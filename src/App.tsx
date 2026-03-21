@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 
 import { runPermissionCheck } from './lib/permissions';
 import {
@@ -13,7 +13,8 @@ import {
   saveEnabled,
   saveLastProcessedTimestamp,
   saveMode,
-  savePermissions
+  savePermissions,
+  saveTestSequenceDelayMs
 } from './lib/storage';
 import type {
   AppMode,
@@ -73,6 +74,11 @@ function formatCompactTimestamp(value: number | string | undefined): string {
   }).format(date);
 }
 
+function normalizeDelaySeconds(value: number): number {
+  if (!Number.isFinite(value)) return 60;
+  return Math.max(5, Math.min(600, Math.round(value)));
+}
+
 function getServerLoadPercent(server: ExporterServerSnapshot): number {
   if (!server.maxPlayers) return 0;
   return Math.max(0, Math.min(100, Math.round((server.playerCount / server.maxPlayers) * 100)));
@@ -118,6 +124,9 @@ export default function App({ config }: AppProps) {
   const [selection, setSelection] = useState<SelectionState | null>(null);
   const [plannedSequence, setPlannedSequence] = useState<ExporterServerSnapshot[]>([]);
   const [pendingSequence, setPendingSequence] = useState<PendingSequence | null>(null);
+  const [testSequenceDelayMsOverride, setTestSequenceDelayMsOverride] = useState<number>(
+    storedState.testSequenceDelayMs
+  );
   const [isFetching, setIsFetching] = useState<boolean>(false);
   const [fatalError, setFatalError] = useState<string | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
@@ -130,6 +139,7 @@ export default function App({ config }: AppProps) {
   const permissionsRef = useRef(permissions);
   const connectorWindowRef = useRef<Window | null>(null);
   const sequenceTimerRef = useRef<number | null>(null);
+  const testSequenceDelayMsRef = useRef<number>(0);
 
   useEffect(() => {
     enabledRef.current = enabled;
@@ -185,9 +195,20 @@ export default function App({ config }: AppProps) {
   const testModeConfig = config.app.testMode;
   const activeMode: AppMode = hasConfiguredTestMode ? mode : 'production';
   const isTestModeActive = activeMode === 'test';
-  const testSequenceDelayMs = Math.max(0, testModeConfig?.delayMs || 0);
+  const configuredTestSequenceDelayMs = Math.max(0, testModeConfig?.delayMs || 0);
+  const testSequenceDelayMs = Math.max(0, testSequenceDelayMsOverride || configuredTestSequenceDelayMs);
+  const testSequenceDelaySeconds = Math.max(5, Math.round(testSequenceDelayMs / 1000));
+  const configuredTestSequenceDelaySeconds = Math.max(
+    5,
+    Math.round(configuredTestSequenceDelayMs / 1000)
+  );
   const testCooldownMs = Math.max(0, testModeConfig?.cooldownMs || 30000);
   const testSequencePlanLabel = testModeConfig?.sequenceServerIds?.join(' -> ') || '—';
+  const hasManualTestSequenceDelay = testSequenceDelayMsOverride > 0;
+
+  useEffect(() => {
+    testSequenceDelayMsRef.current = testSequenceDelayMs;
+  }, [testSequenceDelayMs]);
 
   const clearPendingSequence = () => {
     if (sequenceTimerRef.current) {
@@ -257,14 +278,15 @@ export default function App({ config }: AppProps) {
   const scheduleSequenceStep = (remaining: ExporterServerSnapshot[]) => {
     clearPendingSequence();
 
-    if (!remaining.length || testSequenceDelayMs <= 0) return;
+    const nextDelayMs = testSequenceDelayMsRef.current;
+    if (!remaining.length || nextDelayMs <= 0) return;
 
     const [nextServer, ...tail] = remaining;
-    const nextRedirectAt = Date.now() + testSequenceDelayMs;
+    const nextRedirectAt = Date.now() + nextDelayMs;
 
     setPendingSequence({ remaining, nextRedirectAt });
     appendLog(
-      `Запланирован follow-up redirect через ${Math.ceil(testSequenceDelayMs / 1000)} s: ${nextServer.name}`
+      `Запланирован follow-up redirect через ${Math.ceil(nextDelayMs / 1000)} s: ${nextServer.name}`
     );
 
     sequenceTimerRef.current = window.setTimeout(() => {
@@ -287,7 +309,39 @@ export default function App({ config }: AppProps) {
 
       appendLog(`Follow-up redirect triggered: ${nextServer.joinLink}`);
       scheduleSequenceStep(tail);
-    }, testSequenceDelayMs);
+    }, nextDelayMs);
+  };
+
+  const handleTestSequenceDelayChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const nextSeconds = normalizeDelaySeconds(Number(event.target.value));
+    const nextDelayMs = nextSeconds * 1000;
+    const pendingRemaining = pendingSequence?.remaining || [];
+
+    testSequenceDelayMsRef.current = nextDelayMs;
+    setTestSequenceDelayMsOverride(nextDelayMs);
+    saveTestSequenceDelayMs(nextDelayMs);
+    appendLog(`Тестовая задержка follow-up обновлена: ${nextSeconds} s.`);
+
+    if (pendingRemaining.length && enabledRef.current && modeRef.current === 'test') {
+      clearPendingSequence();
+      scheduleSequenceStep(pendingRemaining);
+      appendLog(`Ожидающий follow-up redirect пересоздан с новой задержкой.`);
+    }
+  };
+
+  const handleTestSequenceDelayReset = () => {
+    const pendingRemaining = pendingSequence?.remaining || [];
+
+    testSequenceDelayMsRef.current = configuredTestSequenceDelayMs;
+    setTestSequenceDelayMsOverride(0);
+    saveTestSequenceDelayMs(0);
+    appendLog(`Тестовая задержка follow-up сброшена к конфигу: ${configuredTestSequenceDelaySeconds} s.`);
+
+    if (pendingRemaining.length && enabledRef.current && modeRef.current === 'test') {
+      clearPendingSequence();
+      scheduleSequenceStep(pendingRemaining);
+      appendLog(`Ожидающий follow-up redirect пересоздан с задержкой из конфига.`);
+    }
   };
 
   const handlePermissionsCheck = async () => {
@@ -582,6 +636,30 @@ export default function App({ config }: AppProps) {
               Тестовый режим
             </button>
           </div>
+          {hasConfiguredTestMode ? (
+            <div className="test-tuning-row">
+              <label className="delay-field">
+                <span>Follow-up в тесте</span>
+                <input
+                  className="delay-input"
+                  type="number"
+                  min={5}
+                  max={600}
+                  step={5}
+                  value={testSequenceDelaySeconds}
+                  onChange={handleTestSequenceDelayChange}
+                />
+                <small>сек</small>
+              </label>
+              <button
+                className="button"
+                onClick={handleTestSequenceDelayReset}
+                disabled={!hasManualTestSequenceDelay}
+              >
+                Сбросить к конфигу
+              </button>
+            </div>
+          ) : null}
           <div className="signal-grid">
             <div className="signal-card">
               <span
@@ -684,7 +762,10 @@ export default function App({ config }: AppProps) {
                 </div>
                 <div className="rule-card">
                   <span>Задержка теста</span>
-                  <strong>{Math.round(testSequenceDelayMs / 1000)} s</strong>
+                  <strong>
+                    {Math.round(testSequenceDelayMs / 1000)} s
+                    {hasManualTestSequenceDelay ? ' · local' : ''}
+                  </strong>
                 </div>
                 <div className="rule-card">
                   <span>Cooldown теста</span>

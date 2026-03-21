@@ -2,7 +2,12 @@
   "app": {
     "title": "BSS AutoConnect",
     "pollIntervalMs": 180000,
-    "debugLogLimit": 80
+    "debugLogLimit": 80,
+    "testMode": {
+      "sequenceServerIds": [2, 1],
+      "delayMs": 60000,
+      "cooldownMs": 30000
+    }
   },
   "policy": {
     "timezone": "Europe/Moscow",

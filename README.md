@@ -20,7 +20,7 @@
 - fully-static архитектура без backend и без Steam auth;
 - client-side polling публичных exporter endpoint-ов;
 - выбор target server по frontend policy: ночному окну, приоритетам, лимиту онлайна и `switchDelta`;
-- опциональный test-sequence через runtime-config, например `2 -> 1` с задержкой `10 s`;
+- опциональный test-sequence через runtime-config, например `2 -> 1` с задержкой `60 s`;
 - хранение `enabled`, `lastProcessedTimestamp`, `cooldown` и permissions в `localStorage`;
 - локальный preflight-check на странице: popup, `steam://`, и явная подсказка оставить Squad в главном меню;
 - redirect через служебное popup-окно, чтобы страница не теряла состояние и могла выполнить follow-up redirect;
@@ -75,12 +75,12 @@ npm run dev
 ```json
 {
   "sequenceServerIds": [2, 1],
-  "delayMs": 10000,
+  "delayMs": 60000,
   "cooldownMs": 30000
 }
 ```
 
-Тогда в интерфейсе появится отдельный тестовый режим, который не подменяет боевой.
+Тогда в интерфейсе появится отдельный тестовый режим, который не подменяет боевой. Задержку follow-up можно локально перекрыть прямо на странице; значение сохраняется в `localStorage` и не меняет общий runtime-config для остальных пользователей.
 
 Важно: это публичный клиентский конфиг. Даже если он подставляется через GitHub Secrets, после билда значения становятся видимыми в браузере. Не кладите туда приватные ключи.
 

@@ -78,6 +78,7 @@ export type BrowserPermissions = {
 export type StoredState = {
   enabled: boolean;
   mode: AppMode;
+  testSequenceDelayMs: number;
   lastProcessedTimestamp: number;
   cooldownUntil: number;
   permissions: BrowserPermissions | null;

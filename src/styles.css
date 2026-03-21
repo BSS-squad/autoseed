@@ -250,6 +250,13 @@ input {
   margin-bottom: 16px;
 }
 
+.test-tuning-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
 .button {
   min-height: 42px;
   border-radius: 14px;
@@ -280,6 +287,39 @@ input {
 .button-mode-active {
   border-color: rgba(213, 22, 22, 0.48);
   background: rgba(213, 22, 22, 0.14);
+}
+
+.delay-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+}
+
+.delay-field span,
+.delay-field small {
+  color: var(--muted);
+}
+
+.delay-input {
+  width: 86px;
+  min-height: 34px;
+  border-radius: 10px;
+  border: 1px solid var(--panel-border);
+  background: rgba(0, 0, 0, 0.28);
+  color: var(--text);
+  padding: 0 10px;
+  font: inherit;
+}
+
+.delay-input:focus {
+  outline: 1px solid rgba(213, 22, 22, 0.55);
+  border-color: rgba(213, 22, 22, 0.55);
 }
 
 .signal-grid,
