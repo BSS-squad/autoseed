@@ -49,12 +49,12 @@ npm run dev
   },
   "exporters": [
     {
-      "name": "classic",
-      "baseUrl": "https://seed-api.example.com/classic/v1/autoseed"
+      "name": "squadjs1",
+      "baseUrl": "https://seed-api.example.com/squadjs1/v1/autoseed"
     },
     {
-      "name": "specops",
-      "baseUrl": "https://seed-api.example.com/specops/v1/autoseed"
+      "name": "squadjs2",
+      "baseUrl": "https://seed-api.example.com/squadjs2/v1/autoseed"
     }
   ]
 }

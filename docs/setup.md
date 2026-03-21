@@ -25,12 +25,12 @@
   },
   "exporters": [
     {
-      "name": "classic",
-      "baseUrl": "https://seed-api.example.com/classic/v1/autoseed"
+      "name": "squadjs1",
+      "baseUrl": "https://seed-api.example.com/squadjs1/v1/autoseed"
     },
     {
-      "name": "specops",
-      "baseUrl": "https://seed-api.example.com/specops/v1/autoseed"
+      "name": "squadjs2",
+      "baseUrl": "https://seed-api.example.com/squadjs2/v1/autoseed"
     }
   ]
 }
@@ -54,9 +54,9 @@
   "enabled": true,
   "listenHost": "0.0.0.0",
   "listenPort": 32080,
-  "pathPrefix": "/classic/v1/autoseed",
+  "pathPrefix": "/squadjs1/v1/autoseed",
   "serverId": 1,
-  "serverCode": "srv-1",
+  "serverCode": "squadjs1",
   "isSeedCandidate": true,
   "publicConnectHost": "${SQUAD_PUBLIC_HOST}",
   "publicConnectPort": "${SQUAD_PUBLIC_PORT}",
@@ -201,12 +201,12 @@ networks:
   },
   "exporters": [
     {
-      "name": "classic",
-      "baseUrl": "https://seed-api.squad.leo-land.ru/classic/v1/autoseed"
+      "name": "squadjs1",
+      "baseUrl": "https://seed-api.squad.leo-land.ru/squadjs1/v1/autoseed"
     },
     {
-      "name": "specops",
-      "baseUrl": "https://seed-api.squad.leo-land.ru/specops/v1/autoseed"
+      "name": "squadjs2",
+      "baseUrl": "https://seed-api.squad.leo-land.ru/squadjs2/v1/autoseed"
     }
   ]
 }
@@ -226,16 +226,16 @@ networks:
 
 Ожидаемая схема:
 
-- `https://seed-api.squad.leo-land.ru/classic/v1/autoseed` -> `squadjs1:32080`
-- `https://seed-api.squad.leo-land.ru/specops/v1/autoseed` -> `squadjs2:32080`
+- `https://seed-api.squad.leo-land.ru/squadjs1/v1/autoseed` -> `squadjs1:32080`
+- `https://seed-api.squad.leo-land.ru/squadjs2/v1/autoseed` -> `squadjs2:32080`
 
 Что требуется от инфраструктуры:
 
 - выдать один публичный домен под exporter API
 - поднять для него TLS
 - настроить path-based routing:
-  - `/classic` -> `squadjs1:32080`
-  - `/specops` -> `squadjs2:32080`
+  - `/squadjs1` -> `squadjs1:32080`
+  - `/squadjs2` -> `squadjs2:32080`
 - path не переписывать, потому что exporter уже сконфигурирован с собственным `pathPrefix`
 - не публиковать `32080` наружу напрямую, если используется reverse proxy
 
@@ -288,5 +288,5 @@ services:
 ## 7. Рекомендуемая схема доменов
 
 - `autoseed.example.com` -> GitHub Pages frontend
-- `seed-api.example.com/classic/v1/autoseed` -> exporter `[КЛАССИКА]`
-- `seed-api.example.com/specops/v1/autoseed` -> exporter `[SPEC OPS]`
+- `seed-api.example.com/squadjs1/v1/autoseed` -> exporter `squadjs1`
+- `seed-api.example.com/squadjs2/v1/autoseed` -> exporter `squadjs2`
