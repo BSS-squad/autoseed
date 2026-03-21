@@ -69,15 +69,19 @@ export async function fetchCombinedSnapshot(
         return {
           ok: false as const,
           servers: [] as ExporterServerSnapshot[],
-          timestamp: Date.now(),
+          timestamp: 0,
           error: `${exporterConfig.name}: ${message}`
         };
       }
     })
   );
 
+  const timestamps = results
+    .map((result) => Number(result.timestamp) || 0)
+    .filter((value) => value > 0);
+
   return {
-    timestamp: Math.max(...results.map((result) => result.timestamp), Date.now()),
+    timestamp: timestamps.length ? Math.max(...timestamps) : Date.now(),
     generatedAt: new Date().toISOString(),
     servers: sortServers(results.flatMap((result) => result.servers)),
     errors: results

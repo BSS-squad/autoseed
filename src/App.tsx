@@ -178,14 +178,12 @@ export default function App({ config }: AppProps) {
   }, [config]);
 
   const handleEnable = async () => {
-    let currentPermissions = permissions;
-    if (!currentPermissions) {
-      currentPermissions = await runPermissionCheck();
-      setPermissions(currentPermissions);
-      savePermissions(currentPermissions);
+    if (!permissions) {
+      appendLog('Автоконнектор не запущен: сначала вручную выполните локальную проверку permissions.');
+      return;
     }
 
-    if (!currentPermissions.popupAllowed || !currentPermissions.steamProtocolReady) {
+    if (!permissions.popupAllowed || !permissions.steamProtocolReady) {
       appendLog('Автоконнектор не запущен: browser permissions не подтверждены.');
       return;
     }
@@ -265,7 +263,8 @@ export default function App({ config }: AppProps) {
             <span className="badge">{permissionsReady ? 'Ready' : permissions ? 'Частично готовы' : 'Не проверены'}</span>
           </div>
           <p className="panel-copy">
-            Перед запуском нужно один раз проверить popup и `steam://` protocol handler.
+            Перед запуском нужно один раз явно проверить popup и тестовый вызов `steam://`.
+            Проверка popup может кратко открыть и сразу закрыть служебное окно браузера.
           </p>
           <div className="actions">
             <button className="button button-primary" onClick={() => void handlePermissionsCheck()}>
@@ -298,8 +297,8 @@ export default function App({ config }: AppProps) {
             <div className="preflight-item">
               <span className={classNames('preflight-dot', permissions?.steamProtocolReady && 'preflight-dot-ready')} />
               <div>
-                <strong>Открытие Steam разрешено</strong>
-                <p>Браузер доверяет вызову `steam://` и не блокирует его.</p>
+                <strong>Тестовый вызов Steam не был заблокирован</strong>
+                <p>Страница получила явный сигнал, что браузер не отклонил тестовый вызов `steam://`.</p>
               </div>
             </div>
             <div className="preflight-item">
@@ -388,6 +387,15 @@ export default function App({ config }: AppProps) {
             <h2>Серверы из snapshot</h2>
             <span className="badge">{snapshot.servers.length} servers</span>
           </div>
+          {snapshot.errors.length ? (
+            <div style={{ marginBottom: 16 }}>
+              {snapshot.errors.map((error) => (
+                <p key={error} className="error-text">
+                  {error}
+                </p>
+              ))}
+            </div>
+          ) : null}
           <div className="server-grid">
             {snapshot.servers.map((server: ExporterServerSnapshot) => (
               <article

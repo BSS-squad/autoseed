@@ -47,7 +47,7 @@ function isNightWindow(policy: SeedPolicy, date = new Date()): boolean {
 }
 
 function isSuitableSeedCandidate(server: ExporterServerSnapshot): boolean {
-  return server.online && server.isSeedCandidate;
+  return server.online && server.isSeedCandidate && Boolean(server.joinLink);
 }
 
 export function resolveSeedPolicy(fallbackPolicy?: Partial<SeedPolicy> | null): SeedPolicy {
@@ -69,7 +69,9 @@ export function determineTargetServer(
   if (!candidates.length) return null;
 
   if (isNightWindow(policy)) {
-    return candidates.find((server) => server.id === policy.nightPreferredServerId) || null;
+    const preferredNightServer =
+      candidates.find((server) => server.id === policy.nightPreferredServerId) || null;
+    if (preferredNightServer) return preferredNightServer;
   }
 
   const priorityCandidate = policy.priorityOrder
