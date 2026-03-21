@@ -26,11 +26,11 @@
   "exporters": [
     {
       "name": "classic",
-      "baseUrl": "https://classic-autoseed.example.com"
+      "baseUrl": "https://seed-api.example.com/classic/v1/autoseed"
     },
     {
       "name": "specops",
-      "baseUrl": "https://specops-autoseed.example.com"
+      "baseUrl": "https://seed-api.example.com/specops/v1/autoseed"
     }
   ]
 }
@@ -54,7 +54,7 @@
   "enabled": true,
   "listenHost": "0.0.0.0",
   "listenPort": 32080,
-  "pathPrefix": "/v1/autoseed",
+  "pathPrefix": "/classic/v1/autoseed",
   "serverId": 1,
   "serverCode": "srv-1",
   "isSeedCandidate": true,
@@ -96,6 +96,7 @@
 
 - `serverId`
 - `serverCode`
+- `pathPrefix`
 - `publicConnectHost`
 - `publicConnectPort`
 - `corsOrigins`
@@ -179,7 +180,7 @@ networks:
 
 ### Готовый `AUTOSEED_RUNTIME_CONFIG_JSON` для GitHub secret
 
-Если у вас будет два exporter-домена, secret можно положить в таком виде:
+Если использовать один HTTPS-домен и path-based routing, secret можно положить в таком виде:
 
 ```json
 {
@@ -201,38 +202,41 @@ networks:
   "exporters": [
     {
       "name": "classic",
-      "baseUrl": "https://classic-autoseed.example.com"
+      "baseUrl": "https://seed-api.squad.leo-land.ru/classic/v1/autoseed"
     },
     {
       "name": "specops",
-      "baseUrl": "https://specops-autoseed.example.com"
+      "baseUrl": "https://seed-api.squad.leo-land.ru/specops/v1/autoseed"
     }
   ]
 }
 ```
 
-В этом JSON потом меняются только два `baseUrl` на реальные публичные URL exporter-ов.
+В этом JSON потом меняется только host, если потребуется другой публичный домен. Пути остаются фиксированными.
 
 ### Инфраструктурная схема reverse proxy
 
-Нужно опубликовать два внутренних HTTP exporter-сервиса SquadJS наружу по HTTPS через reverse proxy.
+Нужно опубликовать два внутренних HTTP exporter-сервиса SquadJS наружу по HTTPS через один reverse proxy и один публичный домен.
 
 Технически это выглядит так:
 
 - `squadjs1` внутри машины слушает exporter на `localhost:32080` контейнера
 - `squadjs2` внутри машины слушает exporter на `localhost:32080` контейнера
-- reverse proxy должен принять HTTPS на двух отдельных поддоменах и проксировать запросы во внутренние exporter-порты соответствующих контейнеров
+- reverse proxy должен принять HTTPS на одном домене и проксировать разные path-prefix во внутренние exporter-порты соответствующих контейнеров
 
 Ожидаемая схема:
 
-- `https://classic-autoseed.squad.leo-land.ru` -> `squadjs1:32080`
-- `https://specops-autoseed.squad.leo-land.ru` -> `squadjs2:32080`
+- `https://seed-api.squad.leo-land.ru/classic/v1/autoseed` -> `squadjs1:32080`
+- `https://seed-api.squad.leo-land.ru/specops/v1/autoseed` -> `squadjs2:32080`
 
 Что требуется от инфраструктуры:
 
-- выдать два поддомена под exporter-ы
-- поднять для них TLS
-- настроить reverse proxy на target port `32080` для каждого сервиса
+- выдать один публичный домен под exporter API
+- поднять для него TLS
+- настроить path-based routing:
+  - `/classic` -> `squadjs1:32080`
+  - `/specops` -> `squadjs2:32080`
+- path не переписывать, потому что exporter уже сконфигурирован с собственным `pathPrefix`
 - не публиковать `32080` наружу напрямую, если используется reverse proxy
 
 Что не требуется:
@@ -242,7 +246,7 @@ networks:
 - запись в БД
 - websocket
 
-Exporter read-only и нужен только для `GET /healthz` и `GET /v1/autoseed/snapshot` из браузера GitHub Pages.
+Exporter read-only и нужен только для `GET {baseUrl}/healthz` и `GET {baseUrl}/snapshot` из браузера GitHub Pages.
 
 ### Вариант без reverse proxy
 
@@ -284,5 +288,5 @@ services:
 ## 7. Рекомендуемая схема доменов
 
 - `autoseed.example.com` -> GitHub Pages frontend
-- `classic-autoseed.example.com` -> exporter `[КЛАССИКА]`
-- `specops-autoseed.example.com` -> exporter `[SPEC OPS]`
+- `seed-api.example.com/classic/v1/autoseed` -> exporter `[КЛАССИКА]`
+- `seed-api.example.com/specops/v1/autoseed` -> exporter `[SPEC OPS]`

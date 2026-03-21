@@ -17,11 +17,11 @@
   "exporters": [
     {
       "name": "classic",
-      "baseUrl": "https://classic-autoseed.example.com"
+      "baseUrl": "https://seed-api.example.com/classic/v1/autoseed"
     },
     {
       "name": "specops",
-      "baseUrl": "https://specops-autoseed.example.com"
+      "baseUrl": "https://seed-api.example.com/specops/v1/autoseed"
     }
   ]
 }

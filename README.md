@@ -27,6 +27,8 @@ npm run dev
 
 ## Runtime config
 
+`baseUrl` должен указывать не просто на host, а на публичный exporter-prefix. Frontend сам дописывает к нему только `/snapshot`.
+
 Файл `public/runtime-config.json` должен содержать:
 
 ```json
@@ -48,11 +50,11 @@ npm run dev
   "exporters": [
     {
       "name": "classic",
-      "baseUrl": "https://classic-autoseed.example.com"
+      "baseUrl": "https://seed-api.example.com/classic/v1/autoseed"
     },
     {
       "name": "specops",
-      "baseUrl": "https://specops-autoseed.example.com"
+      "baseUrl": "https://seed-api.example.com/specops/v1/autoseed"
     }
   ]
 }

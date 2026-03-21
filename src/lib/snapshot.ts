@@ -62,7 +62,7 @@ export async function fetchCombinedSnapshot(
 ): Promise<CombinedSnapshot> {
   const results = await Promise.all(
     exporters.map(async (exporterConfig) => {
-      const sourceUrl = `${normalizeBaseUrl(exporterConfig.baseUrl)}/v1/autoseed/snapshot`;
+      const sourceUrl = `${normalizeBaseUrl(exporterConfig.baseUrl)}/snapshot`;
 
       try {
         const response = await fetch(sourceUrl, {
