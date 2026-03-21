@@ -4,6 +4,14 @@
 
 `squadjs2` использует remote `git@github-svo:breaking-squad/squadjs2.git`, а alias `github-svo` в `~/.ssh/config` указывает на ключ `/home/kyarkov/.ssh/id_rsa_home_from_svo`. Для `git@github-svo:breaking-squad/autoseed.git` доступ по SSH есть, но remote сейчас выглядит пустым, поэтому проект в этой папке собран локально с нуля и привязан к `origin`.
 
+## Актуальное состояние
+
+- frontend полностью статический и публикуется через GitHub Pages;
+- exporter публикуется отдельно через `https://api.squad.leo-land.ru/squadjs1/v1/autoseed` и `https://api.squad.leo-land.ru/squadjs2/v1/autoseed`;
+- exporter отдаёт только факты по серверам: `healthz` и `snapshot`;
+- policy живёт только во frontend runtime-config;
+- текущий приоритет выбора: ночью `serverId=2`, днём `2 -> 1`.
+
 ## Что реализовано
 
 - frontend на Vite + React c GitHub Pages deployment;
@@ -63,6 +71,24 @@ npm run dev
 Важно: это публичный клиентский конфиг. Даже если он подставляется через GitHub Secrets, после билда значения становятся видимыми в браузере. Не кладите туда приватные ключи.
 
 Frontend не знает пользователя, не хранит `steamId` и не обращается к Steam OpenID. Exporter отдаёт только факты по серверам, а все правила выбора живут во frontend runtime-config. Это общий autoconnect на правильный seed-сервер по публичному правилу.
+
+## Быстрый тест
+
+Перед проверкой GitHub Pages убедитесь, что exporter отвечает:
+
+- `https://api.squad.leo-land.ru/squadjs1/v1/autoseed/healthz`
+- `https://api.squad.leo-land.ru/squadjs1/v1/autoseed/snapshot`
+- `https://api.squad.leo-land.ru/squadjs2/v1/autoseed/healthz`
+- `https://api.squad.leo-land.ru/squadjs2/v1/autoseed/snapshot`
+
+Дальше:
+
+1. Обновите secret `AUTOSEED_RUNTIME_CONFIG_JSON`.
+2. Дождитесь успешного workflow `Deploy Pages`.
+3. Откройте GitHub Pages URL.
+4. Пройдите preflight-check на странице.
+5. Держите Steam и Squad открытыми, Squad в главном меню.
+6. Включите автоконнектор и дождитесь нового snapshot.
 
 ## GitHub Pages
 

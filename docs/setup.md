@@ -1,5 +1,21 @@
 # Setup Guide
 
+## 0. Актуальная схема
+
+Сейчас проект устроен так:
+
+- GitHub Pages frontend читает только публичные exporter endpoint-ы;
+- exporter публикуется на одном домене `api.squad.leo-land.ru` с path-prefix:
+  - `/squadjs1/v1/autoseed`
+  - `/squadjs2/v1/autoseed`
+- exporter не отдаёт policy;
+- policy живёт только во frontend runtime-config;
+- текущая BSS policy:
+  - ночью `nightPreferredServerId=2`
+  - днём приоритет `2 -> 1`
+  - лимит `maxSeedPlayers=80`
+  - `switchDelta=10`
+
 ## 1. Frontend: GitHub Pages
 
 ### GitHub secret
@@ -276,3 +292,23 @@ services:
 - `autoseed.example.com` -> GitHub Pages frontend
 - `api.squad.leo-land.ru/squadjs1/v1/autoseed` -> exporter `squadjs1`
 - `api.squad.leo-land.ru/squadjs2/v1/autoseed` -> exporter `squadjs2`
+
+## 8. Быстрый тест после деплоя
+
+### Проверка exporter
+
+```bash
+curl -s https://api.squad.leo-land.ru/squadjs1/v1/autoseed/healthz | jq
+curl -s https://api.squad.leo-land.ru/squadjs1/v1/autoseed/snapshot | jq
+curl -s https://api.squad.leo-land.ru/squadjs2/v1/autoseed/healthz | jq
+curl -s https://api.squad.leo-land.ru/squadjs2/v1/autoseed/snapshot | jq
+```
+
+### Проверка GitHub Pages
+
+1. Обновить secret `AUTOSEED_RUNTIME_CONFIG_JSON`.
+2. Убедиться, что workflow `Deploy Pages` завершился успешно.
+3. Открыть опубликованный frontend.
+4. Нажать локальную проверку разрешений.
+5. Оставить Steam и Squad запущенными, Squad в главном меню.
+6. Включить автоконнектор и дождаться нового snapshot.
