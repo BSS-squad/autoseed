@@ -10,7 +10,7 @@
 - runtime-конфиг через `public/runtime-config.json`;
 - fully-static архитектура без backend и без Steam auth;
 - client-side polling публичных exporter endpoint-ов;
-- выбор target server по ночному окну, приоритетам, лимиту онлайна и `switchDelta`;
+- выбор target server по frontend policy: ночному окну, приоритетам, лимиту онлайна и `switchDelta`;
 - хранение `enabled`, `lastProcessedTimestamp`, `cooldown` и permissions в `localStorage`;
 - локальный preflight-check на странице: popup, `steam://`, и явная подсказка оставить Squad в главном меню;
 - redirect через `window.location.href = joinLink`, если пришёл новый snapshot и есть подходящий seed-сервер;
@@ -41,20 +41,20 @@ npm run dev
     "timezone": "Europe/Moscow",
     "nightWindowStart": "23:00",
     "nightWindowEnd": "08:00",
-    "nightPreferredServerId": 1,
+    "nightPreferredServerId": 2,
     "maxSeedPlayers": 80,
-    "priorityOrder": [1, 2, 4],
+    "priorityOrder": [2, 1],
     "switchDelta": 10,
     "cooldownMs": 600000
   },
   "exporters": [
     {
       "name": "squadjs1",
-      "baseUrl": "https://seed-api.example.com/squadjs1/v1/autoseed"
+      "baseUrl": "https://api.squad.leo-land.ru/squadjs1/v1/autoseed"
     },
     {
       "name": "squadjs2",
-      "baseUrl": "https://seed-api.example.com/squadjs2/v1/autoseed"
+      "baseUrl": "https://api.squad.leo-land.ru/squadjs2/v1/autoseed"
     }
   ]
 }
@@ -62,7 +62,7 @@ npm run dev
 
 Важно: это публичный клиентский конфиг. Даже если он подставляется через GitHub Secrets, после билда значения становятся видимыми в браузере. Не кладите туда приватные ключи.
 
-Frontend не знает пользователя, не хранит `steamId` и не обращается к Steam OpenID. Это общий autoconnect на правильный seed-сервер по публичному правилу.
+Frontend не знает пользователя, не хранит `steamId` и не обращается к Steam OpenID. Exporter отдаёт только факты по серверам, а все правила выбора живут во frontend runtime-config. Это общий autoconnect на правильный seed-сервер по публичному правилу.
 
 ## GitHub Pages
 

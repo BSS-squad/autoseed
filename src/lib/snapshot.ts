@@ -2,8 +2,7 @@ import type {
   CombinedSnapshot,
   ExporterEndpointConfig,
   ExporterServerSnapshot,
-  ExporterSnapshotResponse,
-  SeedPolicy
+  ExporterSnapshotResponse
 } from '../types';
 
 function normalizeBaseUrl(value: string): string {
@@ -25,28 +24,6 @@ function mapServer(server: Partial<ExporterServerSnapshot>, sourceUrl: string): 
     joinLink: server.joinLink,
     updatedAt: Number(server.updatedAt) || Date.now(),
     sourceUrl
-  };
-}
-
-function mergePolicy(
-  current: Partial<Omit<SeedPolicy, 'cooldownMs'>> | null,
-  next: ExporterSnapshotResponse['meta']
-): Partial<Omit<SeedPolicy, 'cooldownMs'>> | null {
-  if (!next) return current;
-
-  const normalized: Partial<Omit<SeedPolicy, 'cooldownMs'>> = {
-    timezone: next.timezone,
-    nightWindowStart: next.nightWindowStart,
-    nightWindowEnd: next.nightWindowEnd,
-    nightPreferredServerId: next.nightPreferredServerId,
-    maxSeedPlayers: next.maxSeedPlayers,
-    priorityOrder: Array.isArray(next.priorityOrder) ? next.priorityOrder : undefined,
-    switchDelta: next.switchDelta
-  };
-
-  return {
-    ...(current || {}),
-    ...Object.fromEntries(Object.entries(normalized).filter(([, value]) => value !== undefined))
   };
 }
 
@@ -85,8 +62,7 @@ export async function fetchCombinedSnapshot(
           ok: true as const,
           servers,
           timestamp: Number(payload.timestamp) || Date.now(),
-          error: null,
-          policy: mergePolicy(null, payload.meta)
+          error: null
         };
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown exporter error';
@@ -94,22 +70,10 @@ export async function fetchCombinedSnapshot(
           ok: false as const,
           servers: [] as ExporterServerSnapshot[],
           timestamp: Date.now(),
-          error: `${exporterConfig.name}: ${message}`,
-          policy: null
+          error: `${exporterConfig.name}: ${message}`
         };
       }
     })
-  );
-
-  const policy = results.reduce<Partial<Omit<SeedPolicy, 'cooldownMs'>> | null>(
-    (accumulator, result) => {
-      if (!result.policy) return accumulator;
-      return {
-        ...(accumulator || {}),
-        ...result.policy
-      };
-    },
-    null
   );
 
   return {
@@ -118,7 +82,6 @@ export async function fetchCombinedSnapshot(
     servers: sortServers(results.flatMap((result) => result.servers)),
     errors: results
       .map((result) => result.error)
-      .filter((value): value is string => Boolean(value)),
-    policy
+      .filter((value): value is string => Boolean(value))
   };
 }

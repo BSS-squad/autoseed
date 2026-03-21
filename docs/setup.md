@@ -17,20 +17,20 @@
     "timezone": "Europe/Moscow",
     "nightWindowStart": "23:00",
     "nightWindowEnd": "08:00",
-    "nightPreferredServerId": 1,
+    "nightPreferredServerId": 2,
     "maxSeedPlayers": 80,
-    "priorityOrder": [1, 2, 4],
+    "priorityOrder": [2, 1],
     "switchDelta": 10,
     "cooldownMs": 600000
   },
   "exporters": [
     {
       "name": "squadjs1",
-      "baseUrl": "https://seed-api.example.com/squadjs1/v1/autoseed"
+      "baseUrl": "https://api.squad.leo-land.ru/squadjs1/v1/autoseed"
     },
     {
       "name": "squadjs2",
-      "baseUrl": "https://seed-api.example.com/squadjs2/v1/autoseed"
+      "baseUrl": "https://api.squad.leo-land.ru/squadjs2/v1/autoseed"
     }
   ]
 }
@@ -64,14 +64,7 @@
   "snapshotRefreshIntervalMs": 20000,
   "staleAfterMs": 90000,
   "rateLimitWindowMs": 60000,
-  "rateLimitMaxRequests": 120,
-  "timezone": "Europe/Moscow",
-  "nightWindowStart": "23:00",
-  "nightWindowEnd": "08:00",
-  "nightPreferredServerId": 1,
-  "priorityOrder": [1, 2, 4],
-  "maxSeedPlayers": 80,
-  "switchDelta": 10
+  "rateLimitMaxRequests": 120
 }
 ```
 
@@ -100,13 +93,6 @@
 - `publicConnectHost`
 - `publicConnectPort`
 - `corsOrigins`
-- `timezone`
-- `nightWindowStart`
-- `nightWindowEnd`
-- `nightPreferredServerId`
-- `priorityOrder`
-- `maxSeedPlayers`
-- `switchDelta`
 
 ## 4. Текущие значения BSS
 
@@ -193,20 +179,20 @@ networks:
     "timezone": "Europe/Moscow",
     "nightWindowStart": "23:00",
     "nightWindowEnd": "08:00",
-    "nightPreferredServerId": 1,
+    "nightPreferredServerId": 2,
     "maxSeedPlayers": 80,
-    "priorityOrder": [1, 2, 4],
+    "priorityOrder": [2, 1],
     "switchDelta": 10,
     "cooldownMs": 600000
   },
   "exporters": [
     {
       "name": "squadjs1",
-      "baseUrl": "https://seed-api.squad.leo-land.ru/squadjs1/v1/autoseed"
+      "baseUrl": "https://api.squad.leo-land.ru/squadjs1/v1/autoseed"
     },
     {
       "name": "squadjs2",
-      "baseUrl": "https://seed-api.squad.leo-land.ru/squadjs2/v1/autoseed"
+      "baseUrl": "https://api.squad.leo-land.ru/squadjs2/v1/autoseed"
     }
   ]
 }
@@ -226,8 +212,8 @@ networks:
 
 Ожидаемая схема:
 
-- `https://seed-api.squad.leo-land.ru/squadjs1/v1/autoseed` -> `squadjs1:32080`
-- `https://seed-api.squad.leo-land.ru/squadjs2/v1/autoseed` -> `squadjs2:32080`
+- `https://api.squad.leo-land.ru/squadjs1/v1/autoseed` -> `squadjs1:32080`
+- `https://api.squad.leo-land.ru/squadjs2/v1/autoseed` -> `squadjs2:32080`
 
 Что требуется от инфраструктуры:
 
@@ -288,5 +274,5 @@ services:
 ## 7. Рекомендуемая схема доменов
 
 - `autoseed.example.com` -> GitHub Pages frontend
-- `seed-api.example.com/squadjs1/v1/autoseed` -> exporter `squadjs1`
-- `seed-api.example.com/squadjs2/v1/autoseed` -> exporter `squadjs2`
+- `api.squad.leo-land.ru/squadjs1/v1/autoseed` -> exporter `squadjs1`
+- `api.squad.leo-land.ru/squadjs2/v1/autoseed` -> exporter `squadjs2`

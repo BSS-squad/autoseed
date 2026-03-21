@@ -9,9 +9,9 @@ export const DEFAULT_SEED_POLICY: SeedPolicy = {
   timezone: 'Europe/Moscow',
   nightWindowStart: '23:00',
   nightWindowEnd: '08:00',
-  nightPreferredServerId: 1,
+  nightPreferredServerId: 2,
   maxSeedPlayers: 80,
-  priorityOrder: [1, 2, 4],
+  priorityOrder: [2, 1],
   switchDelta: 10,
   cooldownMs: 10 * 60 * 1000
 };
@@ -50,18 +50,11 @@ function isSuitableSeedCandidate(server: ExporterServerSnapshot): boolean {
   return server.online && server.isSeedCandidate;
 }
 
-export function resolveSeedPolicy(
-  fallbackPolicy?: Partial<SeedPolicy> | null,
-  snapshotPolicy?: Partial<Omit<SeedPolicy, 'cooldownMs'>> | null
-): SeedPolicy {
+export function resolveSeedPolicy(fallbackPolicy?: Partial<SeedPolicy> | null): SeedPolicy {
   return {
     ...DEFAULT_SEED_POLICY,
     ...(fallbackPolicy || {}),
-    ...(snapshotPolicy || {}),
-    priorityOrder:
-      snapshotPolicy?.priorityOrder ||
-      fallbackPolicy?.priorityOrder ||
-      DEFAULT_SEED_POLICY.priorityOrder
+    priorityOrder: fallbackPolicy?.priorityOrder || DEFAULT_SEED_POLICY.priorityOrder
   };
 }
 

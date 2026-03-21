@@ -8,20 +8,20 @@
     "timezone": "Europe/Moscow",
     "nightWindowStart": "23:00",
     "nightWindowEnd": "08:00",
-    "nightPreferredServerId": 1,
+    "nightPreferredServerId": 2,
     "maxSeedPlayers": 80,
-    "priorityOrder": [1, 2, 4],
+    "priorityOrder": [2, 1],
     "switchDelta": 10,
     "cooldownMs": 600000
   },
   "exporters": [
     {
       "name": "squadjs1",
-      "baseUrl": "https://seed-api.example.com/squadjs1/v1/autoseed"
+      "baseUrl": "https://api.squad.leo-land.ru/squadjs1/v1/autoseed"
     },
     {
       "name": "squadjs2",
-      "baseUrl": "https://seed-api.example.com/squadjs2/v1/autoseed"
+      "baseUrl": "https://api.squad.leo-land.ru/squadjs2/v1/autoseed"
     }
   ]
 }

@@ -47,10 +47,6 @@ export type ExporterSnapshotResponse = {
   generatedAt: string;
   version: number;
   servers: Array<Partial<Omit<ExporterServerSnapshot, 'sourceUrl' | 'error'>>>;
-  meta?: Partial<Omit<SeedPolicy, 'cooldownMs'>> & {
-    stale?: boolean;
-    lastServerUpdateAt?: number;
-  };
 };
 
 export type CombinedSnapshot = {
@@ -58,7 +54,6 @@ export type CombinedSnapshot = {
   generatedAt: string;
   servers: ExporterServerSnapshot[];
   errors: string[];
-  policy: Partial<Omit<SeedPolicy, 'cooldownMs'>> | null;
 };
 
 export type SelectionState = {

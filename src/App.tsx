@@ -30,8 +30,7 @@ const EMPTY_SNAPSHOT: CombinedSnapshot = {
   timestamp: 0,
   generatedAt: '',
   servers: [],
-  errors: [],
-  policy: null
+  errors: []
 };
 
 function formatTimestamp(value: number | string | undefined): string {
@@ -88,10 +87,7 @@ export default function App({ config }: AppProps) {
     return () => window.clearInterval(timer);
   }, []);
 
-  const effectivePolicy = useMemo(
-    () => resolveSeedPolicy(config.policy, snapshot.policy),
-    [config.policy, snapshot.policy]
-  );
+  const effectivePolicy = useMemo(() => resolveSeedPolicy(config.policy), [config.policy]);
 
   const debugLogLimit = config.app.debugLogLimit || 80;
 
@@ -118,7 +114,7 @@ export default function App({ config }: AppProps) {
 
     try {
       const nextSnapshot = await fetchCombinedSnapshot(config.exporters);
-      const nextPolicy = resolveSeedPolicy(config.policy, nextSnapshot.policy);
+      const nextPolicy = resolveSeedPolicy(config.policy);
       const nextSelection = buildSelectionState(nextSnapshot, nextPolicy);
 
       setSnapshot(nextSnapshot);
