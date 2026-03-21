@@ -12,9 +12,11 @@ import {
   saveCooldownUntil,
   saveEnabled,
   saveLastProcessedTimestamp,
+  saveMode,
   savePermissions
 } from './lib/storage';
 import type {
+  AppMode,
   AppConfig,
   BrowserPermissions,
   CombinedSnapshot,
@@ -102,9 +104,13 @@ function buildTestSequence(
 
 export default function App({ config }: AppProps) {
   const storedState = useMemo(() => loadStoredState(), []);
+  const hasConfiguredTestMode = Boolean(config.app.testMode?.sequenceServerIds?.length);
   const [snapshot, setSnapshot] = useState<CombinedSnapshot>(EMPTY_SNAPSHOT);
   const [permissions, setPermissions] = useState<BrowserPermissions | null>(storedState.permissions);
   const [enabled, setEnabled] = useState<boolean>(storedState.enabled);
+  const [mode, setMode] = useState<AppMode>(
+    hasConfiguredTestMode ? storedState.mode : 'production'
+  );
   const [lastProcessedTimestamp, setLastProcessedTimestamp] = useState<number>(
     storedState.lastProcessedTimestamp
   );
@@ -118,6 +124,7 @@ export default function App({ config }: AppProps) {
   const [now, setNow] = useState<number>(Date.now());
 
   const enabledRef = useRef(enabled);
+  const modeRef = useRef(mode);
   const cooldownUntilRef = useRef(cooldownUntil);
   const lastProcessedTimestampRef = useRef(lastProcessedTimestamp);
   const permissionsRef = useRef(permissions);
@@ -127,6 +134,10 @@ export default function App({ config }: AppProps) {
   useEffect(() => {
     enabledRef.current = enabled;
   }, [enabled]);
+
+  useEffect(() => {
+    modeRef.current = mode;
+  }, [mode]);
 
   useEffect(() => {
     cooldownUntilRef.current = cooldownUntil;
@@ -139,6 +150,13 @@ export default function App({ config }: AppProps) {
   useEffect(() => {
     permissionsRef.current = permissions;
   }, [permissions]);
+
+  useEffect(() => {
+    if (!hasConfiguredTestMode && mode !== 'production') {
+      setMode('production');
+      saveMode('production');
+    }
+  }, [hasConfiguredTestMode, mode]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -164,8 +182,12 @@ export default function App({ config }: AppProps) {
     });
   };
 
-  const testSequenceDelayMs = Math.max(0, config.app.testSequenceDelayMs || 0);
-  const testSequencePlanLabel = config.app.testSequenceServerIds?.join(' -> ') || '—';
+  const testModeConfig = config.app.testMode;
+  const activeMode: AppMode = hasConfiguredTestMode ? mode : 'production';
+  const isTestModeActive = activeMode === 'test';
+  const testSequenceDelayMs = Math.max(0, testModeConfig?.delayMs || 0);
+  const testCooldownMs = Math.max(0, testModeConfig?.cooldownMs || 30000);
+  const testSequencePlanLabel = testModeConfig?.sequenceServerIds?.join(' -> ') || '—';
 
   const clearPendingSequence = () => {
     if (sequenceTimerRef.current) {
@@ -174,6 +196,13 @@ export default function App({ config }: AppProps) {
     }
 
     setPendingSequence(null);
+  };
+
+  const resetRedirectState = () => {
+    setLastProcessedTimestamp(0);
+    saveLastProcessedTimestamp(0);
+    setCooldownUntil(0);
+    saveCooldownUntil(0);
   };
 
   const closeConnectorWindow = () => {
@@ -270,6 +299,19 @@ export default function App({ config }: AppProps) {
     );
   };
 
+  const handleModeChange = (nextMode: AppMode) => {
+    if (nextMode === mode) return;
+    if (nextMode === 'test' && !hasConfiguredTestMode) return;
+
+    clearPendingSequence();
+    resetRedirectState();
+    modeRef.current = nextMode;
+    setMode(nextMode);
+    saveMode(nextMode);
+    appendLog(nextMode === 'test' ? 'Переключено в тестовый режим.' : 'Переключено в боевой режим.');
+    void refreshSnapshot();
+  };
+
   const refreshSnapshot = async () => {
     setIsFetching(true);
     setFatalError(null);
@@ -278,8 +320,12 @@ export default function App({ config }: AppProps) {
       const nextSnapshot = await fetchCombinedSnapshot(config.exporters);
       const nextPolicy = resolveSeedPolicy(config.policy);
       const nextSelection = buildSelectionState(nextSnapshot, nextPolicy);
-      const nextTestSequence = buildTestSequence(nextSnapshot, config.app.testSequenceServerIds);
-      const nextRedirectPlan = nextTestSequence.length
+      const testModeEnabled = modeRef.current === 'test';
+      const nextTestSequence = buildTestSequence(
+        nextSnapshot,
+        testModeEnabled ? testModeConfig?.sequenceServerIds : undefined
+      );
+      const nextRedirectPlan = testModeEnabled
         ? nextTestSequence
         : nextSelection.targetServer
           ? [nextSelection.targetServer]
@@ -295,7 +341,7 @@ export default function App({ config }: AppProps) {
 
       appendLog(
         `Snapshot fetched: target=${nextRedirectPlan[0]?.name || nextSelection.targetServer?.name || 'none'}, mode=${
-          nextTestSequence.length ? 'test-sequence' : nextSelection.nightMode ? 'night' : 'day'
+          testModeEnabled ? 'test' : nextSelection.nightMode ? 'night' : 'day'
         }`
       );
 
@@ -308,8 +354,8 @@ export default function App({ config }: AppProps) {
 
       if (!nextRedirectPlan[0]?.joinLink) {
         appendLog(
-          nextTestSequence.length || config.app.testSequenceServerIds?.length
-            ? 'Redirect подавлен: тестовая последовательность пока не готова.'
+          testModeEnabled
+            ? 'Redirect подавлен: тестовый режим пока не готов.'
             : 'Redirect подавлен: нет подходящего сервера или joinLink.'
         );
         return;
@@ -325,7 +371,7 @@ export default function App({ config }: AppProps) {
         return;
       }
 
-      const nextCooldownUntil = Date.now() + nextPolicy.cooldownMs;
+      const nextCooldownUntil = Date.now() + (testModeEnabled ? testCooldownMs : nextPolicy.cooldownMs);
       setLastProcessedTimestamp(nextSnapshot.timestamp);
       saveLastProcessedTimestamp(nextSnapshot.timestamp);
       setCooldownUntil(nextCooldownUntil);
@@ -376,8 +422,8 @@ export default function App({ config }: AppProps) {
     setEnabled(true);
     saveEnabled(true);
     appendLog(
-      config.app.testSequenceServerIds?.length
-        ? `Автоконнектор включён. Активна тестовая последовательность: ${testSequencePlanLabel}.`
+      isTestModeActive
+        ? `Автоконнектор включён. Активен тестовый режим: ${testSequencePlanLabel}.`
         : 'Автоконнектор включён.'
     );
     void refreshSnapshot();
@@ -392,8 +438,8 @@ export default function App({ config }: AppProps) {
   };
 
   const cooldownLeftMs = Math.max(0, cooldownUntil - now);
-  const statusText = config.app.testSequenceServerIds?.length
-    ? plannedSequence.length === config.app.testSequenceServerIds.length
+  const statusText = isTestModeActive
+    ? plannedSequence.length === (testModeConfig?.sequenceServerIds?.length || 0)
       ? 'Тестовая последовательность готова'
       : 'Тестовая последовательность пока не готова'
     : getSelectionStatusLabel(selection);
@@ -403,7 +449,7 @@ export default function App({ config }: AppProps) {
   const nextFollowupCountdown = pendingSequence
     ? Math.max(0, pendingSequence.nextRedirectAt - now)
     : 0;
-  const productionMode = !config.app.testSequenceServerIds?.length;
+  const productionMode = activeMode === 'production';
   const liveServerCount = snapshot.servers.filter((server) => server.online).length;
   const healthyExporterCount = Math.max(0, config.exporters.length - snapshot.errors.length);
   const latestLog = logs[logs.length - 1] || 'Событий пока нет.';
@@ -521,6 +567,21 @@ export default function App({ config }: AppProps) {
               Обновить сейчас
             </button>
           </div>
+          <div className="mode-switch">
+            <button
+              className={classNames('button', productionMode && 'button-mode-active')}
+              onClick={() => handleModeChange('production')}
+            >
+              Боевой режим
+            </button>
+            <button
+              className={classNames('button', isTestModeActive && 'button-mode-active')}
+              onClick={() => handleModeChange('test')}
+              disabled={!hasConfiguredTestMode}
+            >
+              Тестовый режим
+            </button>
+          </div>
           <div className="signal-grid">
             <div className="signal-card">
               <span
@@ -615,6 +676,22 @@ export default function App({ config }: AppProps) {
               <span>Polling</span>
               <strong>{Math.round(config.app.pollIntervalMs / 1000)} s</strong>
             </div>
+            {hasConfiguredTestMode ? (
+              <>
+                <div className="rule-card">
+                  <span>Тестовый план</span>
+                  <strong>{testSequencePlanLabel}</strong>
+                </div>
+                <div className="rule-card">
+                  <span>Задержка теста</span>
+                  <strong>{Math.round(testSequenceDelayMs / 1000)} s</strong>
+                </div>
+                <div className="rule-card">
+                  <span>Cooldown теста</span>
+                  <strong>{Math.round(testCooldownMs / 1000)} s</strong>
+                </div>
+              </>
+            ) : null}
           </div>
         </section>
 
@@ -631,6 +708,10 @@ export default function App({ config }: AppProps) {
             </span>
           </div>
           <div className="summary-stack">
+            <div className="summary-row">
+              <span>Активный режим</span>
+              <strong>{productionMode ? 'Боевой' : `Тестовый ${testSequencePlanLabel}`}</strong>
+            </div>
             <div className="summary-row">
               <span>Последний snapshot</span>
               <strong>{formatTimestamp(snapshot.generatedAt)}</strong>

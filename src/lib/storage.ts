@@ -1,7 +1,8 @@
-import type { BrowserPermissions, StoredState } from '../types';
+import type { AppMode, BrowserPermissions, StoredState } from '../types';
 
 const STORAGE_KEYS = {
   enabled: 'steam-auto-enabled',
+  mode: 'steam-auto-mode',
   lastTimestamp: 'steam-auto-last-timestamp',
   cooldownUntil: 'steam-auto-cooldown-until',
   permissions: 'steam-auto-permissions'
@@ -9,12 +10,14 @@ const STORAGE_KEYS = {
 
 export function loadStoredState(): StoredState {
   const enabled = window.localStorage.getItem(STORAGE_KEYS.enabled) === 'true';
+  const mode = loadMode();
   const lastProcessedTimestamp = Number(window.localStorage.getItem(STORAGE_KEYS.lastTimestamp) || 0);
   const cooldownUntil = Number(window.localStorage.getItem(STORAGE_KEYS.cooldownUntil) || 0);
   const permissions = loadPermissions();
 
   return {
     enabled,
+    mode,
     lastProcessedTimestamp: Number.isFinite(lastProcessedTimestamp) ? lastProcessedTimestamp : 0,
     cooldownUntil: Number.isFinite(cooldownUntil) ? cooldownUntil : 0,
     permissions
@@ -23,6 +26,15 @@ export function loadStoredState(): StoredState {
 
 export function saveEnabled(value: boolean): void {
   window.localStorage.setItem(STORAGE_KEYS.enabled, String(value));
+}
+
+export function loadMode(): AppMode {
+  const raw = window.localStorage.getItem(STORAGE_KEYS.mode);
+  return raw === 'test' ? 'test' : 'production';
+}
+
+export function saveMode(value: AppMode): void {
+  window.localStorage.setItem(STORAGE_KEYS.mode, value);
 }
 
 export function saveLastProcessedTimestamp(value: number): void {

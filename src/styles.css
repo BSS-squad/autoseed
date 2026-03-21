@@ -243,6 +243,13 @@ input {
   margin: 16px 0;
 }
 
+.mode-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
 .button {
   min-height: 42px;
   border-radius: 14px;
@@ -259,9 +266,20 @@ input {
   border-color: rgba(255, 255, 255, 0.16);
 }
 
+.button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
 .button-primary {
   background: linear-gradient(135deg, var(--red), var(--red-deep));
   border-color: rgba(213, 22, 22, 0.55);
+}
+
+.button-mode-active {
+  border-color: rgba(213, 22, 22, 0.48);
+  background: rgba(213, 22, 22, 0.14);
 }
 
 .signal-grid,

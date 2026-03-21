@@ -3,11 +3,16 @@ export type AppConfig = {
     title: string;
     pollIntervalMs: number;
     debugLogLimit?: number;
-    testSequenceServerIds?: number[];
-    testSequenceDelayMs?: number;
+    testMode?: TestModeConfig;
   };
   policy?: Partial<SeedPolicy>;
   exporters: ExporterEndpointConfig[];
+};
+
+export type TestModeConfig = {
+  sequenceServerIds: number[];
+  delayMs: number;
+  cooldownMs: number;
 };
 
 export type SeedPolicy = {
@@ -72,7 +77,10 @@ export type BrowserPermissions = {
 
 export type StoredState = {
   enabled: boolean;
+  mode: AppMode;
   lastProcessedTimestamp: number;
   cooldownUntil: number;
   permissions: BrowserPermissions | null;
 };
+
+export type AppMode = 'production' | 'test';
