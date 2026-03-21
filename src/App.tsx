@@ -26,6 +26,11 @@ type AppProps = {
   config: AppConfig;
 };
 
+type PendingSequence = {
+  remaining: ExporterServerSnapshot[];
+  nextRedirectAt: number;
+};
+
 const EMPTY_SNAPSHOT: CombinedSnapshot = {
   timestamp: 0,
   generatedAt: '',
@@ -51,6 +56,35 @@ function classNames(...values: Array<string | false | null | undefined>): string
   return values.filter(Boolean).join(' ');
 }
 
+function formatCountdown(ms: number): string {
+  if (ms <= 0) return '0 s';
+  return `${Math.ceil(ms / 1000)} s`;
+}
+
+function canUseRedirectSequenceTarget(server: ExporterServerSnapshot | undefined): boolean {
+  return Boolean(server?.online && server.joinLink);
+}
+
+function buildTestSequence(
+  snapshot: CombinedSnapshot,
+  configuredServerIds: number[] | undefined
+): ExporterServerSnapshot[] {
+  if (!configuredServerIds?.length) return [];
+
+  const sequence: ExporterServerSnapshot[] = [];
+
+  for (const serverId of configuredServerIds) {
+    const server = snapshot.servers.find((entry) => entry.id === serverId);
+    if (!server || !canUseRedirectSequenceTarget(server)) {
+      return [];
+    }
+
+    sequence.push(server);
+  }
+
+  return sequence;
+}
+
 export default function App({ config }: AppProps) {
   const storedState = useMemo(() => loadStoredState(), []);
   const [snapshot, setSnapshot] = useState<CombinedSnapshot>(EMPTY_SNAPSHOT);
@@ -61,6 +95,8 @@ export default function App({ config }: AppProps) {
   );
   const [cooldownUntil, setCooldownUntil] = useState<number>(storedState.cooldownUntil);
   const [selection, setSelection] = useState<SelectionState | null>(null);
+  const [plannedSequence, setPlannedSequence] = useState<ExporterServerSnapshot[]>([]);
+  const [pendingSequence, setPendingSequence] = useState<PendingSequence | null>(null);
   const [isFetching, setIsFetching] = useState<boolean>(false);
   const [fatalError, setFatalError] = useState<string | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
@@ -69,6 +105,9 @@ export default function App({ config }: AppProps) {
   const enabledRef = useRef(enabled);
   const cooldownUntilRef = useRef(cooldownUntil);
   const lastProcessedTimestampRef = useRef(lastProcessedTimestamp);
+  const permissionsRef = useRef(permissions);
+  const connectorWindowRef = useRef<Window | null>(null);
+  const sequenceTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     enabledRef.current = enabled;
@@ -83,8 +122,19 @@ export default function App({ config }: AppProps) {
   }, [lastProcessedTimestamp]);
 
   useEffect(() => {
+    permissionsRef.current = permissions;
+  }, [permissions]);
+
+  useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      clearPendingSequence();
+      closeConnectorWindow();
+    };
   }, []);
 
   const effectivePolicy = useMemo(() => resolveSeedPolicy(config.policy), [config.policy]);
@@ -97,6 +147,106 @@ export default function App({ config }: AppProps) {
       const next = [...previous, entry];
       return next.slice(Math.max(0, next.length - debugLogLimit));
     });
+  };
+
+  const testSequenceDelayMs = Math.max(0, config.app.testSequenceDelayMs || 0);
+  const testSequencePlanLabel = config.app.testSequenceServerIds?.join(' -> ') || '—';
+  const connectorWindowReady = Boolean(
+    connectorWindowRef.current && !connectorWindowRef.current.closed
+  );
+
+  const clearPendingSequence = () => {
+    if (sequenceTimerRef.current) {
+      window.clearTimeout(sequenceTimerRef.current);
+      sequenceTimerRef.current = null;
+    }
+
+    setPendingSequence(null);
+  };
+
+  const closeConnectorWindow = () => {
+    const connectorWindow = connectorWindowRef.current;
+    if (!connectorWindow || connectorWindow.closed) return;
+
+    try {
+      connectorWindow.close();
+    } catch {
+      // Ignore user-agent specific close failures.
+    }
+  };
+
+  const ensureConnectorWindow = (): Window | null => {
+    const existingWindow = connectorWindowRef.current;
+    if (existingWindow && !existingWindow.closed) {
+      return existingWindow;
+    }
+
+    try {
+      const nextWindow = window.open('', 'autoseed-connector', 'width=420,height=220');
+      if (!nextWindow) return null;
+
+      nextWindow.document.write(
+        '<!doctype html><title>BSS AutoConnect</title><body style="font:14px sans-serif;padding:16px">Служебное окно автоконнектора.<br/>Не закрывайте его во время тестовой последовательности.</body>'
+      );
+      nextWindow.document.close();
+      connectorWindowRef.current = nextWindow;
+      return nextWindow;
+    } catch {
+      return null;
+    }
+  };
+
+  const triggerJoinLink = (joinLink: string): boolean => {
+    const connectorWindow = ensureConnectorWindow();
+    if (!connectorWindow) {
+      appendLog('Redirect подавлен: не удалось подготовить служебное окно.');
+      return false;
+    }
+
+    try {
+      connectorWindow.location.href = joinLink;
+      connectorWindow.focus();
+      return true;
+    } catch {
+      appendLog('Redirect подавлен: браузер не дал обновить служебное окно.');
+      return false;
+    }
+  };
+
+  const scheduleSequenceStep = (remaining: ExporterServerSnapshot[]) => {
+    clearPendingSequence();
+
+    if (!remaining.length || testSequenceDelayMs <= 0) return;
+
+    const [nextServer, ...tail] = remaining;
+    const nextRedirectAt = Date.now() + testSequenceDelayMs;
+
+    setPendingSequence({ remaining, nextRedirectAt });
+    appendLog(
+      `Запланирован follow-up redirect через ${Math.ceil(testSequenceDelayMs / 1000)} s: ${nextServer.name}`
+    );
+
+    sequenceTimerRef.current = window.setTimeout(() => {
+      sequenceTimerRef.current = null;
+      setPendingSequence(null);
+
+      if (!enabledRef.current) {
+        appendLog(`Follow-up redirect пропущен: автоконнектор уже выключен.`);
+        return;
+      }
+
+      if (!nextServer.joinLink) {
+        appendLog(`Follow-up redirect пропущен: у ${nextServer.name} нет joinLink.`);
+        return;
+      }
+
+      if (!triggerJoinLink(nextServer.joinLink)) {
+        return;
+      }
+
+      appendLog(`Follow-up redirect triggered: ${nextServer.joinLink}`);
+      scheduleSequenceStep(tail);
+    }, testSequenceDelayMs);
   };
 
   const handlePermissionsCheck = async () => {
@@ -116,29 +266,40 @@ export default function App({ config }: AppProps) {
       const nextSnapshot = await fetchCombinedSnapshot(config.exporters);
       const nextPolicy = resolveSeedPolicy(config.policy);
       const nextSelection = buildSelectionState(nextSnapshot, nextPolicy);
+      const nextTestSequence = buildTestSequence(nextSnapshot, config.app.testSequenceServerIds);
+      const nextRedirectPlan = nextTestSequence.length
+        ? nextTestSequence
+        : nextSelection.targetServer
+          ? [nextSelection.targetServer]
+          : [];
 
       setSnapshot(nextSnapshot);
       setSelection(nextSelection);
+      setPlannedSequence(nextRedirectPlan);
 
       if (nextSnapshot.errors.length) {
         nextSnapshot.errors.forEach((error) => appendLog(`Ошибка exporter: ${error}`));
       }
 
       appendLog(
-        `Snapshot fetched: target=${nextSelection.targetServer?.name || 'none'}, mode=${
-          nextSelection.nightMode ? 'night' : 'day'
+        `Snapshot fetched: target=${nextRedirectPlan[0]?.name || nextSelection.targetServer?.name || 'none'}, mode=${
+          nextTestSequence.length ? 'test-sequence' : nextSelection.nightMode ? 'night' : 'day'
         }`
       );
 
       if (!enabledRef.current) return;
 
-      if (!permissions?.popupAllowed || !permissions?.steamProtocolReady) {
+      if (!permissionsRef.current?.popupAllowed || !permissionsRef.current?.steamProtocolReady) {
         appendLog('Redirect подавлен: нет подтверждённых browser permissions.');
         return;
       }
 
-      if (!nextSelection.targetServer?.joinLink) {
-        appendLog('Redirect подавлен: нет подходящего сервера или joinLink.');
+      if (!nextRedirectPlan[0]?.joinLink) {
+        appendLog(
+          nextTestSequence.length || config.app.testSequenceServerIds?.length
+            ? 'Redirect подавлен: тестовая последовательность пока не готова.'
+            : 'Redirect подавлен: нет подходящего сервера или joinLink.'
+        );
         return;
       }
 
@@ -157,8 +318,15 @@ export default function App({ config }: AppProps) {
       saveLastProcessedTimestamp(nextSnapshot.timestamp);
       setCooldownUntil(nextCooldownUntil);
       saveCooldownUntil(nextCooldownUntil);
-      appendLog(`Redirect triggered: ${nextSelection.targetServer.joinLink}`);
-      window.location.href = nextSelection.targetServer.joinLink;
+      clearPendingSequence();
+
+      const [firstTarget, ...followups] = nextRedirectPlan;
+      if (!triggerJoinLink(firstTarget.joinLink!)) {
+        return;
+      }
+
+      appendLog(`Redirect triggered: ${firstTarget.joinLink}`);
+      scheduleSequenceStep(followups);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown snapshot error';
       setFatalError(message);
@@ -188,20 +356,41 @@ export default function App({ config }: AppProps) {
       return;
     }
 
+    if (!ensureConnectorWindow()) {
+      appendLog('Автоконнектор не запущен: не удалось открыть служебное окно.');
+      return;
+    }
+
     setEnabled(true);
     saveEnabled(true);
-    appendLog('Автоконнектор включён.');
+    appendLog(
+      config.app.testSequenceServerIds?.length
+        ? `Автоконнектор включён. Активна тестовая последовательность: ${testSequencePlanLabel}.`
+        : 'Автоконнектор включён.'
+    );
+    void refreshSnapshot();
   };
 
   const handleDisable = () => {
+    clearPendingSequence();
+    closeConnectorWindow();
     setEnabled(false);
     saveEnabled(false);
     appendLog('Автоконнектор выключен.');
   };
 
   const cooldownLeftMs = Math.max(0, cooldownUntil - now);
-  const statusText = getSelectionStatusLabel(selection);
+  const statusText = config.app.testSequenceServerIds?.length
+    ? plannedSequence.length === config.app.testSequenceServerIds.length
+      ? 'Тестовая последовательность готова'
+      : 'Тестовая последовательность пока не готова'
+    : getSelectionStatusLabel(selection);
   const permissionsReady = Boolean(permissions?.popupAllowed && permissions?.steamProtocolReady);
+  const displayTargetServer = plannedSequence[0] || selection?.targetServer || null;
+  const nextFollowupServer = pendingSequence?.remaining[0] || plannedSequence[1] || null;
+  const nextFollowupCountdown = pendingSequence
+    ? Math.max(0, pendingSequence.nextRedirectAt - now)
+    : 0;
 
   return (
     <div className="shell">
@@ -221,7 +410,7 @@ export default function App({ config }: AppProps) {
           </div>
           <div className="stat-card">
             <span>Target</span>
-            <strong>{selection?.targetServer?.name || 'Нет подходящего сервера'}</strong>
+            <strong>{displayTargetServer?.name || 'Нет подходящего сервера'}</strong>
           </div>
         </div>
       </header>
@@ -244,7 +433,13 @@ export default function App({ config }: AppProps) {
             </div>
             <div>
               <dt>Режим</dt>
-              <dd>{selection?.nightMode ? 'Ночной' : 'Дневной'}</dd>
+              <dd>
+                {config.app.testSequenceServerIds?.length
+                  ? 'Тестовая последовательность'
+                  : selection?.nightMode
+                    ? 'Ночной'
+                    : 'Дневной'}
+              </dd>
             </div>
             <div>
               <dt>Exporter endpoints</dt>
@@ -252,7 +447,11 @@ export default function App({ config }: AppProps) {
             </div>
             <div>
               <dt>Target joinLink</dt>
-              <dd>{selection?.targetServer?.joinLink || '—'}</dd>
+              <dd>{displayTargetServer?.joinLink || '—'}</dd>
+            </div>
+            <div>
+              <dt>Follow-up</dt>
+              <dd>{nextFollowupServer?.name || '—'}</dd>
             </div>
           </dl>
         </section>
@@ -317,14 +516,22 @@ export default function App({ config }: AppProps) {
         <section className="panel">
           <div className="panel-header">
             <h2>Управление</h2>
-            <span className="badge">{isFetching ? 'Polling…' : 'Idle'}</span>
+            <span className="badge">
+              {pendingSequence
+                ? `Follow-up через ${formatCountdown(nextFollowupCountdown)}`
+                : isFetching
+                  ? 'Polling…'
+                  : enabled
+                    ? 'Активен'
+                    : 'Idle'}
+            </span>
           </div>
           <div className="actions">
-            <button className="button button-primary" onClick={() => void handleEnable()}>
-              Включить автоконнектор
-            </button>
-            <button className="button" onClick={handleDisable}>
-              Выключить
+            <button
+              className="button button-primary"
+              onClick={enabled ? handleDisable : () => void handleEnable()}
+            >
+              {enabled ? 'Выключить автоконнектор' : 'Включить автоконнектор'}
             </button>
             <button className="button" onClick={() => void refreshSnapshot()}>
               Обновить сейчас
@@ -342,6 +549,14 @@ export default function App({ config }: AppProps) {
             <div>
               <dt>lastProcessedTimestamp</dt>
               <dd>{lastProcessedTimestamp || '—'}</dd>
+            </div>
+            <div>
+              <dt>Служебное окно</dt>
+              <dd>{connectorWindowReady ? 'Готово' : 'Не подготовлено'}</dd>
+            </div>
+            <div>
+              <dt>Тестовый план</dt>
+              <dd>{config.app.testSequenceServerIds?.length ? testSequencePlanLabel : 'Выключен'}</dd>
             </div>
           </dl>
           {fatalError ? <p className="error-text">{fatalError}</p> : null}

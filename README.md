@@ -20,9 +20,10 @@
 - fully-static архитектура без backend и без Steam auth;
 - client-side polling публичных exporter endpoint-ов;
 - выбор target server по frontend policy: ночному окну, приоритетам, лимиту онлайна и `switchDelta`;
+- опциональный test-sequence через runtime-config, например `2 -> 1` с задержкой `10 s`;
 - хранение `enabled`, `lastProcessedTimestamp`, `cooldown` и permissions в `localStorage`;
 - локальный preflight-check на странице: popup, `steam://`, и явная подсказка оставить Squad в главном меню;
-- redirect через `window.location.href = joinLink`, если пришёл новый snapshot и есть подходящий seed-сервер;
+- redirect через служебное popup-окно, чтобы страница не теряла состояние и могла выполнить follow-up redirect;
 - документация по настройке frontend и exporter-а.
 
 ## Локальный запуск
@@ -44,7 +45,9 @@ npm run dev
 {
   "app": {
     "title": "BSS AutoConnect",
-    "pollIntervalMs": 180000
+    "pollIntervalMs": 180000,
+    "testSequenceServerIds": [2, 1],
+    "testSequenceDelayMs": 10000
   },
   "policy": {
     "timezone": "Europe/Moscow",

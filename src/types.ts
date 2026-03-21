@@ -3,6 +3,8 @@ export type AppConfig = {
     title: string;
     pollIntervalMs: number;
     debugLogLimit?: number;
+    testSequenceServerIds?: number[];
+    testSequenceDelayMs?: number;
   };
   policy?: Partial<SeedPolicy>;
   exporters: ExporterEndpointConfig[];

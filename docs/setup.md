@@ -27,7 +27,9 @@
   "app": {
     "title": "BSS AutoConnect",
     "pollIntervalMs": 180000,
-    "debugLogLimit": 80
+    "debugLogLimit": 80,
+    "testSequenceServerIds": [2, 1],
+    "testSequenceDelayMs": 10000
   },
   "policy": {
     "timezone": "Europe/Moscow",
@@ -53,6 +55,8 @@
 ```
 
 Если сайт публикуется не из корня домена, добавьте repository variable `VITE_BASE_PATH`, например `/autoseed/`.
+
+`testSequenceServerIds` и `testSequenceDelayMs` опциональны. Они нужны только для ручного end-to-end теста, когда нужно принудительно прогнать последовательность переходов, например `2 -> 1`, даже если обычная policy сейчас не выбрала бы такой сценарий.
 
 ### Важно
 
