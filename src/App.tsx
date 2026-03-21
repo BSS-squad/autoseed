@@ -45,6 +45,8 @@ const EMPTY_SNAPSHOT: CombinedSnapshot = {
   errors: []
 };
 
+const IMMEDIATE_REDIRECT_SNAPSHOT_MAX_AGE_MS = 15_000;
+
 function formatTimestamp(value: number | string | undefined): string {
   if (!value) return '—';
   const date = new Date(value);
@@ -81,6 +83,19 @@ function formatCompactTimestamp(value: number | string | undefined): string {
 function normalizeDelaySeconds(value: number): number {
   if (!Number.isFinite(value)) return 60;
   return Math.max(5, Math.min(600, Math.round(value)));
+}
+
+function getSnapshotAgeMs(snapshot: CombinedSnapshot): number {
+  const generatedAtMs = Date.parse(snapshot.generatedAt);
+  if (Number.isFinite(generatedAtMs)) {
+    return Math.max(0, Date.now() - generatedAtMs);
+  }
+
+  if (snapshot.timestamp > 0) {
+    return Math.max(0, Date.now() - snapshot.timestamp);
+  }
+
+  return Number.POSITIVE_INFINITY;
 }
 
 function getServerLoadPercent(server: ExporterServerSnapshot): number {
@@ -495,10 +510,9 @@ export default function App({ config }: AppProps) {
       return;
     }
 
-    if (isTestModeActive) {
-      clearPendingSequence();
-      resetRedirectState();
-    }
+    clearPendingSequence();
+    resetRedirectState();
+    enabledRef.current = true;
 
     setEnabled(true);
     saveEnabled(true);
@@ -508,23 +522,45 @@ export default function App({ config }: AppProps) {
         : 'Автоконнектор включён.'
     );
 
-    if (
-      isTestModeActive &&
-      plannedSequence.length === (testModeConfig?.sequenceServerIds?.length || 0) &&
-      snapshot.timestamp > 0
-    ) {
-      if (startRedirectPlan(plannedSequence, snapshot.timestamp, testCooldownMs)) {
-        appendLog('Тестовый режим: первый redirect запущен сразу из текущего snapshot.');
+    const immediateRedirectPlan =
+      isTestModeActive
+        ? plannedSequence.length === (testModeConfig?.sequenceServerIds?.length || 0)
+          ? plannedSequence
+          : []
+        : selection?.targetServer
+          ? [selection.targetServer]
+          : [];
+    const currentSnapshotIsFresh =
+      snapshot.timestamp > 0 && getSnapshotAgeMs(snapshot) <= IMMEDIATE_REDIRECT_SNAPSHOT_MAX_AGE_MS;
+
+    if (immediateRedirectPlan.length && currentSnapshotIsFresh) {
+      if (
+        startRedirectPlan(
+          immediateRedirectPlan,
+          snapshot.timestamp,
+          isTestModeActive ? testCooldownMs : effectivePolicy.cooldownMs
+        )
+      ) {
+        appendLog(
+          isTestModeActive
+            ? 'Тестовый режим: первый redirect запущен сразу из текущего snapshot.'
+            : 'Боевой режим: первый redirect запущен сразу из текущего snapshot.'
+        );
         return;
       }
     }
 
-    void refreshSnapshot({ forceRedirect: isTestModeActive });
+    if (immediateRedirectPlan.length && snapshot.timestamp > 0 && !currentSnapshotIsFresh) {
+      appendLog('Текущий snapshot устарел: запрашиваю свежие данные перед первичным redirect.');
+    }
+
+    void refreshSnapshot({ forceRedirect: true });
   };
 
   const handleDisable = () => {
     clearPendingSequence();
     closeConnectorWindow();
+    enabledRef.current = false;
     setEnabled(false);
     saveEnabled(false);
     appendLog('Автоконнектор выключен.');
