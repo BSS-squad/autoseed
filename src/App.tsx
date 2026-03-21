@@ -34,6 +34,10 @@ type PendingSequence = {
   nextRedirectAt: number;
 };
 
+type RefreshSnapshotOptions = {
+  forceRedirect?: boolean;
+};
+
 const EMPTY_SNAPSHOT: CombinedSnapshot = {
   timestamp: 0,
   generatedAt: '',
@@ -366,7 +370,34 @@ export default function App({ config }: AppProps) {
     void refreshSnapshot();
   };
 
-  const refreshSnapshot = async () => {
+  const startRedirectPlan = (
+    redirectPlan: ExporterServerSnapshot[],
+    snapshotTimestamp: number,
+    cooldownMs: number
+  ): boolean => {
+    const [firstTarget, ...followups] = redirectPlan;
+    if (!firstTarget?.joinLink) {
+      appendLog('Redirect подавлен: нет готового joinLink.');
+      return false;
+    }
+
+    const nextCooldownUntil = Date.now() + cooldownMs;
+    setLastProcessedTimestamp(snapshotTimestamp);
+    saveLastProcessedTimestamp(snapshotTimestamp);
+    setCooldownUntil(nextCooldownUntil);
+    saveCooldownUntil(nextCooldownUntil);
+    clearPendingSequence();
+
+    if (!triggerJoinLink(firstTarget.joinLink)) {
+      return false;
+    }
+
+    appendLog(`Redirect triggered: ${firstTarget.joinLink}`);
+    scheduleSequenceStep(followups);
+    return true;
+  };
+
+  const refreshSnapshot = async (options?: RefreshSnapshotOptions) => {
     setIsFetching(true);
     setFatalError(null);
 
@@ -415,30 +446,21 @@ export default function App({ config }: AppProps) {
         return;
       }
 
-      if (nextSnapshot.timestamp <= lastProcessedTimestampRef.current) {
+      if (!options?.forceRedirect && nextSnapshot.timestamp <= lastProcessedTimestampRef.current) {
         appendLog('Redirect подавлен: snapshot уже обработан.');
         return;
       }
 
-      if (Date.now() < cooldownUntilRef.current) {
+      if (!options?.forceRedirect && Date.now() < cooldownUntilRef.current) {
         appendLog('Redirect подавлен: активен cooldown.');
         return;
       }
 
-      const nextCooldownUntil = Date.now() + (testModeEnabled ? testCooldownMs : nextPolicy.cooldownMs);
-      setLastProcessedTimestamp(nextSnapshot.timestamp);
-      saveLastProcessedTimestamp(nextSnapshot.timestamp);
-      setCooldownUntil(nextCooldownUntil);
-      saveCooldownUntil(nextCooldownUntil);
-      clearPendingSequence();
-
-      const [firstTarget, ...followups] = nextRedirectPlan;
-      if (!triggerJoinLink(firstTarget.joinLink!)) {
-        return;
-      }
-
-      appendLog(`Redirect triggered: ${firstTarget.joinLink}`);
-      scheduleSequenceStep(followups);
+      startRedirectPlan(
+        nextRedirectPlan,
+        nextSnapshot.timestamp,
+        testModeEnabled ? testCooldownMs : nextPolicy.cooldownMs
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown snapshot error';
       setFatalError(message);
@@ -473,6 +495,11 @@ export default function App({ config }: AppProps) {
       return;
     }
 
+    if (isTestModeActive) {
+      clearPendingSequence();
+      resetRedirectState();
+    }
+
     setEnabled(true);
     saveEnabled(true);
     appendLog(
@@ -480,7 +507,19 @@ export default function App({ config }: AppProps) {
         ? `Автоконнектор включён. Активен тестовый режим: ${testSequencePlanLabel}.`
         : 'Автоконнектор включён.'
     );
-    void refreshSnapshot();
+
+    if (
+      isTestModeActive &&
+      plannedSequence.length === (testModeConfig?.sequenceServerIds?.length || 0) &&
+      snapshot.timestamp > 0
+    ) {
+      if (startRedirectPlan(plannedSequence, snapshot.timestamp, testCooldownMs)) {
+        appendLog('Тестовый режим: первый redirect запущен сразу из текущего snapshot.');
+        return;
+      }
+    }
+
+    void refreshSnapshot({ forceRedirect: isTestModeActive });
   };
 
   const handleDisable = () => {
