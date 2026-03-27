@@ -31,6 +31,48 @@ export type ExporterEndpointConfig = {
   baseUrl: string;
 };
 
+export type ExporterPlayerSnapshot = {
+  eosId?: string | null;
+  steamId?: string | null;
+  name: string;
+  teamId?: number | null;
+  teamName?: string | null;
+  squadId?: number | null;
+  squadName?: string | null;
+  role?: string | null;
+  isLeader: boolean;
+  isCommander: boolean;
+  playtimeSeconds?: number | null;
+  playtimeHours?: number | null;
+  playtimeSource?: string | null;
+};
+
+export type ExporterSquadSnapshot = {
+  id?: number | null;
+  name: string;
+  playerCount: number;
+  totalPlaytimeSeconds?: number | null;
+  totalPlaytimeHours?: number | null;
+  leaderName?: string | null;
+  leaderPlaytimeSeconds?: number | null;
+  leaderPlaytimeHours?: number | null;
+};
+
+export type ExporterTeamSnapshot = {
+  id?: number | null;
+  name: string;
+  playerCount: number;
+  playersWithHours?: number;
+  totalPlaytimeSeconds?: number | null;
+  totalPlaytimeHours?: number | null;
+  leaderPlaytimeSeconds?: number | null;
+  leaderPlaytimeHours?: number | null;
+  commanderPlaytimeSeconds?: number | null;
+  commanderPlaytimeHours?: number | null;
+  squads: ExporterSquadSnapshot[];
+  players: ExporterPlayerSnapshot[];
+};
+
 export type ExporterServerSnapshot = {
   id: number;
   code: string;
@@ -43,9 +85,27 @@ export type ExporterServerSnapshot = {
   isSeedCandidate: boolean;
   online: boolean;
   joinLink?: string;
+  teams: ExporterTeamSnapshot[];
+  players: ExporterPlayerSnapshot[];
   updatedAt: number;
   sourceUrl: string;
   error?: string | null;
+};
+
+export type ExporterSnapshotPlayerResponse = Partial<ExporterPlayerSnapshot>;
+
+export type ExporterSnapshotSquadResponse = Partial<ExporterSquadSnapshot>;
+
+export type ExporterSnapshotTeamResponse = Partial<Omit<ExporterTeamSnapshot, 'players' | 'squads'>> & {
+  squads?: ExporterSnapshotSquadResponse[];
+  players?: ExporterSnapshotPlayerResponse[];
+};
+
+export type ExporterSnapshotServerResponse = Partial<
+  Omit<ExporterServerSnapshot, 'sourceUrl' | 'error' | 'teams' | 'players'>
+> & {
+  teams?: ExporterSnapshotTeamResponse[];
+  players?: ExporterSnapshotPlayerResponse[];
 };
 
 export type ExporterSnapshotResponse = {
@@ -53,7 +113,7 @@ export type ExporterSnapshotResponse = {
   timestamp: number;
   generatedAt: string;
   version: number;
-  servers: Array<Partial<Omit<ExporterServerSnapshot, 'sourceUrl' | 'error'>>>;
+  servers: ExporterSnapshotServerResponse[];
 };
 
 export type CombinedSnapshot = {

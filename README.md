@@ -8,8 +8,8 @@
 
 - frontend полностью статический и публикуется через GitHub Pages;
 - exporter публикуется отдельно через `https://api.squad.leo-land.ru/squadjs1/v1/autoseed` и `https://api.squad.leo-land.ru/squadjs2/v1/autoseed`;
-- exporter отдаёт только факты по серверам: `healthz` и `snapshot`;
-- `joinLink` приходит готовым из exporter-а и может быть прямым `steam://connect/...` или внешним HTTPS-redirect;
+- exporter отдаёт `healthz` и расширенный `snapshot` с общим онлайном, составом сторон, squad-структурой и часами из `PlaytimeTracker`;
+- `joinLink` приходит готовым из exporter-а и теперь может подтягиваться из `Squadbrowser API` по exact server name;
 - policy живёт только во frontend runtime-config;
 - текущий приоритет выбора: ночью `serverId=2`, днём `2 -> 1`.
 
@@ -19,12 +19,13 @@
 - runtime-конфиг через `public/runtime-config.json`;
 - fully-static архитектура без backend и без Steam auth;
 - client-side polling публичных exporter endpoint-ов;
+- просмотр онлайна серверов, состава сторон и баланса часов по игрокам;
 - выбор target server по frontend policy: ночному окну, приоритетам, лимиту онлайна и `switchDelta`;
 - опциональный test-sequence через runtime-config, например `2 -> 1` с задержкой `60 s`;
 - хранение `enabled`, `lastProcessedTimestamp`, `cooldown` и permissions в `localStorage`;
 - локальный preflight-check на странице: popup, `steam://`, и явная подсказка оставить Squad в главном меню;
 - redirect через служебное popup-окно, чтобы страница не теряла состояние и могла выполнить follow-up redirect;
-- документация по настройке frontend и exporter-а.
+- документация по настройке frontend, exporter-а и `Squadbrowser` join-link lookup.
 
 ## Локальный запуск
 
@@ -85,6 +86,20 @@ npm run dev
 Важно: это публичный клиентский конфиг. Даже если он подставляется через GitHub Secrets, после билда значения становятся видимыми в браузере. Не кладите туда приватные ключи.
 
 Frontend не знает пользователя, не хранит `steamId` и не обращается к Steam OpenID. Exporter отдаёт только факты по серверам, а все правила выбора живут во frontend runtime-config. Это общий autoconnect на правильный seed-сервер по публичному правилу.
+
+## Squadbrowser Join Link
+
+Локальный файл [docs/squadbrowser-openapi.json](./docs/squadbrowser-openapi.json) описывает ручку `POST /pub/join-link`. Exporter в `squadjs2` умеет:
+
+- брать exact server name из SquadJS;
+- звать `Squadbrowser API` с `x-api-key`;
+- публиковать готовый `joinLink` во frontend snapshot;
+- падать назад на обычный `steam://connect/{host}:{port}`, если `Squadbrowser API` временно недоступен.
+
+Для включения этого пути на стороне SquadJS нужны:
+
+- `SQUADBROWSER_API_BASE_URL`
+- `SQUADBROWSER_API_KEY`
 
 ## Быстрый тест
 

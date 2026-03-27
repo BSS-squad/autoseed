@@ -17,11 +17,12 @@ import {
   saveTestSequenceDelayMs
 } from './lib/storage';
 import type {
-  AppMode,
   AppConfig,
+  AppMode,
   BrowserPermissions,
   CombinedSnapshot,
   ExporterServerSnapshot,
+  ExporterTeamSnapshot,
   SelectionState
 } from './types';
 
@@ -36,6 +37,19 @@ type PendingSequence = {
 
 type RefreshSnapshotOptions = {
   forceRedirect?: boolean;
+};
+
+type TeamPanelProps = {
+  team: ExporterTeamSnapshot;
+  opponent: ExporterTeamSnapshot | null;
+};
+
+type ConnectorWindowContext = {
+  title: string;
+  server: ExporterServerSnapshot;
+  followupServer?: ExporterServerSnapshot | null;
+  followupDelayMs?: number;
+  seedLimit: number;
 };
 
 const EMPTY_SNAPSHOT: CombinedSnapshot = {
@@ -57,19 +71,6 @@ function formatTimestamp(value: number | string | undefined): string {
   }).format(date);
 }
 
-function formatBool(value: boolean): string {
-  return value ? 'Да' : 'Нет';
-}
-
-function classNames(...values: Array<string | false | null | undefined>): string {
-  return values.filter(Boolean).join(' ');
-}
-
-function formatCountdown(ms: number): string {
-  if (ms <= 0) return '0 s';
-  return `${Math.ceil(ms / 1000)} s`;
-}
-
 function formatCompactTimestamp(value: number | string | undefined): string {
   if (!value) return '—';
   const date = new Date(value);
@@ -78,6 +79,27 @@ function formatCompactTimestamp(value: number | string | undefined): string {
     hour: '2-digit',
     minute: '2-digit'
   }).format(date);
+}
+
+function formatBool(value: boolean): string {
+  return value ? 'Да' : 'Нет';
+}
+
+function formatCountdown(ms: number): string {
+  if (ms <= 0) return '0 s';
+  return `${Math.ceil(ms / 1000)} s`;
+}
+
+function formatHours(value: number | null | undefined): string {
+  if (typeof value !== 'number' || Number.isNaN(value)) return '—';
+  return `${new Intl.NumberFormat('ru-RU', {
+    minimumFractionDigits: value >= 100 ? 0 : 1,
+    maximumFractionDigits: 1
+  }).format(value)} ч`;
+}
+
+function classNames(...values: Array<string | false | null | undefined>): string {
+  return values.filter(Boolean).join(' ');
 }
 
 function normalizeDelaySeconds(value: number): number {
@@ -103,6 +125,11 @@ function getServerLoadPercent(server: ExporterServerSnapshot): number {
   return Math.max(0, Math.min(100, Math.round((server.playerCount / server.maxPlayers) * 100)));
 }
 
+function getSeedProgressPercent(server: ExporterServerSnapshot, seedLimit: number): number {
+  if (!seedLimit) return 0;
+  return Math.max(0, Math.min(100, Math.round((server.playerCount / seedLimit) * 100)));
+}
+
 function canUseRedirectSequenceTarget(server: ExporterServerSnapshot | undefined): boolean {
   return Boolean(server?.online && server.joinLink);
 }
@@ -125,6 +152,272 @@ function buildTestSequence(
   }
 
   return sequence;
+}
+
+function getTeamHours(team: ExporterTeamSnapshot | null | undefined): number {
+  return typeof team?.totalPlaytimeHours === 'number' ? team.totalPlaytimeHours : 0;
+}
+
+function getWeakerTeam(server: ExporterServerSnapshot | null | undefined): ExporterTeamSnapshot | null {
+  if (!server) return null;
+  const [left, right] = server.teams;
+  if (!left || !right) return null;
+
+  const leftHours = getTeamHours(left);
+  const rightHours = getTeamHours(right);
+  if (leftHours === rightHours) return null;
+  return leftHours < rightHours ? left : right;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+function buildConnectorWindowMarkup(context: ConnectorWindowContext): string {
+  const { title, server, followupServer, followupDelayMs = 0, seedLimit } = context;
+  const seedPercent = getSeedProgressPercent(server, seedLimit);
+  const weakerTeam = getWeakerTeam(server);
+  const [teamOne, teamTwo] = server.teams;
+  const matchupText =
+    teamOne && teamTwo
+      ? `${escapeHtml(teamOne.name)} ${formatHours(teamOne.totalPlaytimeHours)} · ${escapeHtml(teamTwo.name)} ${formatHours(teamTwo.totalPlaytimeHours)}`
+      : 'Состав сторон уточняется…';
+  const followupText =
+    followupServer && followupDelayMs > 0
+      ? `Следом: ${escapeHtml(followupServer.name)} через ${Math.ceil(followupDelayMs / 1000)} s`
+      : 'Ожидаем ответ Steam / Squad';
+  const weakerText = weakerTeam
+    ? `Слабее по часам: ${escapeHtml(weakerTeam.name)}`
+    : 'Баланс сторон пока ровный';
+
+  return `<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${escapeHtml(title)}</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #060606;
+        --panel: rgba(18, 18, 18, 0.96);
+        --line: rgba(255, 255, 255, 0.08);
+        --text: #f5f5f5;
+        --muted: #9d9d9d;
+        --red: #dd1f1f;
+        --green: #20c45a;
+        --amber: #f59e0b;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; min-height: 100%; font-family: Inter, system-ui, sans-serif; background:
+        radial-gradient(circle at top left, rgba(221, 31, 31, 0.24), transparent 28%),
+        linear-gradient(180deg, #020202 0%, #090909 100%);
+        color: var(--text); }
+      body { display: grid; place-items: center; padding: 16px; }
+      .panel {
+        width: min(440px, 100%);
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        background: var(--panel);
+        padding: 22px;
+        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+      }
+      .eyebrow {
+        margin: 0 0 8px;
+        color: var(--muted);
+        font-size: 12px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+      h1 {
+        margin: 0;
+        font-size: 24px;
+        line-height: 1.05;
+      }
+      p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+      .stack { display: grid; gap: 14px; margin-top: 18px; }
+      .row {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 14px;
+        border-radius: 16px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.03);
+      }
+      .row strong { font-size: 15px; }
+      .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; }
+      .big { font-size: 34px; font-weight: 800; line-height: 1; }
+      .progress {
+        height: 12px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.06);
+        overflow: hidden;
+      }
+      .progress > span {
+        display: block;
+        height: 100%;
+        width: ${seedPercent}%;
+        background: linear-gradient(90deg, var(--red), #ff6b6b);
+      }
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        width: fit-content;
+        min-height: 32px;
+        padding: 0 12px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: rgba(32, 196, 90, 0.12);
+        color: var(--green);
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .tag::before {
+        content: "";
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: currentColor;
+      }
+      .note { color: var(--amber); }
+    </style>
+  </head>
+  <body>
+    <main class="panel">
+      <p class="eyebrow">BSS AutoConnect</p>
+      <h1>${escapeHtml(server.name)}</h1>
+      <p>Держи Squad открытым в главном меню. Окно нужно только для redirect в Steam.</p>
+      <div class="stack">
+        <span class="tag">Подключаем к серверу</span>
+        <div class="row">
+          <div>
+            <div class="label">Прогресс рассида</div>
+            <div class="big">${server.playerCount}/${seedLimit || server.maxPlayers || '—'}</div>
+          </div>
+          <div style="text-align:right">
+            <div class="label">Общий онлайн</div>
+            <strong>${server.playerCount}/${server.maxPlayers || '—'}</strong>
+          </div>
+        </div>
+        <div class="progress"><span></span></div>
+        <div class="row">
+          <div>
+            <div class="label">Стороны</div>
+            <strong>${matchupText}</strong>
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <div class="label">Подсказка</div>
+            <strong>${weakerText}</strong>
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <div class="label">Дальше</div>
+            <strong class="note">${followupText}</strong>
+          </div>
+        </div>
+      </div>
+    </main>
+  </body>
+</html>`;
+}
+
+function TeamPanel({ team, opponent }: TeamPanelProps) {
+  const teamHours = getTeamHours(team);
+  const opponentHours = getTeamHours(opponent);
+  const hoursDelta = teamHours - opponentHours;
+  const isUnderdog = Boolean(opponent) && hoursDelta < 0;
+  const isStronger = Boolean(opponent) && hoursDelta > 0;
+  const averageHours = team.playerCount > 0 ? teamHours / team.playerCount : 0;
+
+  let balanceLabel = 'Баланс пока ровный';
+  let balanceTone = 'team-balance-neutral';
+  if (isUnderdog) {
+    balanceLabel = `Слабее на ${formatHours(Math.abs(hoursDelta))}`;
+    balanceTone = 'team-balance-underdog';
+  } else if (isStronger) {
+    balanceLabel = `Сильнее на ${formatHours(Math.abs(hoursDelta))}`;
+    balanceTone = 'team-balance-strong';
+  }
+
+  return (
+    <section className={classNames('team-panel', isUnderdog && 'team-panel-underdog')}>
+      <div className="team-panel-head">
+        <div>
+          <h4>{team.name}</h4>
+          <p>{team.playerCount} игроков</p>
+        </div>
+        <span className={classNames('team-balance', balanceTone)}>{balanceLabel}</span>
+      </div>
+
+      <div className="team-kpis">
+        <div className="team-kpi">
+          <span>Всего</span>
+          <strong>{formatHours(team.totalPlaytimeHours)}</strong>
+        </div>
+        <div className="team-kpi">
+          <span>Среднее</span>
+          <strong>{team.playerCount ? formatHours(averageHours) : '—'}</strong>
+        </div>
+        <div className="team-kpi">
+          <span>SL</span>
+          <strong>{formatHours(team.leaderPlaytimeHours)}</strong>
+        </div>
+        <div className="team-kpi">
+          <span>CMD</span>
+          <strong>{formatHours(team.commanderPlaytimeHours)}</strong>
+        </div>
+      </div>
+
+      {team.squads.length ? (
+        <div className="team-squads">
+          {team.squads.slice(0, 6).map((squad) => (
+            <span key={`${team.id}-${squad.id}-${squad.name}`} className="squad-chip">
+              {squad.name} · {formatHours(squad.totalPlaytimeHours)}
+            </span>
+          ))}
+        </div>
+      ) : null}
+
+      <div className="roster-list">
+        {team.players.length ? (
+          team.players.map((player) => (
+            <article key={`${player.steamId || player.eosId || player.name}-${player.teamId || 0}`} className="roster-row">
+              <div className="roster-main">
+                <div className="roster-name-row">
+                  <strong>{player.name}</strong>
+                  {player.isCommander ? <span className="role-pill role-pill-cmd">CMD</span> : null}
+                  {!player.isCommander && player.isLeader ? (
+                    <span className="role-pill role-pill-sl">SL</span>
+                  ) : null}
+                </div>
+                <p>
+                  {player.squadName || 'Без сквада'}
+                  {player.role ? ` · ${player.role}` : ''}
+                </p>
+              </div>
+              <div className="roster-hours">{formatHours(player.playtimeHours)}</div>
+            </article>
+          ))
+        ) : (
+          <div className="roster-empty">Список игроков пока пуст.</div>
+        )}
+      </div>
+    </section>
+  );
 }
 
 export default function App({ config }: AppProps) {
@@ -192,6 +485,26 @@ export default function App({ config }: AppProps) {
     return () => window.clearInterval(timer);
   }, []);
 
+  const clearPendingSequence = () => {
+    if (sequenceTimerRef.current) {
+      window.clearTimeout(sequenceTimerRef.current);
+      sequenceTimerRef.current = null;
+    }
+
+    setPendingSequence(null);
+  };
+
+  const closeConnectorWindow = () => {
+    const connectorWindow = connectorWindowRef.current;
+    if (!connectorWindow || connectorWindow.closed) return;
+
+    try {
+      connectorWindow.close();
+    } catch {
+      // Ignore user-agent specific close failures.
+    }
+  };
+
   useEffect(() => {
     return () => {
       clearPendingSequence();
@@ -200,7 +513,6 @@ export default function App({ config }: AppProps) {
   }, []);
 
   const effectivePolicy = useMemo(() => resolveSeedPolicy(config.policy), [config.policy]);
-
   const debugLogLimit = config.app.debugLogLimit || 80;
 
   const appendLog = (message: string) => {
@@ -229,33 +541,6 @@ export default function App({ config }: AppProps) {
     testSequenceDelayMsRef.current = testSequenceDelayMs;
   }, [testSequenceDelayMs]);
 
-  const clearPendingSequence = () => {
-    if (sequenceTimerRef.current) {
-      window.clearTimeout(sequenceTimerRef.current);
-      sequenceTimerRef.current = null;
-    }
-
-    setPendingSequence(null);
-  };
-
-  const resetRedirectState = () => {
-    setLastProcessedTimestamp(0);
-    saveLastProcessedTimestamp(0);
-    setCooldownUntil(0);
-    saveCooldownUntil(0);
-  };
-
-  const closeConnectorWindow = () => {
-    const connectorWindow = connectorWindowRef.current;
-    if (!connectorWindow || connectorWindow.closed) return;
-
-    try {
-      connectorWindow.close();
-    } catch {
-      // Ignore user-agent specific close failures.
-    }
-  };
-
   const ensureConnectorWindow = (): Window | null => {
     const existingWindow = connectorWindowRef.current;
     if (existingWindow && !existingWindow.closed) {
@@ -263,11 +548,12 @@ export default function App({ config }: AppProps) {
     }
 
     try {
-      const nextWindow = window.open('', 'autoseed-connector', 'width=420,height=220');
+      const nextWindow = window.open('', 'autoseed-connector', 'popup=yes,width=480,height=460');
       if (!nextWindow) return null;
 
+      nextWindow.document.open();
       nextWindow.document.write(
-        '<!doctype html><title>BSS AutoConnect</title><body style="font:14px sans-serif;padding:16px">Служебное окно автоконнектора.<br/>Не закрывайте его во время тестовой последовательности.</body>'
+        '<!doctype html><title>BSS AutoConnect</title><body style="margin:0;background:#060606;color:#f3f3f3;font-family:Inter,system-ui,sans-serif;display:grid;place-items:center;min-height:100vh"><div style="padding:18px;border:1px solid rgba(255,255,255,.08);border-radius:20px;background:#111;text-align:center;max-width:320px">Служебное окно коннектора готово.<br/>Не закрывайте его во время переключений.</div></body>'
       );
       nextWindow.document.close();
       connectorWindowRef.current = nextWindow;
@@ -277,7 +563,37 @@ export default function App({ config }: AppProps) {
     }
   };
 
-  const triggerJoinLink = (joinLink: string): boolean => {
+  const renderConnectorWindow = (
+    connectorWindow: Window,
+    server: ExporterServerSnapshot,
+    followupServer?: ExporterServerSnapshot | null
+  ): void => {
+    try {
+      connectorWindow.document.open();
+      connectorWindow.document.write(
+        buildConnectorWindowMarkup({
+          title: config.app.title,
+          server,
+          followupServer,
+          followupDelayMs: followupServer ? testSequenceDelayMsRef.current : 0,
+          seedLimit: effectivePolicy.maxSeedPlayers
+        })
+      );
+      connectorWindow.document.close();
+    } catch {
+      appendLog('Не удалось обновить окно коннектора перед redirect.');
+    }
+  };
+
+  const triggerJoinLink = (
+    server: ExporterServerSnapshot,
+    followupServer?: ExporterServerSnapshot | null
+  ): boolean => {
+    if (!server.joinLink) {
+      appendLog(`Redirect подавлен: у ${server.name} нет joinLink.`);
+      return false;
+    }
+
     const connectorWindow = ensureConnectorWindow();
     if (!connectorWindow) {
       appendLog('Redirect подавлен: не удалось подготовить служебное окно.');
@@ -285,8 +601,15 @@ export default function App({ config }: AppProps) {
     }
 
     try {
-      connectorWindow.location.href = joinLink;
-      connectorWindow.focus();
+      renderConnectorWindow(connectorWindow, server, followupServer);
+      window.setTimeout(() => {
+        try {
+          connectorWindow.location.href = server.joinLink!;
+          connectorWindow.focus();
+        } catch {
+          appendLog('Redirect подавлен: браузер не дал обновить служебное окно.');
+        }
+      }, 40);
       return true;
     } catch {
       appendLog('Redirect подавлен: браузер не дал обновить служебное окно.');
@@ -322,13 +645,20 @@ export default function App({ config }: AppProps) {
         return;
       }
 
-      if (!triggerJoinLink(nextServer.joinLink)) {
+      if (!triggerJoinLink(nextServer, tail[0] || null)) {
         return;
       }
 
       appendLog(`Follow-up redirect triggered: ${nextServer.joinLink}`);
       scheduleSequenceStep(tail);
     }, nextDelayMs);
+  };
+
+  const resetRedirectState = () => {
+    setLastProcessedTimestamp(0);
+    saveLastProcessedTimestamp(0);
+    setCooldownUntil(0);
+    saveCooldownUntil(0);
   };
 
   const handleTestSequenceDelayChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -354,7 +684,9 @@ export default function App({ config }: AppProps) {
     testSequenceDelayMsRef.current = configuredTestSequenceDelayMs;
     setTestSequenceDelayMsOverride(0);
     saveTestSequenceDelayMs(0);
-    appendLog(`Тестовая задержка follow-up сброшена к конфигу: ${configuredTestSequenceDelaySeconds} s.`);
+    appendLog(
+      `Тестовая задержка follow-up сброшена к конфигу: ${configuredTestSequenceDelaySeconds} s.`
+    );
 
     if (pendingRemaining.length && enabledRef.current && modeRef.current === 'test') {
       clearPendingSequence();
@@ -368,14 +700,14 @@ export default function App({ config }: AppProps) {
     setPermissions(result);
     savePermissions(result);
     appendLog(
-      `Проверка permissions: popup=${formatBool(result.popupAllowed)}, steam=${formatBool(result.steamProtocolReady)}`
+      `Проверка браузера: popup=${formatBool(result.popupAllowed)}, steam=${formatBool(result.steamProtocolReady)}`
     );
   };
 
-  const handleModeChange = (nextMode: AppMode) => {
-    if (nextMode === mode) return;
-    if (nextMode === 'test' && !hasConfiguredTestMode) return;
+  const handleModeToggle = () => {
+    if (!hasConfiguredTestMode) return;
 
+    const nextMode: AppMode = mode === 'production' ? 'test' : 'production';
     clearPendingSequence();
     resetRedirectState();
     modeRef.current = nextMode;
@@ -403,7 +735,7 @@ export default function App({ config }: AppProps) {
     saveCooldownUntil(nextCooldownUntil);
     clearPendingSequence();
 
-    if (!triggerJoinLink(firstTarget.joinLink)) {
+    if (!triggerJoinLink(firstTarget, followups[0] || null)) {
       return false;
     }
 
@@ -496,7 +828,7 @@ export default function App({ config }: AppProps) {
 
   const handleEnable = async () => {
     if (!permissions) {
-      appendLog('Автоконнектор не запущен: сначала вручную выполните локальную проверку permissions.');
+      appendLog('Автоконнектор не запущен: сначала вручную выполните локальную проверку браузера.');
       return;
     }
 
@@ -567,35 +899,50 @@ export default function App({ config }: AppProps) {
   };
 
   const cooldownLeftMs = Math.max(0, cooldownUntil - now);
+  const permissionsReady = Boolean(permissions?.popupAllowed && permissions?.steamProtocolReady);
+  const productionMode = activeMode === 'production';
   const statusText = isTestModeActive
     ? plannedSequence.length === (testModeConfig?.sequenceServerIds?.length || 0)
       ? 'Тестовая последовательность готова'
       : 'Тестовая последовательность пока не готова'
     : getSelectionStatusLabel(selection);
-  const permissionsReady = Boolean(permissions?.popupAllowed && permissions?.steamProtocolReady);
   const displayTargetServer = plannedSequence[0] || selection?.targetServer || null;
   const nextFollowupServer = pendingSequence?.remaining[0] || plannedSequence[1] || null;
   const nextFollowupCountdown = pendingSequence
     ? Math.max(0, pendingSequence.nextRedirectAt - now)
     : 0;
-  const productionMode = activeMode === 'production';
+  const weakSideSuggestion = getWeakerTeam(displayTargetServer);
   const liveServerCount = snapshot.servers.filter((server) => server.online).length;
   const healthyExporterCount = Math.max(0, config.exporters.length - snapshot.errors.length);
   const latestLog = logs[logs.length - 1] || 'Событий пока нет.';
+  const orderedServers = useMemo(
+    () =>
+      snapshot.servers
+        .slice()
+        .sort((left, right) => {
+          const leftTarget = left.id === displayTargetServer?.id ? 1 : 0;
+          const rightTarget = right.id === displayTargetServer?.id ? 1 : 0;
+          if (leftTarget !== rightTarget) return rightTarget - leftTarget;
+          if (left.online !== right.online) return Number(right.online) - Number(left.online);
+          return left.id - right.id;
+        }),
+    [displayTargetServer?.id, snapshot.servers]
+  );
 
   return (
-    <div className="shell">
-      <header className="hero">
-        <div className="hero-main">
+    <div className="shell modern-shell">
+      <header className="hero hero-redesign">
+        <div className="hero-main hero-main-tight">
           <p className="eyebrow">BSS Seed Connect</p>
           <h1>{config.app.title}</h1>
-          <p className="hero-copy">
-            Публичный snapshot SquadJS exporter-а, автоматический выбор seed-сервера и redirect в
-            Squad через Steam.
+          <p className="hero-copy hero-copy-tight">
+            Включай коннектор или сразу смотри онлайн, состав сторон и баланс часов по обоим
+            серверам.
           </p>
-          <div className="hero-badges">
+
+          <div className="hero-badges hero-badges-tight">
             <span className={classNames('status-pill', enabled ? 'status-good' : 'status-muted')}>
-              {enabled ? 'Автоконнектор включён' : 'Автоконнектор выключен'}
+              {enabled ? 'Коннектор активен' : 'Коннектор выключен'}
             </span>
             <span
               className={classNames(
@@ -611,84 +958,39 @@ export default function App({ config }: AppProps) {
                 displayTargetServer ? 'status-good' : 'status-danger'
               )}
             >
-              {displayTargetServer ? statusText : 'Цель не выбрана'}
-            </span>
-            <span className="status-pill status-accent">
-              {productionMode ? 'Боевой режим' : `Тест ${testSequencePlanLabel}`}
+              {displayTargetServer ? `Цель: ${displayTargetServer.name}` : 'Цель не выбрана'}
             </span>
           </div>
         </div>
-        <div className="hero-side hero-metrics">
-          <div className="stat-card">
-            <span>Текущая цель</span>
-            <strong>{displayTargetServer?.name || 'Нет подходящего сервера'}</strong>
-          </div>
-          <div className="metric-row">
-            <div className="stat-card stat-card-compact">
-              <span>Серверы</span>
-              <strong>
-                {liveServerCount}/{snapshot.servers.length || config.exporters.length}
-              </strong>
-            </div>
-            <div className="stat-card stat-card-compact">
-              <span>Exporter</span>
-              <strong>
-                {healthyExporterCount}/{config.exporters.length}
-              </strong>
-            </div>
-            <div className="stat-card stat-card-compact">
-              <span>Snapshot</span>
-              <strong>{formatCompactTimestamp(snapshot.generatedAt)}</strong>
-            </div>
-            <div className="stat-card stat-card-compact">
-              <span>{pendingSequence ? 'Follow-up' : 'Cooldown'}</span>
-              <strong>
-                {pendingSequence
-                  ? formatCountdown(nextFollowupCountdown)
-                  : cooldownLeftMs > 0
-                    ? formatCountdown(cooldownLeftMs)
-                    : '—'}
-              </strong>
-            </div>
-          </div>
-        </div>
-      </header>
 
-      {(fatalError || snapshot.errors.length) && (
-        <section className="alert-strip">
-          {fatalError ? <p>{fatalError}</p> : null}
-          {snapshot.errors.map((error) => (
-            <p key={error}>{error}</p>
-          ))}
-        </section>
-      )}
-
-      <main className="dashboard-grid compact-grid" style={{ marginTop: 20 }}>
-        <section className="panel panel-span">
-          <div className="panel-header">
-            <h2>Управление</h2>
-            <span
-              className={classNames(
-                'badge',
-                pendingSequence ? 'badge-warn' : enabled ? 'badge-live' : 'badge-muted'
-              )}
-            >
-              {pendingSequence
-                ? `Follow-up через ${formatCountdown(nextFollowupCountdown)}`
-                : isFetching
-                  ? 'Polling…'
-                  : enabled
-                    ? 'Активен'
-                    : 'Idle'}
-            </span>
-          </div>
-          <div className="actions">
+        <aside className="control-deck">
+          <div className="segmented-control">
             <button
-              className="button button-primary"
-              onClick={enabled ? handleDisable : () => void handleEnable()}
+              className={classNames('segment', productionMode && 'segment-active')}
+              onClick={productionMode ? undefined : handleModeToggle}
+              disabled={productionMode}
             >
-              {enabled ? 'Выключить автоконнектор' : 'Включить автоконнектор'}
+              Боевой
             </button>
+            <button
+              className={classNames('segment', isTestModeActive && 'segment-active')}
+              onClick={!productionMode ? undefined : handleModeToggle}
+              disabled={!hasConfiguredTestMode || isTestModeActive}
+            >
+              {hasConfiguredTestMode ? `Тест ${testSequencePlanLabel}` : 'Тест недоступен'}
+            </button>
+          </div>
+
+          <button
+            className={classNames('power-button', enabled && 'power-button-live')}
+            onClick={enabled ? handleDisable : () => void handleEnable()}
+          >
+            <span className="power-caption">Автоконнектор</span>
+            <strong>{enabled ? 'Включён' : 'Выключен'}</strong>
+            <small>{statusText}</small>
+          </button>
+
+          <div className="control-actions">
             <button className="button button-primary" onClick={() => void handlePermissionsCheck()}>
               Проверить браузер
             </button>
@@ -696,25 +998,11 @@ export default function App({ config }: AppProps) {
               Обновить сейчас
             </button>
           </div>
-          <div className="mode-switch">
-            <button
-              className={classNames('button', productionMode && 'button-mode-active')}
-              onClick={() => handleModeChange('production')}
-            >
-              Боевой режим
-            </button>
-            <button
-              className={classNames('button', isTestModeActive && 'button-mode-active')}
-              onClick={() => handleModeChange('test')}
-              disabled={!hasConfiguredTestMode}
-            >
-              Тестовый режим
-            </button>
-          </div>
-          {hasConfiguredTestMode ? (
-            <div className="test-tuning-row">
+
+          {hasConfiguredTestMode && isTestModeActive ? (
+            <div className="test-delay-card">
               <label className="delay-field">
-                <span>Follow-up в тесте</span>
+                <span>Follow-up</span>
                 <input
                   className="delay-input"
                   type="number"
@@ -731,11 +1019,12 @@ export default function App({ config }: AppProps) {
                 onClick={handleTestSequenceDelayReset}
                 disabled={!hasManualTestSequenceDelay}
               >
-                Сбросить к конфигу
+                Сбросить
               </button>
             </div>
           ) : null}
-          <div className="signal-grid">
+
+          <div className="signal-grid compact-signal-grid">
             <div className="signal-card">
               <span
                 className={classNames(
@@ -745,7 +1034,7 @@ export default function App({ config }: AppProps) {
               />
               <div>
                 <strong>Popup</strong>
-                <p>{permissions?.popupAllowed ? 'Разрешены' : 'Не подтверждены'}</p>
+                <p>{permissions?.popupAllowed ? 'готов' : 'не готов'}</p>
               </div>
             </div>
             <div className="signal-card">
@@ -756,8 +1045,8 @@ export default function App({ config }: AppProps) {
                 )}
               />
               <div>
-                <strong>Steam protocol</strong>
-                <p>{permissions?.steamProtocolReady ? 'Готов' : 'Не подтверждён'}</p>
+                <strong>Steam</strong>
+                <p>{permissions?.steamProtocolReady ? 'готов' : 'не готов'}</p>
               </div>
             </div>
             <div className="signal-card">
@@ -772,7 +1061,7 @@ export default function App({ config }: AppProps) {
               <div>
                 <strong>Exporter</strong>
                 <p>
-                  {healthyExporterCount}/{config.exporters.length} доступны
+                  {healthyExporterCount}/{config.exporters.length}
                 </p>
               </div>
             </div>
@@ -785,23 +1074,223 @@ export default function App({ config }: AppProps) {
               />
               <div>
                 <strong>Target</strong>
-                <p>{displayTargetServer ? 'Найден' : 'Не найден'}</p>
+                <p>{displayTargetServer ? 'есть' : 'нет'}</p>
               </div>
             </div>
           </div>
-          <p className="panel-note">
-            После проверки браузера оставь Steam и Squad запущенными, а сам Squad держи в главном
-            меню.
-          </p>
-        </section>
+        </aside>
+      </header>
 
-        <section className="panel">
-          <div className="panel-header">
-            <h2>Правила</h2>
-            <span className={classNames('badge', productionMode ? 'badge-live' : 'badge-warn')}>
-              {productionMode ? 'Боевой режим' : `Тест ${testSequencePlanLabel}`}
-            </span>
+      {(fatalError || snapshot.errors.length) && (
+        <section className="alert-strip">
+          {fatalError ? <p>{fatalError}</p> : null}
+          {snapshot.errors.map((error) => (
+            <p key={error}>{error}</p>
+          ))}
+        </section>
+      )}
+
+      <section className="overview-grid">
+        <article className="overview-card overview-card-spotlight">
+          <span className="overview-label">Текущая цель</span>
+          <strong>{displayTargetServer?.name || 'Подходящий сервер не найден'}</strong>
+          <p>{statusText}</p>
+        </article>
+
+        <article className="overview-card">
+          <span className="overview-label">Куда заходить</span>
+          <strong>{weakSideSuggestion?.name || 'Стороны пока ровные'}</strong>
+          <p>{weakSideSuggestion ? 'Слабая сторона на текущем target' : 'Ждём состав сторон'}</p>
+        </article>
+
+        <article className="overview-card">
+          <span className="overview-label">Snapshot</span>
+          <strong>{formatCompactTimestamp(snapshot.generatedAt)}</strong>
+          <p>
+            {liveServerCount}/{snapshot.servers.length || config.exporters.length} серверов online
+          </p>
+        </article>
+
+        <article className="overview-card">
+          <span className="overview-label">{pendingSequence ? 'Следующий переход' : 'Cooldown'}</span>
+          <strong>
+            {pendingSequence
+              ? formatCountdown(nextFollowupCountdown)
+              : cooldownLeftMs > 0
+                ? formatCountdown(cooldownLeftMs)
+                : '—'}
+          </strong>
+          <p>
+            {pendingSequence
+              ? nextFollowupServer?.name || 'Ожидаем follow-up'
+              : enabled
+                ? 'Коннектор ждёт новый snapshot'
+                : 'Коннектор не активен'}
+          </p>
+        </article>
+      </section>
+
+      <section className="server-stack">
+        {orderedServers.map((server) => {
+          const seedLimit = effectivePolicy.maxSeedPlayers || server.maxPlayers || 0;
+          const loadPercent = getServerLoadPercent(server);
+          const seedPercent = getSeedProgressPercent(server, seedLimit);
+          const weakerTeam = getWeakerTeam(server);
+          const [teamOne, teamTwo] = server.teams;
+
+          return (
+            <article
+              key={`${server.sourceUrl}-${server.id}-${server.code}`}
+              className={classNames(
+                'server-board',
+                server.online && 'server-board-live',
+                displayTargetServer?.id === server.id && 'server-board-target'
+              )}
+            >
+              <div className="server-board-top">
+                <div className="server-title-block">
+                  <div className="server-title-row">
+                    <h2>{server.name}</h2>
+                    <div className="server-chip-row">
+                      <span
+                        className={classNames(
+                          'server-state',
+                          server.online ? 'state-live' : 'state-dead'
+                        )}
+                      >
+                        {server.online ? 'online' : 'offline'}
+                      </span>
+                      <span
+                        className={classNames(
+                          'server-state',
+                          server.isSeedCandidate ? 'state-live' : 'state-dead'
+                        )}
+                      >
+                        seed
+                      </span>
+                      {server.joinLink ? (
+                        <span className="server-state state-join">join ready</span>
+                      ) : (
+                        <span className="server-state state-dead">no join</span>
+                      )}
+                      {displayTargetServer?.id === server.id ? (
+                        <span className="server-state state-target">target</span>
+                      ) : null}
+                    </div>
+                  </div>
+                  <p className="server-board-copy">
+                    {weakerTeam
+                      ? `Слабее по часам: ${weakerTeam.name}`
+                      : 'Смотри состав сторон и общий баланс часов ниже.'}
+                  </p>
+                </div>
+
+                <div className="server-metrics">
+                  <div className="server-metric">
+                    <span>Онлайн</span>
+                    <strong>
+                      {server.playerCount}/{server.maxPlayers || '—'}
+                    </strong>
+                  </div>
+                  <div className="server-metric">
+                    <span>Seed progress</span>
+                    <strong>
+                      {server.playerCount}/{seedLimit || '—'}
+                    </strong>
+                  </div>
+                  <div className="server-metric">
+                    <span>Очередь</span>
+                    <strong>{server.queueLength || 0}</strong>
+                  </div>
+                  <div className="server-metric">
+                    <span>Снимок</span>
+                    <strong>{formatCompactTimestamp(server.updatedAt)}</strong>
+                  </div>
+                </div>
+              </div>
+
+              <div className="meter-block">
+                <div className="meter-line">
+                  <span>Загрузка</span>
+                  <strong>{loadPercent}%</strong>
+                </div>
+                <div className="server-meter server-meter-neutral">
+                  <span style={{ width: `${loadPercent}%` }} />
+                </div>
+              </div>
+
+              <div className="meter-block">
+                <div className="meter-line">
+                  <span>Прогресс рассида</span>
+                  <strong>{seedPercent}%</strong>
+                </div>
+                <div className="server-meter server-meter-seed">
+                  <span style={{ width: `${seedPercent}%` }} />
+                </div>
+              </div>
+
+              <div className="server-facts dense-facts">
+                <div className="fact-pill">
+                  <span>Слой</span>
+                  <strong>{server.currentLayer || '—'}</strong>
+                </div>
+                <div className="fact-pill">
+                  <span>Режим</span>
+                  <strong>{server.gameMode || '—'}</strong>
+                </div>
+                <div className="fact-pill">
+                  <span>Стороны</span>
+                  <strong>{server.teams.length || 0}</strong>
+                </div>
+                <div className="fact-pill">
+                  <span>Игроков с часами</span>
+                  <strong>
+                    {server.teams.reduce((sum, team) => sum + (team.playersWithHours || 0), 0)}
+                  </strong>
+                </div>
+              </div>
+
+              {server.error ? <p className="error-text">{server.error}</p> : null}
+
+              <div className="teams-grid">
+                {teamOne ? <TeamPanel team={teamOne} opponent={teamTwo || null} /> : null}
+                {teamTwo ? <TeamPanel team={teamTwo} opponent={teamOne || null} /> : null}
+                {!teamOne && !teamTwo ? (
+                  <div className="team-panel team-panel-empty">
+                    Состав сторон пока не поступил из exporter-а.
+                  </div>
+                ) : null}
+              </div>
+            </article>
+          );
+        })}
+      </section>
+
+      <details className="panel panel-span panel-details">
+        <summary className="details-summary">
+          <span>Правила и диагностика</span>
+          <span className="badge badge-muted">{snapshot.errors.length + (fatalError ? 1 : 0)}</span>
+        </summary>
+        <div className="diagnostics-grid">
+          <div className="summary-stack">
+            <div className="summary-row">
+              <span>Режим</span>
+              <strong>{productionMode ? 'Боевой' : `Тест ${testSequencePlanLabel}`}</strong>
+            </div>
+            <div className="summary-row">
+              <span>Последний snapshot</span>
+              <strong>{formatTimestamp(snapshot.generatedAt)}</strong>
+            </div>
+            <div className="summary-row">
+              <span>Последняя проверка браузера</span>
+              <strong>{permissions ? formatTimestamp(permissions.checkedAt) : '—'}</strong>
+            </div>
+            <div className="summary-row">
+              <span>Последнее событие</span>
+              <strong>{latestLog}</strong>
+            </div>
           </div>
+
           <div className="rule-grid">
             <div className="rule-card">
               <span>Приоритет</span>
@@ -836,7 +1325,7 @@ export default function App({ config }: AppProps) {
                   <strong>{testSequencePlanLabel}</strong>
                 </div>
                 <div className="rule-card">
-                  <span>Задержка теста</span>
+                  <span>Задержка follow-up</span>
                   <strong>
                     {Math.round(testSequenceDelayMs / 1000)} s
                     {hasManualTestSequenceDelay ? ' · local' : ''}
@@ -849,132 +1338,18 @@ export default function App({ config }: AppProps) {
               </>
             ) : null}
           </div>
-        </section>
+        </div>
+      </details>
 
-        <section className="panel">
-          <div className="panel-header">
-            <h2>Состояние</h2>
-            <span
-              className={classNames(
-                'badge',
-                selection?.nightMode ? 'badge-warn' : 'badge-muted'
-              )}
-            >
-              {selection?.nightMode ? 'Ночной режим' : 'Дневной режим'}
-            </span>
-          </div>
-          <div className="summary-stack">
-            <div className="summary-row">
-              <span>Активный режим</span>
-              <strong>{productionMode ? 'Боевой' : `Тестовый ${testSequencePlanLabel}`}</strong>
-            </div>
-            <div className="summary-row">
-              <span>Последний snapshot</span>
-              <strong>{formatTimestamp(snapshot.generatedAt)}</strong>
-            </div>
-            <div className="summary-row">
-              <span>Последняя проверка браузера</span>
-              <strong>{permissions ? formatTimestamp(permissions.checkedAt) : '—'}</strong>
-            </div>
-            <div className="summary-row">
-              <span>Cooldown</span>
-              <strong>{cooldownLeftMs > 0 ? formatCountdown(cooldownLeftMs) : 'Не активен'}</strong>
-            </div>
-            {pendingSequence ? (
-              <div className="summary-row">
-                <span>Следующий redirect</span>
-                <strong>{nextFollowupServer?.name || '—'}</strong>
-              </div>
-            ) : null}
-            <div className="summary-row summary-row-log">
-              <span>Последнее событие</span>
-              <strong>{latestLog}</strong>
-            </div>
-          </div>
-        </section>
-
-        <section className="panel panel-span">
-          <div className="panel-header">
-            <h2>Серверы</h2>
-            <span className="badge badge-live">{snapshot.servers.length}</span>
-          </div>
-          <div className="server-grid">
-            {snapshot.servers.map((server: ExporterServerSnapshot) => (
-              <article
-                key={`${server.sourceUrl}-${server.id}-${server.code}`}
-                className={classNames(
-                  'server-card',
-                  server.online && 'server-card-live',
-                  displayTargetServer?.id === server.id && 'server-card-target'
-                )}
-              >
-                <div className="server-card-head compact-head">
-                  <div>
-                    <h3>{server.name}</h3>
-                    <p className="server-subline">{server.code}</p>
-                  </div>
-                  <div className="server-chip-row">
-                    <span
-                      className={classNames(
-                        'server-state',
-                        server.online ? 'state-live' : 'state-dead'
-                      )}
-                    >
-                      {server.online ? 'online' : 'offline'}
-                    </span>
-                    <span
-                      className={classNames(
-                        'server-state',
-                        server.isSeedCandidate ? 'state-live' : 'state-dead'
-                      )}
-                    >
-                      seed
-                    </span>
-                    {displayTargetServer?.id === server.id ? (
-                      <span className="server-state state-target">target</span>
-                    ) : null}
-                  </div>
-                </div>
-                <div className="server-load">
-                  <div className="server-load-main">
-                    <strong>{server.playerCount}</strong>
-                    <span>/{server.maxPlayers || '—'}</span>
-                  </div>
-                  <em>{getServerLoadPercent(server)}%</em>
-                </div>
-                <div className="server-meter">
-                  <span style={{ width: `${getServerLoadPercent(server)}%` }} />
-                </div>
-                <div className="server-facts">
-                  <div className="fact-pill">
-                    <span>Очередь</span>
-                    <strong>{server.queueLength || 0}</strong>
-                  </div>
-                  <div className="fact-pill">
-                    <span>Слой</span>
-                    <strong>{server.currentLayer || '—'}</strong>
-                  </div>
-                  <div className="fact-pill">
-                    <span>Режим</span>
-                    <strong>{server.gameMode || '—'}</strong>
-                  </div>
-                </div>
-                {server.error ? <p className="error-text">{server.error}</p> : null}
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <details className="panel panel-span panel-details">
-          <summary className="details-summary">
-            <span>Debug log</span>
-            <span className="badge badge-muted">{logs.length}</span>
-          </summary>
-          <div className="log-box">
-            {logs.length ? logs.map((line) => <pre key={line}>{line}</pre>) : <pre>Лог пуст.</pre>}
-          </div>
-        </details>
-      </main>
+      <details className="panel panel-span panel-details">
+        <summary className="details-summary">
+          <span>Debug log</span>
+          <span className="badge badge-muted">{logs.length}</span>
+        </summary>
+        <div className="log-box">
+          {logs.length ? logs.map((line) => <pre key={line}>{line}</pre>) : <pre>Лог пуст.</pre>}
+        </div>
+      </details>
     </div>
   );
 }

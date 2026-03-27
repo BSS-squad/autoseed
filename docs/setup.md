@@ -9,6 +9,7 @@
   - `/squadjs1/v1/autoseed`
   - `/squadjs2/v1/autoseed`
 - exporter не отдаёт policy;
+- exporter отдаёт расширенный snapshot: server state, teams, squads, roster и playtime summary;
 - policy живёт только во frontend runtime-config;
 - текущая BSS policy:
   - ночью `nightPreferredServerId=2`
@@ -89,6 +90,10 @@
   "publicConnectHost": "${SQUAD_PUBLIC_HOST}",
   "publicConnectPort": "${SQUAD_PUBLIC_PORT}",
   "joinLinkTemplate": "steam://connect/{host}:{port}",
+  "squadbrowserApiBaseUrl": "${SQUADBROWSER_API_BASE_URL}",
+  "squadbrowserApiKey": "${SQUADBROWSER_API_KEY}",
+  "squadbrowserTimeoutMs": 4000,
+  "squadbrowserJoinLinkTtlMs": 300000,
   "corsOrigins": ["*"],
   "snapshotRefreshIntervalMs": 20000,
   "staleAfterMs": 90000,
@@ -102,8 +107,10 @@
 - `SQUAD_HOST`: адрес, куда сам SquadJS ходит за A2S/RCON.
 - `SQUAD_PUBLIC_HOST`: публичный IP/домен, который пойдёт в `steam://connect/...`.
 - `SQUAD_PUBLIC_PORT`: публичный connect-port сервера Squad.
+- `SQUADBROWSER_API_BASE_URL`: base URL внешнего `Squadbrowser API`, например `https://example.com/api`.
+- `SQUADBROWSER_API_KEY`: ключ для `POST /pub/join-link`.
 
-По умолчанию лучше использовать прямой `joinLinkTemplate: "steam://connect/{host}:{port}"`, чтобы не зависеть от внешнего redirect-сервиса. Если всё же нужен внешний redirect, `joinLinkTemplate` можно задать фиксированной HTTPS-ссылкой без `{host}` и `{port}`. Тогда exporter будет отдавать её как есть.
+Если `SQUADBROWSER_API_BASE_URL` и `SQUADBROWSER_API_KEY` заданы, exporter сначала получает join lobby link через `Squadbrowser API` по exact server name и публикует его в `snapshot`. Если запрос туда не удался, exporter мягко падает назад на `joinLinkTemplate`, поэтому базовый `steam://connect/{host}:{port}` лучше всё равно оставить настроенным.
 
 ## 3. Что менять при переносе на другие IP и серверы
 
@@ -124,6 +131,8 @@
 - `publicConnectHost`
 - `publicConnectPort`
 - `joinLinkTemplate`
+- `squadbrowserApiBaseUrl`
+- `squadbrowserApiKey`
 - `corsOrigins`
 
 ## 4. Текущие значения BSS
@@ -135,7 +144,7 @@
 
 При этом в SquadJS-конфигах `queryPort` остаётся `7810` и `7811`. Это нормально: `queryPort` и публичный connect-port могут не совпадать, поэтому `joinLink` должен собираться именно из `SQUAD_PUBLIC_HOST` и `SQUAD_PUBLIC_PORT`.
 
-Для BSS сейчас предпочтительнее прямой `steam://connect/{host}:{port}` через `SQUAD_PUBLIC_HOST/SQUAD_PUBLIC_PORT`, без промежуточного `sqstat` redirect.
+Для BSS основной путь теперь лучше держать через `Squadbrowser API`, а `steam://connect/{host}:{port}` оставить fallback-ом.
 
 ## 5. Готовые сервисы для Dokploy
 
@@ -160,6 +169,8 @@ services:
       SQUAD_HOST: ${SQUAD1_HOST}
       SQUAD_PUBLIC_HOST: 80.242.59.123
       SQUAD_PUBLIC_PORT: 7800
+      SQUADBROWSER_API_BASE_URL: ${SQUADBROWSER_API_BASE_URL}
+      SQUADBROWSER_API_KEY: ${SQUADBROWSER_API_KEY}
       SQUAD_RCON_PASSWORD: ${SQUAD1_RCON_PASSWORD}
       MYSQL_HOST: ${MYSQL_HOST}
       MYSQL_PORT: ${MYSQL_PORT}
@@ -183,6 +194,8 @@ services:
       SQUAD_HOST: ${SQUAD2_HOST}
       SQUAD_PUBLIC_HOST: 80.242.59.123
       SQUAD_PUBLIC_PORT: 7801
+      SQUADBROWSER_API_BASE_URL: ${SQUADBROWSER_API_BASE_URL}
+      SQUADBROWSER_API_KEY: ${SQUADBROWSER_API_KEY}
       SQUAD_RCON_PASSWORD: ${SQUAD2_RCON_PASSWORD}
       MYSQL_HOST: ${MYSQL_HOST}
       MYSQL_PORT: ${MYSQL_PORT}

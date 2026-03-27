@@ -1,0 +1,661 @@
+{
+    "openapi": "3.1.0",
+    "info": {
+        "title": "SQB Backend API",
+        "version": "1.0.0",
+        "description": "Squad Browser backend API documentation\n\n## Authentication\n\nAll public API endpoints require authentication using an API key.\n\n**Header:** `x-api-key`\n**Format:** API key must start with `sqb_` prefix\n**Example:** `sqb_your_api_key_here`\n\nUse the \"Authorize\" button in the top right to set your API key for testing."
+    },
+    "servers": [
+        {
+            "url": "/api"
+        }
+    ],
+    "tags": [
+        {
+            "name": "Servers",
+            "description": "Squad server data"
+        },
+        {
+            "name": "Players",
+            "description": "Player profiles and search"
+        },
+        {
+            "name": "Utilities",
+            "description": "Helper endpoints"
+        }
+    ],
+    "components": {
+        "securitySchemes": {
+            "ApiKeyAuth": {
+                "type": "apiKey",
+                "in": "header",
+                "name": "x-api-key"
+            }
+        },
+        "schemas": {
+            "JoinLinkResponse": {
+                "type": "object",
+                "properties": {
+                    "joinUrl": {
+                        "type": "string"
+                    },
+                    "serverId": {
+                        "type": "string"
+                    },
+                    "serverName": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "joinUrl",
+                    "serverId",
+                    "serverName"
+                ]
+            },
+            "ErrorResponse": {
+                "type": "object",
+                "properties": {
+                    "status": {
+                        "type": "number"
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "timestamp": {
+                        "type": "string"
+                    },
+                    "path": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "status",
+                    "message",
+                    "timestamp",
+                    "path"
+                ]
+            },
+            "GetJoinLinkBody": {
+                "type": "object",
+                "properties": {
+                    "serverName": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Exact server name from Squad RCON `serverInfo` response. Must be provided as-is with all spaces and special characters.",
+                        "example": "[EN] ExtraSuperDuper Server"
+                    }
+                },
+                "required": [
+                    "serverName"
+                ]
+            },
+            "CurrentServer": {
+                "type": [
+                    "object",
+                    "null"
+                ],
+                "properties": {
+                    "serverId": {
+                        "type": "string"
+                    },
+                    "serverName": {
+                        "type": "string"
+                    },
+                    "currentMap": {
+                        "type": "string"
+                    },
+                    "team": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    }
+                },
+                "required": [
+                    "serverId",
+                    "serverName",
+                    "currentMap",
+                    "team"
+                ]
+            },
+            "TopServer": {
+                "type": [
+                    "object",
+                    "null"
+                ],
+                "properties": {
+                    "serverId": {
+                        "type": "string"
+                    },
+                    "serverName": {
+                        "type": "string"
+                    },
+                    "playtimeMinutes": {
+                        "type": "number"
+                    }
+                },
+                "required": [
+                    "serverId",
+                    "serverName",
+                    "playtimeMinutes"
+                ]
+            },
+            "LastServer": {
+                "type": [
+                    "object",
+                    "null"
+                ],
+                "properties": {
+                    "serverId": {
+                        "type": "string"
+                    },
+                    "serverName": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "serverId",
+                    "serverName"
+                ]
+            },
+            "PlayerStats": {
+                "type": "object",
+                "properties": {
+                    "totalPlaytimeMinutes": {
+                        "type": "number"
+                    },
+                    "avgSessionMinutes": {
+                        "type": "number"
+                    },
+                    "totalSessions": {
+                        "type": "number"
+                    },
+                    "sessionsLast7Days": {
+                        "type": "number"
+                    },
+                    "sessionsLast30Days": {
+                        "type": "number"
+                    },
+                    "lastServer": {
+                        "$ref": "#/components/schemas/LastServer"
+                    }
+                },
+                "required": [
+                    "totalPlaytimeMinutes",
+                    "avgSessionMinutes",
+                    "totalSessions",
+                    "sessionsLast7Days",
+                    "sessionsLast30Days",
+                    "lastServer"
+                ]
+            },
+            "FavoriteServer": {
+                "type": "object",
+                "properties": {
+                    "serverId": {
+                        "type": "string"
+                    },
+                    "serverName": {
+                        "type": "string"
+                    },
+                    "playtimeMinutes": {
+                        "type": "number"
+                    },
+                    "lastPlayedAt": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "serverId",
+                    "serverName",
+                    "playtimeMinutes",
+                    "lastPlayedAt"
+                ]
+            },
+            "PlayerProfileResponse": {
+                "type": "object",
+                "properties": {
+                    "eosId": {
+                        "type": "string"
+                    },
+                    "steamId": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "displayName": {
+                        "type": "string"
+                    },
+                    "firstSeen": {
+                        "type": "string"
+                    },
+                    "lastSeen": {
+                        "type": "string"
+                    },
+                    "squadHours": {
+                        "type": [
+                            "number",
+                            "null"
+                        ]
+                    },
+                    "steamHoursUpdatedAt": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "steamProfilePrivate": {
+                        "type": "boolean"
+                    },
+                    "isOnline": {
+                        "type": "boolean"
+                    },
+                    "currentServer": {
+                        "$ref": "#/components/schemas/CurrentServer"
+                    },
+                    "topServer": {
+                        "$ref": "#/components/schemas/TopServer"
+                    },
+                    "stats": {
+                        "$ref": "#/components/schemas/PlayerStats"
+                    },
+                    "favoriteServers": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/FavoriteServer"
+                        }
+                    }
+                },
+                "required": [
+                    "eosId",
+                    "steamId",
+                    "displayName",
+                    "firstSeen",
+                    "lastSeen",
+                    "squadHours",
+                    "steamHoursUpdatedAt",
+                    "steamProfilePrivate",
+                    "isOnline",
+                    "currentServer",
+                    "topServer",
+                    "stats",
+                    "favoriteServers"
+                ]
+            },
+            "SessionItem": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "number"
+                    },
+                    "serverId": {
+                        "type": "string"
+                    },
+                    "serverName": {
+                        "type": "string"
+                    },
+                    "joinedAt": {
+                        "type": "string"
+                    },
+                    "leftAt": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "durationMinutes": {
+                        "type": [
+                            "number",
+                            "null"
+                        ]
+                    }
+                },
+                "required": [
+                    "id",
+                    "serverId",
+                    "serverName",
+                    "joinedAt",
+                    "leftAt",
+                    "durationMinutes"
+                ]
+            },
+            "PlayerSessionsResponse": {
+                "type": "object",
+                "properties": {
+                    "eosId": {
+                        "type": "string"
+                    },
+                    "sessions": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/SessionItem"
+                        }
+                    }
+                },
+                "required": [
+                    "eosId",
+                    "sessions"
+                ]
+            },
+            "CorePlayerEntry": {
+                "type": "object",
+                "properties": {
+                    "eosId": {
+                        "type": "string"
+                    },
+                    "displayName": {
+                        "type": "string"
+                    },
+                    "playtimeHours": {
+                        "type": "number"
+                    },
+                    "totalPlaytimeHours": {
+                        "type": "number"
+                    },
+                    "loyaltyPercent": {
+                        "type": "number"
+                    },
+                    "lastPlayedAt": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "eosId",
+                    "displayName",
+                    "playtimeHours",
+                    "totalPlaytimeHours",
+                    "loyaltyPercent",
+                    "lastPlayedAt"
+                ]
+            },
+            "CorePlayersResponse": {
+                "type": "object",
+                "properties": {
+                    "serverId": {
+                        "type": "string"
+                    },
+                    "threshold": {
+                        "type": "number"
+                    },
+                    "totalCorePlayers": {
+                        "type": "number"
+                    },
+                    "players": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/CorePlayerEntry"
+                        }
+                    }
+                },
+                "required": [
+                    "serverId",
+                    "threshold",
+                    "totalCorePlayers",
+                    "players"
+                ]
+            }
+        },
+        "parameters": {}
+    },
+    "paths": {
+        "/pub/join-link": {
+            "post": {
+                "tags": [
+                    "Utilities"
+                ],
+                "summary": "Get server join link by name",
+                "description": "Get a Squad server join link using the exact server name from RCON.\n\n**Important:** The `serverName` must match exactly as returned by Squad RCON `showServerInfo` command,\nincluding leading/trailing spaces and special characters.\n\n**Example request body:**\n```json\n{ \"serverName\": \"[EN] ExtraSuperDuper Server\" }\n```\n\n---\n\n**Usage example (JavaScript):**\n```js\n// 1. Get the exact server name from RCON\nconst rcon = new Rcon({ host: 'your-server-ip', port: 21114, password: 'rcon_password' });\nconst serverInfo = await rcon.execute('ShowServerInfo');\nconst serverName = JSON.parse(serverInfo).ServerName_s;\n\n// 2. Request the join link from the API\nconst res = await fetch('https://example.com/api/pub/join-link', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json', 'x-api-key': 'YOUR_API_KEY' },\n  body: JSON.stringify({ serverName }),\n});\nconst { joinUrl } = await res.json();\n```\n\n**Usage example (Python):**\n```python\n# 1. Get the exact server name from RCON\nrcon = Rcon(host=\"your-server-ip\", port=21114, password=\"rcon_password\")\nserver_info = rcon.execute(\"ShowServerInfo\")\nserver_name = json.loads(server_info)[\"ServerName_s\"]\n\n# 2. Request the join link from the API\nres = requests.post(\n    \"https://example.com/api/pub/join-link\",\n    headers={\"x-api-key\": \"YOUR_API_KEY\"},\n    json={\"serverName\": server_name},\n)\njoin_url = res.json()[\"joinUrl\"]\n```",
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/GetJoinLinkBody"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Join link",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/JoinLinkResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid, missing, or expired API key",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/pub/players/{id}": {
+            "get": {
+                "tags": [
+                    "Players"
+                ],
+                "summary": "Get player profile",
+                "description": "Get a player's full profile. Returns basic info, online status, play statistics, top/favorite servers, and current session if online.",
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "schema": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Player identifier — either eosId (32-char hex) or steamId (17-digit number)",
+                            "example": "0002a10186d9414496bf20d22d3860b0"
+                        },
+                        "required": true,
+                        "name": "id",
+                        "in": "path"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Player profile",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PlayerProfileResponse"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid, missing, or expired API key",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/pub/players/{id}/sessions": {
+            "get": {
+                "tags": [
+                    "Players"
+                ],
+                "summary": "Get player sessions",
+                "description": "Get a player's recent game sessions (last 50). Each session includes the server played on, join/leave times, and duration.",
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "schema": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Player identifier — either eosId (32-char hex) or steamId (17-digit number)",
+                            "example": "0002a10186d9414496bf20d22d3860b0"
+                        },
+                        "required": true,
+                        "name": "id",
+                        "in": "path"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Player sessions list",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PlayerSessionsResponse"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid, missing, or expired API key",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/pub/servers/{serverId}/players/core": {
+            "get": {
+                "tags": [
+                    "Servers"
+                ],
+                "summary": "Get server core players",
+                "description": "Get the most loyal (\"core\") players for a specific server. Core players are those who spend a high percentage of their total playtime on this server, exceeding the loyalty threshold.",
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "schema": {
+                            "type": "number",
+                            "minimum": 0.5,
+                            "maximum": 1,
+                            "default": 0.8,
+                            "description": "Loyalty threshold (0.5–1.0)",
+                            "example": 0.7
+                        },
+                        "required": false,
+                        "name": "threshold",
+                        "in": "path"
+                    },
+                    {
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 100,
+                            "default": 50,
+                            "description": "Max number of players to return",
+                            "example": 50
+                        },
+                        "required": false,
+                        "name": "limit",
+                        "in": "path"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Core players list",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CorePlayersResponse"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid, missing, or expired API key",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "webhooks": {}
+}
