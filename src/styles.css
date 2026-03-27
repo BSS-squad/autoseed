@@ -674,6 +674,40 @@ input {
   padding-right: 4px;
 }
 
+.squad-group {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.025);
+  overflow: hidden;
+}
+
+.squad-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.squad-group-head strong {
+  display: block;
+  font-size: 0.95rem;
+}
+
+.squad-group-head p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.squad-group-body {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+
 .roster-list::-webkit-scrollbar,
 .log-box::-webkit-scrollbar {
   width: 10px;

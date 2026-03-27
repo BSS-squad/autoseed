@@ -22,6 +22,7 @@ import type {
   BrowserPermissions,
   CombinedSnapshot,
   ExporterServerSnapshot,
+  ExporterSquadSnapshot,
   ExporterTeamSnapshot,
   SelectionState
 } from './types';
@@ -42,6 +43,15 @@ type RefreshSnapshotOptions = {
 type TeamPanelProps = {
   team: ExporterTeamSnapshot;
   opponent: ExporterTeamSnapshot | null;
+};
+
+type TeamRosterGroup = {
+  key: string;
+  name: string;
+  playerCount: number;
+  totalPlaytimeHours: number | null;
+  players: ExporterTeamSnapshot['players'];
+  isUnassigned: boolean;
 };
 
 type ConnectorWindowContext = {
@@ -163,6 +173,77 @@ function buildTestSequence(
 
 function getTeamHours(team: ExporterTeamSnapshot | null | undefined): number {
   return typeof team?.totalPlaytimeHours === 'number' ? team.totalPlaytimeHours : 0;
+}
+
+function buildSquadGroupKey(squadId?: number | null, squadName?: string | null): string {
+  if (typeof squadId === 'number' && Number.isFinite(squadId)) {
+    return `id:${squadId}`;
+  }
+
+  const normalizedName = (squadName || '').trim().toLowerCase();
+  return normalizedName ? `name:${normalizedName}` : 'unassigned';
+}
+
+function buildTeamRosterGroups(team: ExporterTeamSnapshot): TeamRosterGroup[] {
+  const groups = new Map<
+    string,
+    {
+      squad: ExporterSquadSnapshot | null;
+      name: string;
+      players: ExporterTeamSnapshot['players'];
+      isUnassigned: boolean;
+    }
+  >();
+
+  for (const squad of team.squads) {
+    const key = buildSquadGroupKey(squad.id, squad.name);
+    groups.set(key, {
+      squad,
+      name: squad.name || 'Без сквада',
+      players: [],
+      isUnassigned: false
+    });
+  }
+
+  for (const player of team.players) {
+    const key = buildSquadGroupKey(player.squadId, player.squadName);
+    const existing = groups.get(key);
+    if (existing) {
+      existing.players.push(player);
+      continue;
+    }
+
+    groups.set(key, {
+      squad: null,
+      name: player.squadName || 'Без сквада',
+      players: [player],
+      isUnassigned: !player.squadName && !player.squadId
+    });
+  }
+
+  return Array.from(groups.entries())
+    .map(([key, value]) => {
+      const fallbackHours = value.players.reduce((sum, player) => {
+        return sum + (typeof player.playtimeHours === 'number' ? player.playtimeHours : 0);
+      }, 0);
+
+      return {
+        key,
+        name: value.name,
+        playerCount: value.players.length || value.squad?.playerCount || 0,
+        totalPlaytimeHours:
+          typeof value.squad?.totalPlaytimeHours === 'number'
+            ? value.squad.totalPlaytimeHours
+            : fallbackHours || null,
+        players: value.players,
+        isUnassigned: value.isUnassigned
+      };
+    })
+    .filter((group) => group.playerCount > 0)
+    .sort((left, right) => {
+      if (left.isUnassigned !== right.isUnassigned) return left.isUnassigned ? 1 : -1;
+      return left.name.localeCompare(right.name, 'ru', { numeric: true, sensitivity: 'base' });
+    });
 }
 
 function getWeakerTeam(server: ExporterServerSnapshot | null | undefined): ExporterTeamSnapshot | null {
@@ -351,6 +432,7 @@ function TeamPanel({ team, opponent }: TeamPanelProps) {
   const isUnderdog = Boolean(opponent) && hoursDelta < 0;
   const isStronger = Boolean(opponent) && hoursDelta > 0;
   const averageHours = team.playerCount > 0 ? teamHours / team.playerCount : 0;
+  const rosterGroups = buildTeamRosterGroups(team);
 
   let balanceLabel = 'Баланс пока ровный';
   let balanceTone = 'team-balance-neutral';
@@ -391,35 +473,40 @@ function TeamPanel({ team, opponent }: TeamPanelProps) {
         </div>
       </div>
 
-      {team.squads.length ? (
-        <div className="team-squads">
-          {team.squads.slice(0, 6).map((squad) => (
-            <span key={`${team.id}-${squad.id}-${squad.name}`} className="squad-chip">
-              {squad.name} · {formatHours(squad.totalPlaytimeHours)}
-            </span>
-          ))}
-        </div>
-      ) : null}
-
       <div className="roster-list">
-        {team.players.length ? (
-          team.players.map((player) => (
-            <article key={`${player.steamId || player.eosId || player.name}-${player.teamId || 0}`} className="roster-row">
-              <div className="roster-main">
-                <div className="roster-name-row">
-                  <strong>{player.name}</strong>
-                  {player.isCommander ? <span className="role-pill role-pill-cmd">CMD</span> : null}
-                  {!player.isCommander && player.isLeader ? (
-                    <span className="role-pill role-pill-sl">SL</span>
-                  ) : null}
+        {rosterGroups.length ? (
+          rosterGroups.map((group) => (
+            <section key={`${team.id || 0}-${group.key}`} className="squad-group">
+              <header className="squad-group-head">
+                <div>
+                  <strong>{group.name}</strong>
+                  <p>{group.playerCount} игроков</p>
                 </div>
-                <p>
-                  {player.squadName || 'Без сквада'}
-                  {player.role ? ` · ${player.role}` : ''}
-                </p>
+                <span className="squad-chip">{formatHours(group.totalPlaytimeHours)}</span>
+              </header>
+
+              <div className="squad-group-body">
+                {group.players.map((player) => (
+                  <article
+                    key={`${player.steamId || player.eosId || player.name}-${player.teamId || 0}`}
+                    className="roster-row"
+                  >
+                    <div className="roster-main">
+                      <div className="roster-name-row">
+                        <strong>{player.name}</strong>
+                        {player.isCommander ? (
+                          <span className="role-pill role-pill-cmd">CMD</span>
+                        ) : null}
+                        {!player.isCommander && player.isLeader ? (
+                          <span className="role-pill role-pill-sl">SL</span>
+                        ) : null}
+                      </div>
+                    </div>
+                    <div className="roster-hours">{formatHours(player.playtimeHours)}</div>
+                  </article>
+                ))}
               </div>
-              <div className="roster-hours">{formatHours(player.playtimeHours)}</div>
-            </article>
+            </section>
           ))
         ) : (
           <div className="roster-empty">Список игроков пока пуст.</div>
