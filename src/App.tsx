@@ -1264,7 +1264,11 @@ export default function App({ config }: AppProps) {
             const serverKey = getServerSelectionKey(server);
             const isActive = serverKey === getServerSelectionKey(activeServer);
             const isTarget = isSameServer(server, displayTargetServer);
-            const weakerTeam = getWeakerTeam(server);
+            const [leftTeam, rightTeam] = server.teams;
+            const switcherHoursLine =
+              leftTeam && rightTeam
+                ? `${leftTeam.name}: ${formatHours(leftTeam.totalPlaytimeHours)} · ${rightTeam.name}: ${formatHours(rightTeam.totalPlaytimeHours)}`
+                : 'Часы сторон пока не готовы';
 
             return (
               <button
@@ -1292,9 +1296,7 @@ export default function App({ config }: AppProps) {
                   <span>{server.playerCount}/{server.maxPlayers || '—'}</span>
                   {isTarget ? <span className="server-switcher-accent">target</span> : null}
                 </div>
-                <p>
-                  {weakerTeam ? `Слабее: ${weakerTeam.name}` : 'Состав сторон без явного перевеса'}
-                </p>
+                <p>{switcherHoursLine}</p>
               </button>
             );
           })}
