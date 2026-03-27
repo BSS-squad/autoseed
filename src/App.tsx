@@ -140,6 +140,18 @@ function getSeedProgressPercent(server: ExporterServerSnapshot, seedLimit: numbe
   return Math.max(0, Math.min(100, Math.round((server.playerCount / seedLimit) * 100)));
 }
 
+function getServerSelectionKey(server: ExporterServerSnapshot | null | undefined): string {
+  if (!server) return '';
+  return `${server.sourceUrl}::${server.id}::${server.code}`;
+}
+
+function isSameServer(
+  left: ExporterServerSnapshot | null | undefined,
+  right: ExporterServerSnapshot | null | undefined
+): boolean {
+  return Boolean(left && right && getServerSelectionKey(left) === getServerSelectionKey(right));
+}
+
 function getSeedProgressGradient(percent: number): string {
   const normalized = Math.max(0, Math.min(100, percent));
   const startHue = Math.round((normalized / 100) * 120);
@@ -539,6 +551,7 @@ export default function App({ config }: AppProps) {
   const [fatalError, setFatalError] = useState<string | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
   const [now, setNow] = useState<number>(Date.now());
+  const [activeServerKey, setActiveServerKey] = useState<string>('');
 
   const enabledRef = useRef(enabled);
   const modeRef = useRef(mode);
@@ -1016,14 +1029,33 @@ export default function App({ config }: AppProps) {
       snapshot.servers
         .slice()
         .sort((left, right) => {
-          const leftTarget = left.id === displayTargetServer?.id ? 1 : 0;
-          const rightTarget = right.id === displayTargetServer?.id ? 1 : 0;
+          const leftTarget = isSameServer(left, displayTargetServer) ? 1 : 0;
+          const rightTarget = isSameServer(right, displayTargetServer) ? 1 : 0;
           if (leftTarget !== rightTarget) return rightTarget - leftTarget;
           if (left.online !== right.online) return Number(right.online) - Number(left.online);
           return left.id - right.id;
         }),
-    [displayTargetServer?.id, snapshot.servers]
+    [displayTargetServer, snapshot.servers]
   );
+  const activeServer =
+    orderedServers.find((server) => getServerSelectionKey(server) === activeServerKey) ||
+    orderedServers[0] ||
+    null;
+
+  useEffect(() => {
+    if (!orderedServers.length) {
+      setActiveServerKey('');
+      return;
+    }
+
+    setActiveServerKey((current) => {
+      if (current && orderedServers.some((server) => getServerSelectionKey(server) === current)) {
+        return current;
+      }
+
+      return getServerSelectionKey(displayTargetServer) || getServerSelectionKey(orderedServers[0]);
+    });
+  }, [displayTargetServer, orderedServers]);
 
   return (
     <div className="shell modern-shell">
@@ -1226,8 +1258,52 @@ export default function App({ config }: AppProps) {
         </article>
       </section>
 
+      <section className="server-switcher">
+        <div className="server-switcher-track">
+          {orderedServers.map((server) => {
+            const serverKey = getServerSelectionKey(server);
+            const isActive = serverKey === getServerSelectionKey(activeServer);
+            const isTarget = isSameServer(server, displayTargetServer);
+            const weakerTeam = getWeakerTeam(server);
+
+            return (
+              <button
+                key={serverKey}
+                type="button"
+                className={classNames(
+                  'server-switcher-card',
+                  isActive && 'server-switcher-card-active',
+                  isTarget && 'server-switcher-card-target'
+                )}
+                onClick={() => setActiveServerKey(serverKey)}
+              >
+                <div className="server-switcher-head">
+                  <strong>{server.name}</strong>
+                  <span
+                    className={classNames(
+                      'server-state',
+                      server.online ? 'state-live' : 'state-dead'
+                    )}
+                  >
+                    {server.online ? 'online' : 'offline'}
+                  </span>
+                </div>
+                <div className="server-switcher-meta">
+                  <span>{server.playerCount}/{server.maxPlayers || '—'}</span>
+                  {isTarget ? <span className="server-switcher-accent">target</span> : null}
+                </div>
+                <p>
+                  {weakerTeam ? `Слабее: ${weakerTeam.name}` : 'Состав сторон без явного перевеса'}
+                </p>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
       <section className="server-stack">
-        {orderedServers.map((server) => {
+        {activeServer ? (() => {
+          const server = activeServer;
           const seedLimit = effectivePolicy.maxSeedPlayers || server.maxPlayers || 0;
           const loadPercent = getServerLoadPercent(server);
           const seedPercent = getSeedProgressPercent(server, seedLimit);
@@ -1236,11 +1312,11 @@ export default function App({ config }: AppProps) {
 
           return (
             <article
-              key={`${server.sourceUrl}-${server.id}-${server.code}`}
+              key={getServerSelectionKey(server)}
               className={classNames(
                 'server-board',
                 server.online && 'server-board-live',
-                displayTargetServer?.id === server.id && 'server-board-target'
+                isSameServer(server, displayTargetServer) && 'server-board-target'
               )}
             >
               <div className="server-board-top">
@@ -1269,7 +1345,7 @@ export default function App({ config }: AppProps) {
                       ) : (
                         <span className="server-state state-dead">no join</span>
                       )}
-                      {displayTargetServer?.id === server.id ? (
+                      {isSameServer(server, displayTargetServer) ? (
                         <span className="server-state state-target">target</span>
                       ) : null}
                     </div>
@@ -1364,7 +1440,11 @@ export default function App({ config }: AppProps) {
               </div>
             </article>
           );
-        })}
+        })() : (
+          <article className="server-board">
+            <div className="roster-empty">Серверы пока не пришли из exporter-а.</div>
+          </article>
+        )}
       </section>
 
       <details className="panel panel-span panel-details">

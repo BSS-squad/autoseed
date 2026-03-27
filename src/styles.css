@@ -416,6 +416,92 @@ input {
   margin-top: 18px;
 }
 
+.server-switcher {
+  margin-top: 18px;
+}
+
+.server-switcher-track {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(280px, 340px);
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+}
+
+.server-switcher-track::-webkit-scrollbar {
+  height: 8px;
+}
+
+.server-switcher-track::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+}
+
+.server-switcher-card {
+  display: grid;
+  gap: 10px;
+  min-height: 126px;
+  padding: 16px;
+  border-radius: 20px;
+  border: 1px solid var(--panel-border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+
+.server-switcher-card:hover {
+  transform: translateY(-1px);
+}
+
+.server-switcher-card-active {
+  border-color: rgba(225, 29, 47, 0.42);
+  background:
+    linear-gradient(135deg, rgba(225, 29, 47, 0.16), rgba(114, 13, 25, 0.22)),
+    rgba(255, 255, 255, 0.03);
+}
+
+.server-switcher-card-target {
+  border-color: rgba(245, 158, 11, 0.32);
+}
+
+.server-switcher-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.server-switcher-head strong {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-height: 1.2;
+}
+
+.server-switcher-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.78rem;
+}
+
+.server-switcher-accent {
+  color: var(--amber);
+}
+
+.server-switcher-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
 .server-board {
   padding: 22px;
   border-radius: 28px;
