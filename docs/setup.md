@@ -87,9 +87,6 @@
   "serverId": 1,
   "serverCode": "squadjs1",
   "isSeedCandidate": true,
-  "publicConnectHost": "${SQUAD_PUBLIC_HOST}",
-  "publicConnectPort": "${SQUAD_PUBLIC_PORT}",
-  "joinLinkTemplate": "steam://connect/{host}:{port}",
   "squadbrowserApiBaseUrl": "${SQUADBROWSER_API_BASE_URL}",
   "squadbrowserApiKey": "${SQUADBROWSER_API_KEY}",
   "squadbrowserTimeoutMs": 4000,
@@ -105,12 +102,10 @@
 Если SquadJS запускается через текущий `docker-entrypoint.sh`, то `config/$INSTANCE_NAME.json` проходит через `envsubst`. Для exporter-а удобно держать отдельно:
 
 - `SQUAD_HOST`: адрес, куда сам SquadJS ходит за A2S/RCON.
-- `SQUAD_PUBLIC_HOST`: публичный IP/домен, который пойдёт в `steam://connect/...`.
-- `SQUAD_PUBLIC_PORT`: публичный connect-port сервера Squad.
 - `SQUADBROWSER_API_BASE_URL`: base URL внешнего `Squadbrowser API`, например `https://example.com/api`.
 - `SQUADBROWSER_API_KEY`: ключ для `POST /pub/join-link`.
 
-Если `SQUADBROWSER_API_BASE_URL` и `SQUADBROWSER_API_KEY` заданы, exporter сначала получает join lobby link через `Squadbrowser API` по exact server name и публикует его в `snapshot`. Если запрос туда не удался, exporter мягко падает назад на `joinLinkTemplate`, поэтому базовый `steam://connect/{host}:{port}` лучше всё равно оставить настроенным.
+Если `SQUADBROWSER_API_BASE_URL` и `SQUADBROWSER_API_KEY` заданы, exporter получает join lobby link через `Squadbrowser API` по exact server name и публикует его в `snapshot`. Если `Squadbrowser` не ответил валидным lobby link, exporter возвращает `joinLink: null`, а frontend должен считать автоконнектор неготовым.
 
 ## 3. Что менять при переносе на другие IP и серверы
 
@@ -128,9 +123,6 @@
 - `serverId`
 - `serverCode`
 - `pathPrefix`
-- `publicConnectHost`
-- `publicConnectPort`
-- `joinLinkTemplate`
 - `squadbrowserApiBaseUrl`
 - `squadbrowserApiKey`
 - `corsOrigins`
@@ -142,9 +134,7 @@
 - `squadjs1` / `[RU] МирДружбаЖвачка ★ BSS ★ [КЛАССИКА]` -> `80.242.59.123:7800`
 - `squadjs2` / `[RU] МирДружбаЖвачка ★ BSS ★ [SPEC OPS]` -> `80.242.59.123:7801`
 
-При этом в SquadJS-конфигах `queryPort` остаётся `7810` и `7811`. Это нормально: `queryPort` и публичный connect-port могут не совпадать, поэтому `joinLink` должен собираться именно из `SQUAD_PUBLIC_HOST` и `SQUAD_PUBLIC_PORT`.
-
-Для BSS основной путь теперь лучше держать через `Squadbrowser API`, а `steam://connect/{host}:{port}` оставить fallback-ом.
+При этом в SquadJS-конфигах `queryPort` остаётся `7810` и `7811`. Это нормально: exporter больше не должен использовать `queryPort` или `steam://connect` как fallback. Единственный допустимый источник `joinLink` для автоконнектора теперь это lobby link из `Squadbrowser API`.
 
 ## 5. Готовые сервисы для Dokploy
 
@@ -167,8 +157,6 @@ services:
       INSTANCE_NAME: squad1
       SQUADJS_DISCORD_TOKEN: ${SQUADJS_DISCORD_TOKEN}
       SQUAD_HOST: ${SQUAD1_HOST}
-      SQUAD_PUBLIC_HOST: 80.242.59.123
-      SQUAD_PUBLIC_PORT: 7800
       SQUADBROWSER_API_BASE_URL: ${SQUADBROWSER_API_BASE_URL}
       SQUADBROWSER_API_KEY: ${SQUADBROWSER_API_KEY}
       SQUAD_RCON_PASSWORD: ${SQUAD1_RCON_PASSWORD}
@@ -192,8 +180,6 @@ services:
       INSTANCE_NAME: squad2
       SQUADJS_DISCORD_TOKEN: ${SQUADJS_DISCORD_TOKEN}
       SQUAD_HOST: ${SQUAD2_HOST}
-      SQUAD_PUBLIC_HOST: 80.242.59.123
-      SQUAD_PUBLIC_PORT: 7801
       SQUADBROWSER_API_BASE_URL: ${SQUADBROWSER_API_BASE_URL}
       SQUADBROWSER_API_KEY: ${SQUADBROWSER_API_KEY}
       SQUAD_RCON_PASSWORD: ${SQUAD2_RCON_PASSWORD}
@@ -309,7 +295,7 @@ services:
 - `32081 -> 32080/tcp` для `squadjs1`
 - `32082 -> 32080/tcp` для `squadjs2`
 
-Для самого подключения по `steam://connect/...` должен быть открыт публичный `SQUAD_PUBLIC_PORT` каждого Squad-сервера.
+Для самого подключения к Squad должен быть открыт публичный игровой порт каждого Squad-сервера.
 
 Для текущего BSS это:
 
