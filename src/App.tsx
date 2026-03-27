@@ -813,6 +813,20 @@ export default function App({ config }: AppProps) {
     );
   };
 
+  const handleDirectJoin = (server: ExporterServerSnapshot) => {
+    if (!server.joinLink) {
+      appendLog(`Прямое подключение недоступно: у ${server.name} нет joinLink.`);
+      return;
+    }
+
+    try {
+      appendLog(`Прямое подключение: ${server.name}`);
+      window.location.href = server.joinLink;
+    } catch {
+      appendLog(`Прямое подключение не удалось: браузер заблокировал переход к ${server.name}.`);
+    }
+  };
+
   const handleModeToggle = () => {
     if (!hasConfiguredTestMode) return;
 
@@ -1271,33 +1285,48 @@ export default function App({ config }: AppProps) {
                 : 'Часы сторон пока не готовы';
 
             return (
-              <button
+              <article
                 key={serverKey}
-                type="button"
                 className={classNames(
                   'server-switcher-card',
                   isActive && 'server-switcher-card-active',
                   isTarget && 'server-switcher-card-target'
                 )}
-                onClick={() => setActiveServerKey(serverKey)}
               >
-                <div className="server-switcher-head">
-                  <strong>{server.name}</strong>
-                  <span
-                    className={classNames(
-                      'server-state',
-                      server.online ? 'state-live' : 'state-dead'
-                    )}
+                <button
+                  type="button"
+                  className="server-switcher-select"
+                  onClick={() => setActiveServerKey(serverKey)}
+                >
+                  <div className="server-switcher-head">
+                    <strong>{server.name}</strong>
+                    <span
+                      className={classNames(
+                        'server-state',
+                        server.online ? 'state-live' : 'state-dead'
+                      )}
+                    >
+                      {server.online ? 'online' : 'offline'}
+                    </span>
+                  </div>
+                  <div className="server-switcher-meta">
+                    <span>{server.playerCount}/{server.maxPlayers || '—'}</span>
+                    {isTarget ? <span className="server-switcher-accent">target</span> : null}
+                  </div>
+                  <p>{switcherHoursLine}</p>
+                </button>
+
+                <div className="server-switcher-actions">
+                  <button
+                    type="button"
+                    className="button button-small"
+                    onClick={() => handleDirectJoin(server)}
+                    disabled={!server.joinLink}
                   >
-                    {server.online ? 'online' : 'offline'}
-                  </span>
+                    {server.joinLink ? 'Подключиться' : 'Lobby не готов'}
+                  </button>
                 </div>
-                <div className="server-switcher-meta">
-                  <span>{server.playerCount}/{server.maxPlayers || '—'}</span>
-                  {isTarget ? <span className="server-switcher-accent">target</span> : null}
-                </div>
-                <p>{switcherHoursLine}</p>
-              </button>
+              </article>
             );
           })}
         </div>
@@ -1357,6 +1386,16 @@ export default function App({ config }: AppProps) {
                       ? `Слабее по часам: ${weakerTeam.name}`
                       : 'Смотри состав сторон и общий баланс часов ниже.'}
                   </p>
+                  <div className="server-board-actions">
+                    <button
+                      type="button"
+                      className="button button-primary"
+                      onClick={() => handleDirectJoin(server)}
+                      disabled={!server.joinLink}
+                    >
+                      {server.joinLink ? 'Подключиться напрямую' : 'Lobby link не готов'}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="server-metrics">

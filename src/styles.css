@@ -446,9 +446,6 @@ input {
   border-radius: 20px;
   border: 1px solid var(--panel-border);
   background: rgba(255, 255, 255, 0.03);
-  color: var(--text);
-  text-align: left;
-  cursor: pointer;
   transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
 }
 
@@ -465,6 +462,23 @@ input {
 
 .server-switcher-card-target {
   border-color: rgba(245, 158, 11, 0.32);
+}
+
+.server-switcher-select {
+  display: grid;
+  gap: 10px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.server-switcher-select:focus-visible,
+.server-board-actions .button:focus-visible {
+  outline: 2px solid rgba(225, 29, 47, 0.42);
+  outline-offset: 2px;
 }
 
 .server-switcher-head {
@@ -500,6 +514,18 @@ input {
   margin: 0;
   color: var(--muted);
   line-height: 1.45;
+}
+
+.server-switcher-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.button-small {
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 12px;
+  font-size: 0.88rem;
 }
 
 .server-board {
@@ -546,6 +572,13 @@ input {
   margin: 12px 0 0;
   color: var(--muted);
   line-height: 1.55;
+}
+
+.server-board-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
 }
 
 .server-metrics {
