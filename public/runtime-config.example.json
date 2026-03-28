@@ -1,7 +1,7 @@
 {
   "app": {
     "title": "BSS AutoConnect",
-    "pollIntervalMs": 180000,
+    "pollIntervalMs": 20000,
     "debugLogLimit": 80,
     "testMode": {
       "sequenceServerIds": [2, 1],

@@ -27,7 +27,7 @@
 {
   "app": {
     "title": "BSS AutoConnect",
-    "pollIntervalMs": 180000,
+    "pollIntervalMs": 20000,
     "debugLogLimit": 80
   },
   "policy": {
@@ -200,7 +200,7 @@ networks:
 {
   "app": {
     "title": "BSS AutoConnect",
-    "pollIntervalMs": 180000,
+    "pollIntervalMs": 20000,
     "debugLogLimit": 80
   },
   "policy": {

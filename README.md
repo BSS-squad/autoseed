@@ -46,7 +46,7 @@ npm run dev
 {
   "app": {
     "title": "BSS AutoConnect",
-    "pollIntervalMs": 180000
+    "pollIntervalMs": 20000
   },
   "policy": {
     "timezone": "Europe/Moscow",

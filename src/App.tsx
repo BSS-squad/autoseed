@@ -61,6 +61,13 @@ type ConnectorWindowContext = {
   followupServer?: ExporterServerSnapshot | null;
   followupDelayMs?: number;
   seedLimit: number;
+  phase: 'dispatching' | 'redirect_sent';
+};
+
+type ConnectorWindowState = {
+  serverKey: string;
+  followupServerKey: string;
+  phase: ConnectorWindowContext['phase'];
 };
 
 type GuideStep = {
@@ -168,6 +175,16 @@ function isSameServer(
   right: ExporterServerSnapshot | null | undefined
 ): boolean {
   return Boolean(left && right && getServerSelectionKey(left) === getServerSelectionKey(right));
+}
+
+function findServerBySelectionKey(
+  snapshot: CombinedSnapshot,
+  selectionKey: string
+): ExporterServerSnapshot | null {
+  if (!selectionKey) return null;
+  return (
+    snapshot.servers.find((server) => getServerSelectionKey(server) === selectionKey) || null
+  );
 }
 
 function getSeedProgressGradient(percent: number): string {
@@ -297,7 +314,7 @@ function escapeHtml(value: string): string {
 }
 
 function buildConnectorWindowMarkup(context: ConnectorWindowContext): string {
-  const { title, server, followupServer, followupDelayMs = 0, seedLimit } = context;
+  const { title, server, followupServer, followupDelayMs = 0, seedLimit, phase } = context;
   const seedPercent = getSeedProgressPercent(server, seedLimit);
   const seedGradient = getSeedProgressGradient(seedPercent);
   const escapedLogo = escapeHtml(projectLogo);
@@ -307,13 +324,28 @@ function buildConnectorWindowMarkup(context: ConnectorWindowContext): string {
     teamOne && teamTwo
       ? `${escapeHtml(teamOne.name)} ${formatHours(teamOne.totalPlaytimeHours)} · ${escapeHtml(teamTwo.name)} ${formatHours(teamTwo.totalPlaytimeHours)}`
       : 'Состав сторон уточняется…';
-  const followupText =
-    followupServer && followupDelayMs > 0
-      ? `Следом: ${escapeHtml(followupServer.name)} через ${Math.ceil(followupDelayMs / 1000)} s`
-      : 'Ожидаем ответ Steam / Squad';
   const weakerText = weakerTeam
     ? `Слабее по часам: ${escapeHtml(weakerTeam.name)}`
     : 'Баланс сторон пока ровный';
+  const hasFollowup = Boolean(followupServer && followupDelayMs > 0);
+  const statusTag =
+    phase === 'redirect_sent'
+      ? hasFollowup
+        ? 'Первый redirect отправлен'
+        : 'Redirect отправлен'
+      : 'Передаём lobby link в Steam';
+  const leadText =
+    phase === 'redirect_sent'
+      ? 'Браузер не получает явный ответ от Steam или Squad. Если это окно осталось на служебной карточке, это нормально. Данные ниже и актуальный joinLink обновляются по новым snapshot.'
+      : 'Держи Squad открытым в главном меню. Окно нужно только для redirect в Steam.';
+  const nextStepLabel = hasFollowup ? 'Follow-up' : 'Дальше';
+  const nextStepText = hasFollowup
+    ? `Следом: ${escapeHtml(followupServer!.name)} через ${Math.ceil(followupDelayMs / 1000)} s`
+    : phase === 'redirect_sent'
+      ? 'Автоконнектор ждёт новый snapshot. Окно оставьте открытым.'
+      : 'После отправки браузер не получит отдельный callback от Steam или Squad.';
+  const snapshotText = formatCompactTimestamp(server.updatedAt);
+  const joinLinkText = server.joinLink ? 'Готов, обновляется по snapshot' : 'Ещё не готов';
 
   return `<!doctype html>
 <html lang="ru">
@@ -457,9 +489,9 @@ function buildConnectorWindowMarkup(context: ConnectorWindowContext): string {
         </div>
       </div>
       <h1>${escapeHtml(server.name)}</h1>
-      <p>Держи Squad открытым в главном меню. Окно нужно только для redirect в Steam.</p>
+      <p>${leadText}</p>
       <div class="stack">
-        <span class="tag">Подключаем к серверу</span>
+        <span class="tag">${statusTag}</span>
         <div class="row">
           <div>
             <div class="label">Прогресс рассида</div>
@@ -485,8 +517,20 @@ function buildConnectorWindowMarkup(context: ConnectorWindowContext): string {
         </div>
         <div class="row">
           <div>
-            <div class="label">Дальше</div>
-            <strong class="note">${followupText}</strong>
+            <div class="label">Снимок</div>
+            <strong>${snapshotText}</strong>
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <div class="label">Lobby link</div>
+            <strong>${joinLinkText}</strong>
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <div class="label">${nextStepLabel}</div>
+            <strong class="note">${nextStepText}</strong>
           </div>
         </div>
       </div>
@@ -708,16 +752,25 @@ export default function App({ config }: AppProps) {
 
   const enabledRef = useRef(enabled);
   const modeRef = useRef(mode);
+  const snapshotRef = useRef(snapshot);
   const cooldownUntilRef = useRef(cooldownUntil);
   const lastProcessedTimestampRef = useRef(lastProcessedTimestamp);
   const permissionsRef = useRef(permissions);
   const connectorWindowRef = useRef<Window | null>(null);
   const sequenceTimerRef = useRef<number | null>(null);
   const testSequenceDelayMsRef = useRef<number>(0);
+  const connectorWindowStateRef = useRef<ConnectorWindowState | null>(null);
+  const connectorWindowWriteBlockedRef = useRef<boolean>(false);
+  const activeRedirectServerKeyRef = useRef<string>('');
+  const activeRedirectJoinLinkRef = useRef<string>('');
 
   useEffect(() => {
     enabledRef.current = enabled;
   }, [enabled]);
+
+  useEffect(() => {
+    snapshotRef.current = snapshot;
+  }, [snapshot]);
 
   useEffect(() => {
     modeRef.current = mode;
@@ -764,6 +817,9 @@ export default function App({ config }: AppProps) {
       connectorWindow.close();
     } catch {
       // Ignore user-agent specific close failures.
+    } finally {
+      connectorWindowRef.current = null;
+      connectorWindowWriteBlockedRef.current = false;
     }
   };
 
@@ -776,6 +832,7 @@ export default function App({ config }: AppProps) {
 
   const effectivePolicy = useMemo(() => resolveSeedPolicy(config.policy), [config.policy]);
   const debugLogLimit = config.app.debugLogLimit || 80;
+  const pollIntervalMs = Math.max(10_000, Math.min(config.app.pollIntervalMs || 20_000, 20_000));
 
   const appendLog = (message: string) => {
     setLogs((previous) => {
@@ -817,6 +874,7 @@ export default function App({ config }: AppProps) {
       nextWindow.document.write(buildConnectorWindowBootMarkup(config.app.title));
       nextWindow.document.close();
       connectorWindowRef.current = nextWindow;
+      connectorWindowWriteBlockedRef.current = false;
       return nextWindow;
     } catch {
       return null;
@@ -826,7 +884,9 @@ export default function App({ config }: AppProps) {
   const renderConnectorWindow = (
     connectorWindow: Window,
     server: ExporterServerSnapshot,
-    followupServer?: ExporterServerSnapshot | null
+    followupServer?: ExporterServerSnapshot | null,
+    phase: ConnectorWindowContext['phase'] = 'dispatching',
+    followupDelayMs: number = followupServer ? testSequenceDelayMsRef.current : 0
   ): void => {
     try {
       connectorWindow.document.open();
@@ -835,15 +895,92 @@ export default function App({ config }: AppProps) {
           title: config.app.title,
           server,
           followupServer,
-          followupDelayMs: followupServer ? testSequenceDelayMsRef.current : 0,
-          seedLimit: effectivePolicy.maxSeedPlayers
+          followupDelayMs,
+          seedLimit: effectivePolicy.maxSeedPlayers,
+          phase
         })
       );
       connectorWindow.document.close();
+      connectorWindowWriteBlockedRef.current = false;
     } catch {
-      appendLog('Не удалось обновить окно коннектора перед redirect.');
+      if (!connectorWindowWriteBlockedRef.current) {
+        appendLog(
+          phase === 'redirect_sent'
+            ? 'Не удалось обновить окно коннектора после redirect.'
+            : 'Не удалось обновить окно коннектора перед redirect.'
+        );
+      }
+      connectorWindowWriteBlockedRef.current = true;
     }
   };
+
+  const syncConnectorWindow = (
+    nextSnapshot: CombinedSnapshot,
+    nextRedirectPlan: ExporterServerSnapshot[]
+  ): void => {
+    const connectorWindow = connectorWindowRef.current;
+    if (!connectorWindow || connectorWindow.closed) {
+      connectorWindowRef.current = null;
+      connectorWindowWriteBlockedRef.current = false;
+      return;
+    }
+
+    const trackedState = connectorWindowStateRef.current;
+    const trackedServer = trackedState
+      ? findServerBySelectionKey(nextSnapshot, trackedState.serverKey)
+      : null;
+    const trackedFollowupServer = trackedState?.followupServerKey
+      ? findServerBySelectionKey(nextSnapshot, trackedState.followupServerKey)
+      : null;
+    const liveFollowupDelayMs =
+      pendingSequence &&
+      trackedFollowupServer &&
+      pendingSequence.remaining.length &&
+      getServerSelectionKey(pendingSequence.remaining[0]) ===
+        getServerSelectionKey(trackedFollowupServer)
+        ? Math.max(0, pendingSequence.nextRedirectAt - Date.now())
+        : trackedFollowupServer
+          ? testSequenceDelayMsRef.current
+          : 0;
+
+    if (trackedServer && trackedState) {
+      renderConnectorWindow(
+        connectorWindow,
+        trackedServer,
+        trackedFollowupServer,
+        trackedState.phase,
+        liveFollowupDelayMs
+      );
+      return;
+    }
+
+    if (!enabledRef.current || !nextRedirectPlan.length) return;
+
+    const fallbackServer = nextRedirectPlan[0];
+    const fallbackFollowupServer = pendingSequence?.remaining[0] || nextRedirectPlan[1] || null;
+    connectorWindowStateRef.current = {
+      serverKey: getServerSelectionKey(fallbackServer),
+      followupServerKey: getServerSelectionKey(fallbackFollowupServer),
+      phase: 'redirect_sent'
+    };
+
+    renderConnectorWindow(
+      connectorWindow,
+      fallbackServer,
+      fallbackFollowupServer,
+      'redirect_sent',
+      pendingSequence
+        ? Math.max(0, pendingSequence.nextRedirectAt - Date.now())
+        : fallbackFollowupServer
+          ? testSequenceDelayMsRef.current
+          : 0
+    );
+  };
+
+  useEffect(() => {
+    if (!enabled) return;
+    syncConnectorWindow(snapshot, plannedSequence);
+  }, [enabled, pendingSequence, plannedSequence, snapshot]);
 
   const triggerJoinLink = (
     server: ExporterServerSnapshot,
@@ -861,11 +998,41 @@ export default function App({ config }: AppProps) {
     }
 
     try {
-      renderConnectorWindow(connectorWindow, server, followupServer);
+      connectorWindowStateRef.current = {
+        serverKey: getServerSelectionKey(server),
+        followupServerKey: getServerSelectionKey(followupServer),
+        phase: 'dispatching'
+      };
+      renderConnectorWindow(
+        connectorWindow,
+        server,
+        followupServer,
+        'dispatching',
+        followupServer ? testSequenceDelayMsRef.current : 0
+      );
       window.setTimeout(() => {
         try {
           connectorWindow.location.href = server.joinLink!;
           connectorWindow.focus();
+          appendLog(
+            followupServer
+              ? `Redirect отправлен в Steam для ${server.name}. Явного ответа от Steam/Squad браузер не получает.`
+              : `Redirect отправлен в Steam для ${server.name}. Дальше ждём только новый snapshot.`
+          );
+          connectorWindowStateRef.current = {
+            serverKey: getServerSelectionKey(server),
+            followupServerKey: getServerSelectionKey(followupServer),
+            phase: 'redirect_sent'
+          };
+          window.setTimeout(() => {
+            renderConnectorWindow(
+              connectorWindow,
+              server,
+              followupServer,
+              'redirect_sent',
+              followupServer ? testSequenceDelayMsRef.current : 0
+            );
+          }, 1200);
         } catch {
           appendLog('Redirect подавлен: браузер не дал обновить служебное окно.');
         }
@@ -883,12 +1050,13 @@ export default function App({ config }: AppProps) {
     const nextDelayMs = testSequenceDelayMsRef.current;
     if (!remaining.length || nextDelayMs <= 0) return;
 
-    const [nextServer, ...tail] = remaining;
+    const [scheduledNextServer, ...tail] = remaining;
+    const nextServerKey = getServerSelectionKey(scheduledNextServer);
     const nextRedirectAt = Date.now() + nextDelayMs;
 
     setPendingSequence({ remaining, nextRedirectAt });
     appendLog(
-      `Запланирован follow-up redirect через ${Math.ceil(nextDelayMs / 1000)} s: ${nextServer.name}`
+      `Запланирован follow-up redirect через ${Math.ceil(nextDelayMs / 1000)} s: ${scheduledNextServer.name}`
     );
 
     sequenceTimerRef.current = window.setTimeout(() => {
@@ -900,16 +1068,19 @@ export default function App({ config }: AppProps) {
         return;
       }
 
-      if (!nextServer.joinLink) {
-        appendLog(`Follow-up redirect пропущен: у ${nextServer.name} нет joinLink.`);
+      const latestNextServer =
+        findServerBySelectionKey(snapshotRef.current, nextServerKey) || scheduledNextServer;
+
+      if (!latestNextServer.joinLink) {
+        appendLog(`Follow-up redirect пропущен: у ${latestNextServer.name} нет joinLink.`);
         return;
       }
 
-      if (!triggerJoinLink(nextServer, tail[0] || null)) {
+      if (!triggerJoinLink(latestNextServer, tail[0] || null)) {
         return;
       }
 
-      appendLog(`Follow-up redirect triggered: ${nextServer.joinLink}`);
+      appendLog(`Follow-up redirect triggered: ${latestNextServer.joinLink}`);
       scheduleSequenceStep(tail);
     }, nextDelayMs);
   };
@@ -919,6 +1090,9 @@ export default function App({ config }: AppProps) {
     saveLastProcessedTimestamp(0);
     setCooldownUntil(0);
     saveCooldownUntil(0);
+    activeRedirectServerKeyRef.current = '';
+    activeRedirectJoinLinkRef.current = '';
+    connectorWindowStateRef.current = null;
   };
 
   const handleTestSequenceDelayChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -1002,16 +1176,19 @@ export default function App({ config }: AppProps) {
       return false;
     }
 
-    const nextCooldownUntil = Date.now() + cooldownMs;
-    setLastProcessedTimestamp(snapshotTimestamp);
-    saveLastProcessedTimestamp(snapshotTimestamp);
-    setCooldownUntil(nextCooldownUntil);
-    saveCooldownUntil(nextCooldownUntil);
     clearPendingSequence();
 
     if (!triggerJoinLink(firstTarget, followups[0] || null)) {
       return false;
     }
+
+    const nextCooldownUntil = Date.now() + cooldownMs;
+    activeRedirectServerKeyRef.current = getServerSelectionKey(firstTarget);
+    activeRedirectJoinLinkRef.current = firstTarget.joinLink || '';
+    setLastProcessedTimestamp(snapshotTimestamp);
+    saveLastProcessedTimestamp(snapshotTimestamp);
+    setCooldownUntil(nextCooldownUntil);
+    saveCooldownUntil(nextCooldownUntil);
 
     appendLog(`Redirect triggered: ${firstTarget.joinLink}`);
     scheduleSequenceStep(followups);
@@ -1067,14 +1244,58 @@ export default function App({ config }: AppProps) {
         return;
       }
 
-      if (!options?.forceRedirect && nextSnapshot.timestamp <= lastProcessedTimestampRef.current) {
+      const nextTargetKey = getServerSelectionKey(nextRedirectPlan[0]);
+      const activeRedirectServerKey = activeRedirectServerKeyRef.current;
+      const activeRedirectJoinLink = activeRedirectJoinLinkRef.current;
+      const productionTargetChanged = Boolean(
+        !testModeEnabled &&
+          nextTargetKey &&
+          activeRedirectServerKey &&
+          nextTargetKey !== activeRedirectServerKey
+      );
+      const productionJoinLinkChanged = Boolean(
+        !testModeEnabled &&
+          nextTargetKey &&
+          activeRedirectServerKey &&
+          nextTargetKey === activeRedirectServerKey &&
+          nextRedirectPlan[0].joinLink &&
+          activeRedirectJoinLink &&
+          nextRedirectPlan[0].joinLink !== activeRedirectJoinLink
+      );
+
+      if (
+        !options?.forceRedirect &&
+        !productionTargetChanged &&
+        !productionJoinLinkChanged &&
+        nextSnapshot.timestamp <= lastProcessedTimestampRef.current
+      ) {
         appendLog('Redirect подавлен: snapshot уже обработан.');
         return;
       }
 
-      if (!options?.forceRedirect && Date.now() < cooldownUntilRef.current) {
+      if (
+        !options?.forceRedirect &&
+        !productionTargetChanged &&
+        !productionJoinLinkChanged &&
+        Date.now() < cooldownUntilRef.current
+      ) {
         appendLog('Redirect подавлен: активен cooldown.');
         return;
+      }
+
+      if (productionTargetChanged) {
+        const previousServer =
+          findServerBySelectionKey(nextSnapshot, activeRedirectServerKey) ||
+          findServerBySelectionKey(snapshot, activeRedirectServerKey);
+        appendLog(
+          `Боевой режим: target сменился c ${previousServer?.name || 'предыдущего сервера'} на ${nextRedirectPlan[0].name}, cooldown пропускаем.`
+        );
+      }
+
+      if (productionJoinLinkChanged) {
+        appendLog(
+          `Боевой режим: у ${nextRedirectPlan[0].name} обновился joinLink, отправляю новый redirect без ожидания cooldown.`
+        );
       }
 
       startRedirectPlan(
@@ -1095,10 +1316,10 @@ export default function App({ config }: AppProps) {
     void refreshSnapshot();
     const interval = window.setInterval(() => {
       void refreshSnapshot();
-    }, config.app.pollIntervalMs);
+    }, pollIntervalMs);
 
     return () => window.clearInterval(interval);
-  }, [config]);
+  }, [config, pollIntervalMs]);
 
   const handleEnable = async () => {
     if (!permissions) {
@@ -1166,6 +1387,9 @@ export default function App({ config }: AppProps) {
   const handleDisable = () => {
     clearPendingSequence();
     closeConnectorWindow();
+    activeRedirectServerKeyRef.current = '';
+    activeRedirectJoinLinkRef.current = '';
+    connectorWindowStateRef.current = null;
     enabledRef.current = false;
     setEnabled(false);
     saveEnabled(false);
@@ -1233,7 +1457,7 @@ export default function App({ config }: AppProps) {
       step: '3',
       title: 'Включи «Автоконнектор»',
       description:
-        'После запуска откроется служебное окно коннектора. Оно занимается redirect-ом в Steam и должно оставаться открытым, пока идёт работа.',
+        'После запуска откроется служебное окно коннектора. Оно занимается redirect-ом в Steam и должно оставаться открытым, пока идёт работа. Если после отправки оно осталось на служебной карточке, это нормально: callback от Steam/Squad браузер не получает, а сама карточка и актуальный joinLink продолжают обновляться по новым snapshot.',
       hints: ['Кнопка: «Автоконнектор»', 'Служебное окно не закрывать']
     },
     {
@@ -1416,7 +1640,7 @@ export default function App({ config }: AppProps) {
               <InlineHelp
                 label="Что делает popup"
                 title="Служебное окно коннектора"
-                description="Открывается после включения автоконнектора. Оно нужно только для redirect-а в Steam и для follow-up переходов, закрывать его во время работы не стоит."
+                description="Открывается после включения автоконнектора. Оно нужно только для redirect-а в Steam и для follow-up переходов. После отправки lobby link окно может визуально остаться на служебной карточке: Steam/Squad не присылают браузеру отдельный callback, а карточка и актуальный joinLink обновляются по свежим snapshot."
               />
             </div>
             <div className="signal-card signal-card-with-help">
@@ -1833,7 +2057,7 @@ export default function App({ config }: AppProps) {
             </div>
             <div className="rule-card">
               <span>Polling</span>
-              <strong>{Math.round(config.app.pollIntervalMs / 1000)} s</strong>
+              <strong>{Math.round(pollIntervalMs / 1000)} s</strong>
             </div>
             {hasConfiguredTestMode ? (
               <>
