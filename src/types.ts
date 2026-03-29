@@ -1,7 +1,6 @@
 export type AppConfig = {
   app: {
     title: string;
-    pollIntervalMs: number;
     debugLogLimit?: number;
     testMode?: TestModeConfig;
   };

@@ -18,7 +18,7 @@
 - frontend на Vite + React c GitHub Pages deployment;
 - runtime-конфиг через `public/runtime-config.json`;
 - fully-static архитектура без backend и без Steam auth;
-- client-side polling публичных exporter endpoint-ов;
+- realtime-подписка на публичные exporter endpoint-ы через `SSE /events`;
 - просмотр онлайна серверов, состава сторон и баланса часов по игрокам;
 - выбор target server по frontend policy: ночному окну, приоритетам, лимиту онлайна и `switchDelta`;
 - опциональный test-sequence через runtime-config, например `2 -> 1` с задержкой `60 s`;
@@ -38,15 +38,14 @@ npm run dev
 
 ## Runtime config
 
-`baseUrl` должен указывать не просто на host, а на публичный exporter-prefix. Frontend сам дописывает к нему только `/snapshot`.
+`baseUrl` должен указывать не просто на host, а на публичный exporter-prefix. Frontend сам использует `GET {baseUrl}/snapshot` для ручного refresh и `GET {baseUrl}/events` для realtime-подписки.
 
 Файл `public/runtime-config.json` должен содержать:
 
 ```json
 {
   "app": {
-    "title": "BSS AutoConnect",
-    "pollIntervalMs": 20000
+    "title": "BSS AutoConnect"
   },
   "policy": {
     "timezone": "Europe/Moscow",

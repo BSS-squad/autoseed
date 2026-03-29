@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent } from 'react';
+import {
+  useEffect,
+  useEffectEvent,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ChangeEvent
+} from 'react';
 
 import { runPermissionCheck } from './lib/permissions';
 import {
@@ -6,7 +14,7 @@ import {
   getSelectionStatusLabel,
   resolveSeedPolicy
 } from './lib/seed-policy';
-import { fetchCombinedSnapshot } from './lib/snapshot';
+import { fetchCombinedSnapshot, subscribeCombinedSnapshot } from './lib/snapshot';
 import {
   loadStoredState,
   saveCooldownUntil,
@@ -40,6 +48,8 @@ type PendingSequence = {
 type RefreshSnapshotOptions = {
   forceRedirect?: boolean;
 };
+
+type SnapshotUpdateSource = 'manual' | 'stream';
 
 type TeamPanelProps = {
   team: ExporterTeamSnapshot;
@@ -832,8 +842,6 @@ export default function App({ config }: AppProps) {
 
   const effectivePolicy = useMemo(() => resolveSeedPolicy(config.policy), [config.policy]);
   const debugLogLimit = config.app.debugLogLimit || 80;
-  const pollIntervalMs = Math.max(10_000, Math.min(config.app.pollIntervalMs || 20_000, 20_000));
-
   const appendLog = (message: string) => {
     setLogs((previous) => {
       const entry = `${new Date().toLocaleTimeString('ru-RU')}: ${message}`;
@@ -859,6 +867,125 @@ export default function App({ config }: AppProps) {
   useEffect(() => {
     testSequenceDelayMsRef.current = testSequenceDelayMs;
   }, [testSequenceDelayMs]);
+
+  const applySnapshot = useEffectEvent(
+    (
+      nextSnapshot: CombinedSnapshot,
+      options?: RefreshSnapshotOptions,
+      source: SnapshotUpdateSource = 'stream'
+    ) => {
+      setFatalError(null);
+
+      try {
+        const nextPolicy = resolveSeedPolicy(config.policy);
+        const nextSelection = buildSelectionState(nextSnapshot, nextPolicy);
+        const testModeEnabled = modeRef.current === 'test';
+        const nextTestSequence = buildTestSequence(
+          nextSnapshot,
+          testModeEnabled ? testModeConfig?.sequenceServerIds : undefined
+        );
+        const nextRedirectPlan = testModeEnabled
+          ? nextTestSequence
+          : nextSelection.targetServer
+            ? [nextSelection.targetServer]
+            : [];
+
+        setSnapshot(nextSnapshot);
+        setSelection(nextSelection);
+        setPlannedSequence(nextRedirectPlan);
+
+        if (nextSnapshot.errors.length) {
+          nextSnapshot.errors.forEach((error) => appendLog(`Ошибка exporter: ${error}`));
+        }
+
+        appendLog(
+          `Snapshot ${source === 'manual' ? 'fetched' : 'updated'}: target=${
+            nextRedirectPlan[0]?.name || nextSelection.targetServer?.name || 'none'
+          }, mode=${testModeEnabled ? 'test' : nextSelection.nightMode ? 'night' : 'day'}`
+        );
+
+        if (!enabledRef.current) return;
+
+        if (!permissionsRef.current?.popupAllowed || !permissionsRef.current?.steamProtocolReady) {
+          appendLog('Redirect подавлен: нет подтверждённых browser permissions.');
+          return;
+        }
+
+        if (!nextRedirectPlan[0]?.joinLink) {
+          appendLog(
+            testModeEnabled
+              ? 'Redirect подавлен: тестовый режим пока не готов.'
+              : 'Redirect подавлен: нет подходящего сервера или joinLink.'
+          );
+          return;
+        }
+
+        const nextTargetKey = getServerSelectionKey(nextRedirectPlan[0]);
+        const activeRedirectServerKey = activeRedirectServerKeyRef.current;
+        const activeRedirectJoinLink = activeRedirectJoinLinkRef.current;
+        const productionTargetChanged = Boolean(
+          !testModeEnabled &&
+            nextTargetKey &&
+            activeRedirectServerKey &&
+            nextTargetKey !== activeRedirectServerKey
+        );
+        const productionJoinLinkChanged = Boolean(
+          !testModeEnabled &&
+            nextTargetKey &&
+            activeRedirectServerKey &&
+            nextTargetKey === activeRedirectServerKey &&
+            nextRedirectPlan[0].joinLink &&
+            activeRedirectJoinLink &&
+            nextRedirectPlan[0].joinLink !== activeRedirectJoinLink
+        );
+
+        if (
+          !options?.forceRedirect &&
+          !productionTargetChanged &&
+          !productionJoinLinkChanged &&
+          nextSnapshot.timestamp <= lastProcessedTimestampRef.current
+        ) {
+          appendLog('Redirect подавлен: snapshot уже обработан.');
+          return;
+        }
+
+        if (
+          !options?.forceRedirect &&
+          !productionTargetChanged &&
+          !productionJoinLinkChanged &&
+          Date.now() < cooldownUntilRef.current
+        ) {
+          appendLog('Redirect подавлен: активен cooldown.');
+          return;
+        }
+
+        if (productionTargetChanged) {
+          const previousServer =
+            findServerBySelectionKey(nextSnapshot, activeRedirectServerKey) ||
+            findServerBySelectionKey(snapshot, activeRedirectServerKey);
+          appendLog(
+            `Боевой режим: target сменился c ${previousServer?.name || 'предыдущего сервера'} на ${nextRedirectPlan[0].name}, cooldown пропускаем.`
+          );
+        }
+
+        if (productionJoinLinkChanged) {
+          appendLog(
+            `Боевой режим: у ${nextRedirectPlan[0].name} обновился joinLink, отправляю новый redirect без ожидания cooldown.`
+          );
+        }
+
+        startRedirectPlan(
+          nextRedirectPlan,
+          nextSnapshot.timestamp,
+          testModeEnabled ? testCooldownMs : nextPolicy.cooldownMs
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown snapshot error';
+        setFatalError(message);
+        appendLog(`Snapshot processing failed: ${message}`);
+      }
+    }
+  );
 
   const ensureConnectorWindow = (): Window | null => {
     const existingWindow = connectorWindowRef.current;
@@ -1201,108 +1328,7 @@ export default function App({ config }: AppProps) {
 
     try {
       const nextSnapshot = await fetchCombinedSnapshot(config.exporters);
-      const nextPolicy = resolveSeedPolicy(config.policy);
-      const nextSelection = buildSelectionState(nextSnapshot, nextPolicy);
-      const testModeEnabled = modeRef.current === 'test';
-      const nextTestSequence = buildTestSequence(
-        nextSnapshot,
-        testModeEnabled ? testModeConfig?.sequenceServerIds : undefined
-      );
-      const nextRedirectPlan = testModeEnabled
-        ? nextTestSequence
-        : nextSelection.targetServer
-          ? [nextSelection.targetServer]
-          : [];
-
-      setSnapshot(nextSnapshot);
-      setSelection(nextSelection);
-      setPlannedSequence(nextRedirectPlan);
-
-      if (nextSnapshot.errors.length) {
-        nextSnapshot.errors.forEach((error) => appendLog(`Ошибка exporter: ${error}`));
-      }
-
-      appendLog(
-        `Snapshot fetched: target=${nextRedirectPlan[0]?.name || nextSelection.targetServer?.name || 'none'}, mode=${
-          testModeEnabled ? 'test' : nextSelection.nightMode ? 'night' : 'day'
-        }`
-      );
-
-      if (!enabledRef.current) return;
-
-      if (!permissionsRef.current?.popupAllowed || !permissionsRef.current?.steamProtocolReady) {
-        appendLog('Redirect подавлен: нет подтверждённых browser permissions.');
-        return;
-      }
-
-      if (!nextRedirectPlan[0]?.joinLink) {
-        appendLog(
-          testModeEnabled
-            ? 'Redirect подавлен: тестовый режим пока не готов.'
-            : 'Redirect подавлен: нет подходящего сервера или joinLink.'
-        );
-        return;
-      }
-
-      const nextTargetKey = getServerSelectionKey(nextRedirectPlan[0]);
-      const activeRedirectServerKey = activeRedirectServerKeyRef.current;
-      const activeRedirectJoinLink = activeRedirectJoinLinkRef.current;
-      const productionTargetChanged = Boolean(
-        !testModeEnabled &&
-          nextTargetKey &&
-          activeRedirectServerKey &&
-          nextTargetKey !== activeRedirectServerKey
-      );
-      const productionJoinLinkChanged = Boolean(
-        !testModeEnabled &&
-          nextTargetKey &&
-          activeRedirectServerKey &&
-          nextTargetKey === activeRedirectServerKey &&
-          nextRedirectPlan[0].joinLink &&
-          activeRedirectJoinLink &&
-          nextRedirectPlan[0].joinLink !== activeRedirectJoinLink
-      );
-
-      if (
-        !options?.forceRedirect &&
-        !productionTargetChanged &&
-        !productionJoinLinkChanged &&
-        nextSnapshot.timestamp <= lastProcessedTimestampRef.current
-      ) {
-        appendLog('Redirect подавлен: snapshot уже обработан.');
-        return;
-      }
-
-      if (
-        !options?.forceRedirect &&
-        !productionTargetChanged &&
-        !productionJoinLinkChanged &&
-        Date.now() < cooldownUntilRef.current
-      ) {
-        appendLog('Redirect подавлен: активен cooldown.');
-        return;
-      }
-
-      if (productionTargetChanged) {
-        const previousServer =
-          findServerBySelectionKey(nextSnapshot, activeRedirectServerKey) ||
-          findServerBySelectionKey(snapshot, activeRedirectServerKey);
-        appendLog(
-          `Боевой режим: target сменился c ${previousServer?.name || 'предыдущего сервера'} на ${nextRedirectPlan[0].name}, cooldown пропускаем.`
-        );
-      }
-
-      if (productionJoinLinkChanged) {
-        appendLog(
-          `Боевой режим: у ${nextRedirectPlan[0].name} обновился joinLink, отправляю новый redirect без ожидания cooldown.`
-        );
-      }
-
-      startRedirectPlan(
-        nextRedirectPlan,
-        nextSnapshot.timestamp,
-        testModeEnabled ? testCooldownMs : nextPolicy.cooldownMs
-      );
+      applySnapshot(nextSnapshot, options, 'manual');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown snapshot error';
       setFatalError(message);
@@ -1313,13 +1339,24 @@ export default function App({ config }: AppProps) {
   };
 
   useEffect(() => {
-    void refreshSnapshot();
-    const interval = window.setInterval(() => {
-      void refreshSnapshot();
-    }, pollIntervalMs);
+    if (typeof window.EventSource === 'undefined') {
+      const message = 'Браузер не поддерживает EventSource/SSE.';
+      setFatalError(message);
+      setIsFetching(false);
+      appendLog(`Snapshot stream failed: ${message}`);
+      return;
+    }
 
-    return () => window.clearInterval(interval);
-  }, [config, pollIntervalMs]);
+    setIsFetching(true);
+    setFatalError(null);
+
+    const unsubscribe = subscribeCombinedSnapshot(config.exporters, (nextSnapshot) => {
+      setIsFetching(false);
+      applySnapshot(nextSnapshot, undefined, 'stream');
+    });
+
+    return () => unsubscribe();
+  }, [applySnapshot, config.exporters]);
 
   const handleEnable = async () => {
     if (!permissions) {
@@ -2056,8 +2093,8 @@ export default function App({ config }: AppProps) {
               <strong>&gt; {effectivePolicy.switchDelta}</strong>
             </div>
             <div className="rule-card">
-              <span>Polling</span>
-              <strong>{Math.round(pollIntervalMs / 1000)} s</strong>
+              <span>Realtime</span>
+              <strong>SSE /events</strong>
             </div>
             {hasConfiguredTestMode ? (
               <>

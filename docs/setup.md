@@ -27,7 +27,6 @@
 {
   "app": {
     "title": "BSS AutoConnect",
-    "pollIntervalMs": 20000,
     "debugLogLimit": 80
   },
   "policy": {
@@ -91,7 +90,6 @@
   "squadbrowserTimeoutMs": 4000,
   "squadbrowserJoinLinkTtlMs": 300000,
   "corsOrigins": ["*"],
-  "snapshotRefreshIntervalMs": 20000,
   "staleAfterMs": 90000,
   "rateLimitWindowMs": 60000,
   "rateLimitMaxRequests": 120
@@ -200,7 +198,6 @@ networks:
 {
   "app": {
     "title": "BSS AutoConnect",
-    "pollIntervalMs": 20000,
     "debugLogLimit": 80
   },
   "policy": {
@@ -260,7 +257,7 @@ networks:
 - запись в БД
 - websocket
 
-Exporter read-only и нужен только для `GET {baseUrl}/healthz` и `GET {baseUrl}/snapshot` из браузера GitHub Pages.
+Exporter read-only и нужен только для `GET {baseUrl}/healthz`, `GET {baseUrl}/snapshot` и `GET {baseUrl}/events` из браузера GitHub Pages.
 
 ### Вариант без reverse proxy
 

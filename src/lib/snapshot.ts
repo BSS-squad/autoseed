@@ -12,6 +12,17 @@ import type {
   ExporterTeamSnapshot
 } from '../types';
 
+type ExporterSnapshotState = {
+  name: string;
+  snapshotUrl: string;
+  eventsUrl: string;
+  initialized: boolean;
+  servers: ExporterServerSnapshot[];
+  timestamp: number;
+  generatedAt: string;
+  error: string | null;
+};
+
 function normalizeBaseUrl(value: string): string {
   return value.endsWith('/') ? value.slice(0, -1) : value;
 }
@@ -100,15 +111,71 @@ function sortServers(servers: ExporterServerSnapshot[]): ExporterServerSnapshot[
   });
 }
 
+function createExporterSnapshotState(
+  exporterConfig: ExporterEndpointConfig
+): ExporterSnapshotState {
+  const baseUrl = normalizeBaseUrl(exporterConfig.baseUrl);
+
+  return {
+    name: exporterConfig.name,
+    snapshotUrl: `${baseUrl}/snapshot`,
+    eventsUrl: `${baseUrl}/events`,
+    initialized: false,
+    servers: [],
+    timestamp: 0,
+    generatedAt: '',
+    error: null
+  };
+}
+
+function buildCombinedSnapshot(states: ExporterSnapshotState[]): CombinedSnapshot {
+  const timestamps = states
+    .map((state) => Number(state.timestamp) || 0)
+    .filter((value) => value > 0);
+  const latestState = states
+    .filter((state) => state.timestamp > 0)
+    .sort((left, right) => (Number(right.timestamp) || 0) - (Number(left.timestamp) || 0))[0];
+
+  return {
+    timestamp: timestamps.length ? Math.max(...timestamps) : Date.now(),
+    generatedAt: latestState?.generatedAt || new Date().toISOString(),
+    servers: sortServers(states.flatMap((state) => state.servers)),
+    errors: states
+      .map((state) => state.error)
+      .filter((value): value is string => Boolean(value))
+  };
+}
+
+function applySnapshotPayload(
+  state: ExporterSnapshotState,
+  payload: ExporterSnapshotResponse
+): void {
+  state.initialized = true;
+  state.error = null;
+  state.timestamp = Number(payload.timestamp) || Date.now();
+  state.generatedAt = payload.generatedAt || new Date(state.timestamp).toISOString();
+  state.servers = Array.isArray(payload.servers)
+    ? payload.servers.map((server) => mapServer(server, state.snapshotUrl))
+    : [];
+}
+
+function applySnapshotError(state: ExporterSnapshotState, message: string): void {
+  state.initialized = true;
+  state.servers = [];
+  state.timestamp = 0;
+  state.generatedAt = '';
+  state.error = `${state.name}: ${message}`;
+}
+
 export async function fetchCombinedSnapshot(
   exporters: ExporterEndpointConfig[]
 ): Promise<CombinedSnapshot> {
-  const results = await Promise.all(
-    exporters.map(async (exporterConfig) => {
-      const sourceUrl = `${normalizeBaseUrl(exporterConfig.baseUrl)}/snapshot`;
+  const states = exporters.map(createExporterSnapshotState);
 
+  await Promise.all(
+    states.map(async (state) => {
       try {
-        const response = await fetch(sourceUrl, {
+        const response = await fetch(state.snapshotUrl, {
           headers: {
             Accept: 'application/json'
           },
@@ -120,43 +187,57 @@ export async function fetchCombinedSnapshot(
         }
 
         const payload = (await response.json()) as ExporterSnapshotResponse;
-        const servers = Array.isArray(payload.servers)
-          ? payload.servers.map((server) => mapServer(server, sourceUrl))
-          : [];
-
-        return {
-          ok: true as const,
-          servers,
-          timestamp: Number(payload.timestamp) || Date.now(),
-          generatedAt: payload.generatedAt || new Date().toISOString(),
-          error: null
-        };
+        applySnapshotPayload(state, payload);
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown exporter error';
-        return {
-          ok: false as const,
-          servers: [] as ExporterServerSnapshot[],
-          timestamp: 0,
-          generatedAt: '',
-          error: `${exporterConfig.name}: ${message}`
-        };
+        applySnapshotError(state, message);
       }
     })
   );
 
-  const timestamps = results
-    .map((result) => Number(result.timestamp) || 0)
-    .filter((value) => value > 0);
-  const latestResult = results
-    .filter((result) => result.ok)
-    .sort((left, right) => (Number(right.timestamp) || 0) - (Number(left.timestamp) || 0))[0];
+  return buildCombinedSnapshot(states);
+}
 
-  return {
-    timestamp: timestamps.length ? Math.max(...timestamps) : Date.now(),
-    generatedAt: latestResult?.generatedAt || new Date().toISOString(),
-    servers: sortServers(results.flatMap((result) => result.servers)),
-    errors: results
-      .map((result) => result.error)
-      .filter((value): value is string => Boolean(value))
+export function subscribeCombinedSnapshot(
+  exporters: ExporterEndpointConfig[],
+  onSnapshot: (snapshot: CombinedSnapshot) => void
+): () => void {
+  const states = exporters.map(createExporterSnapshotState);
+  const eventSources: EventSource[] = [];
+  let closed = false;
+
+  const emitSnapshot = () => {
+    if (closed || !states.every((state) => state.initialized)) return;
+    onSnapshot(buildCombinedSnapshot(states));
+  };
+
+  for (const state of states) {
+    const eventSource = new EventSource(state.eventsUrl);
+
+    eventSource.addEventListener('snapshot', (event) => {
+      try {
+        const payload = JSON.parse((event as MessageEvent<string>).data) as ExporterSnapshotResponse;
+        applySnapshotPayload(state, payload);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Invalid snapshot event payload';
+        applySnapshotError(state, message);
+      }
+
+      emitSnapshot();
+    });
+
+    eventSource.onerror = () => {
+      const nextError = `${state.name}: event stream unavailable`;
+      if (state.error === nextError && state.initialized) return;
+      applySnapshotError(state, 'event stream unavailable');
+      emitSnapshot();
+    };
+
+    eventSources.push(eventSource);
+  }
+
+  return () => {
+    closed = true;
+    eventSources.forEach((eventSource) => eventSource.close());
   };
 }
