@@ -1356,7 +1356,7 @@ export default function App({ config }: AppProps) {
     });
 
     return () => unsubscribe();
-  }, [applySnapshot, config.exporters]);
+  }, [config.exporters]);
 
   const handleEnable = async () => {
     if (!permissions) {
