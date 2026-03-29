@@ -23,6 +23,21 @@ type ExporterSnapshotState = {
   error: string | null;
 };
 
+type ExporterStreamSubscription = {
+  state: ExporterSnapshotState;
+  eventSource: EventSource | null;
+  pollTimerId: number | null;
+  reconnectTimerId: number | null;
+  reconnectAttempt: number;
+};
+
+const SNAPSHOT_POLL_INTERVAL_MS = 30_000;
+const STREAM_RECONNECT_BASE_DELAY_MS = 60_000;
+const STREAM_RECONNECT_MAX_DELAY_MS = 5 * 60_000;
+const SNAPSHOT_HEADERS = {
+  Accept: 'application/json'
+} as const;
+
 function normalizeBaseUrl(value: string): string {
   return value.endsWith('/') ? value.slice(0, -1) : value;
 }
@@ -161,10 +176,74 @@ function applySnapshotPayload(
 
 function applySnapshotError(state: ExporterSnapshotState, message: string): void {
   state.initialized = true;
+  state.error = `${state.name}: ${message}`;
+
+  if (state.timestamp > 0) {
+    return;
+  }
+
   state.servers = [];
   state.timestamp = 0;
   state.generatedAt = '';
-  state.error = `${state.name}: ${message}`;
+}
+
+function clearTimer(timerId: number | null): null {
+  if (timerId !== null) {
+    window.clearTimeout(timerId);
+  }
+
+  return null;
+}
+
+function getReconnectDelay(attempt: number): number {
+  return Math.min(
+    STREAM_RECONNECT_BASE_DELAY_MS * 2 ** attempt,
+    STREAM_RECONNECT_MAX_DELAY_MS
+  );
+}
+
+async function buildHttpError(response: Response): Promise<string> {
+  const statusText = `HTTP ${response.status}`;
+  const contentType = response.headers.get('content-type') || '';
+
+  if (contentType.includes('application/json')) {
+    try {
+      const payload = (await response.clone().json()) as {
+        error?: string;
+        message?: string;
+      };
+      const detail = payload.error || payload.message;
+      if (detail) {
+        return `${statusText}: ${detail}`;
+      }
+    } catch {
+      // Ignore invalid JSON error bodies and fall back to text/status.
+    }
+  }
+
+  try {
+    const text = (await response.text()).trim();
+    if (text) {
+      return `${statusText}: ${text}`;
+    }
+  } catch {
+    // Ignore unreadable error bodies and fall back to status only.
+  }
+
+  return statusText;
+}
+
+async function fetchSnapshotPayload(snapshotUrl: string): Promise<ExporterSnapshotResponse> {
+  const response = await fetch(snapshotUrl, {
+    headers: SNAPSHOT_HEADERS,
+    cache: 'no-store'
+  });
+
+  if (!response.ok) {
+    throw new Error(await buildHttpError(response));
+  }
+
+  return (await response.json()) as ExporterSnapshotResponse;
 }
 
 export async function fetchCombinedSnapshot(
@@ -175,18 +254,7 @@ export async function fetchCombinedSnapshot(
   await Promise.all(
     states.map(async (state) => {
       try {
-        const response = await fetch(state.snapshotUrl, {
-          headers: {
-            Accept: 'application/json'
-          },
-          cache: 'no-store'
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-
-        const payload = (await response.json()) as ExporterSnapshotResponse;
+        const payload = await fetchSnapshotPayload(state.snapshotUrl);
         applySnapshotPayload(state, payload);
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown exporter error';
@@ -202,8 +270,14 @@ export function subscribeCombinedSnapshot(
   exporters: ExporterEndpointConfig[],
   onSnapshot: (snapshot: CombinedSnapshot) => void
 ): () => void {
-  const states = exporters.map(createExporterSnapshotState);
-  const eventSources: EventSource[] = [];
+  const subscriptions: ExporterStreamSubscription[] = exporters.map((exporterConfig) => ({
+    state: createExporterSnapshotState(exporterConfig),
+    eventSource: null,
+    pollTimerId: null,
+    reconnectTimerId: null,
+    reconnectAttempt: 0
+  }));
+  const states = subscriptions.map((subscription) => subscription.state);
   let closed = false;
 
   const emitSnapshot = () => {
@@ -211,33 +285,112 @@ export function subscribeCombinedSnapshot(
     onSnapshot(buildCombinedSnapshot(states));
   };
 
-  for (const state of states) {
-    const eventSource = new EventSource(state.eventsUrl);
+  const stopPolling = (subscription: ExporterStreamSubscription) => {
+    subscription.pollTimerId = clearTimer(subscription.pollTimerId);
+  };
+
+  const stopReconnect = (subscription: ExporterStreamSubscription) => {
+    subscription.reconnectTimerId = clearTimer(subscription.reconnectTimerId);
+  };
+
+  const stopEventSource = (subscription: ExporterStreamSubscription) => {
+    if (!subscription.eventSource) return;
+    subscription.eventSource.close();
+    subscription.eventSource = null;
+  };
+
+  const schedulePolling = (subscription: ExporterStreamSubscription, delayMs = 0) => {
+    if (closed || subscription.eventSource || subscription.pollTimerId !== null) return;
+
+    subscription.pollTimerId = window.setTimeout(() => {
+      subscription.pollTimerId = null;
+      void (async () => {
+        try {
+          const payload = await fetchSnapshotPayload(subscription.state.snapshotUrl);
+          applySnapshotPayload(subscription.state, payload);
+          emitSnapshot();
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Unknown exporter error';
+          applySnapshotError(subscription.state, message);
+          emitSnapshot();
+        } finally {
+          if (!closed && subscription.eventSource === null) {
+            schedulePolling(subscription, SNAPSHOT_POLL_INTERVAL_MS);
+          }
+        }
+      })();
+    }, delayMs);
+  };
+
+  const openEventSource = (subscription: ExporterStreamSubscription) => {
+    if (closed || subscription.eventSource) return;
+
+    const eventSource = new EventSource(subscription.state.eventsUrl);
+    subscription.eventSource = eventSource;
+
+    eventSource.onopen = () => {
+      stopPolling(subscription);
+    };
 
     eventSource.addEventListener('snapshot', (event) => {
       try {
         const payload = JSON.parse((event as MessageEvent<string>).data) as ExporterSnapshotResponse;
-        applySnapshotPayload(state, payload);
+        applySnapshotPayload(subscription.state, payload);
+        subscription.reconnectAttempt = 0;
+        stopReconnect(subscription);
+        stopPolling(subscription);
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Invalid snapshot event payload';
-        applySnapshotError(state, message);
+        stopEventSource(subscription);
+        applySnapshotError(subscription.state, message);
+        emitSnapshot();
+        schedulePolling(subscription);
+
+        if (subscription.reconnectTimerId === null) {
+          const reconnectDelayMs = getReconnectDelay(subscription.reconnectAttempt);
+          subscription.reconnectAttempt += 1;
+          subscription.reconnectTimerId = window.setTimeout(() => {
+            subscription.reconnectTimerId = null;
+            if (closed) return;
+            openEventSource(subscription);
+          }, reconnectDelayMs);
+        }
+
+        return;
       }
 
       emitSnapshot();
     });
 
     eventSource.onerror = () => {
-      const nextError = `${state.name}: event stream unavailable`;
-      if (state.error === nextError && state.initialized) return;
-      applySnapshotError(state, 'event stream unavailable');
-      emitSnapshot();
-    };
+      if (closed) return;
 
-    eventSources.push(eventSource);
-  }
+      stopEventSource(subscription);
+      applySnapshotError(subscription.state, 'event stream unavailable');
+      emitSnapshot();
+
+      schedulePolling(subscription);
+
+      if (subscription.reconnectTimerId !== null) return;
+
+      const reconnectDelayMs = getReconnectDelay(subscription.reconnectAttempt);
+      subscription.reconnectAttempt += 1;
+      subscription.reconnectTimerId = window.setTimeout(() => {
+        subscription.reconnectTimerId = null;
+        if (closed) return;
+        openEventSource(subscription);
+      }, reconnectDelayMs);
+    };
+  };
+
+  subscriptions.forEach((subscription) => openEventSource(subscription));
 
   return () => {
     closed = true;
-    eventSources.forEach((eventSource) => eventSource.close());
+    subscriptions.forEach((subscription) => {
+      stopEventSource(subscription);
+      stopPolling(subscription);
+      stopReconnect(subscription);
+    });
   };
 }

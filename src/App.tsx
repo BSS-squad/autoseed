@@ -2094,7 +2094,7 @@ export default function App({ config }: AppProps) {
             </div>
             <div className="rule-card">
               <span>Realtime</span>
-              <strong>SSE /events</strong>
+              <strong>SSE /events + snapshot fallback</strong>
             </div>
             {hasConfiguredTestMode ? (
               <>
