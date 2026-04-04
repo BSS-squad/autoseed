@@ -1543,6 +1543,20 @@ export default function App({ config }: AppProps) {
   const latestLog = logs[logs.length - 1] || 'Событий пока нет.';
   const diagnosticsIssueCount = snapshot.errors.length + (fatalError ? 1 : 0);
   const debugLogCount = logs.length;
+  const nextActionValue = pendingSequence
+    ? formatCountdown(nextFollowupCountdown)
+    : cooldownLeftMs > 0
+      ? formatCountdown(cooldownLeftMs)
+      : 'Ready';
+  const nextActionCaption = pendingSequence
+    ? nextFollowupServer?.name || 'Ожидаем follow-up'
+    : enabled
+      ? 'Коннектор ждёт новый snapshot'
+      : 'Коннектор выключен';
+  const heroMeshLabel = `${liveServerCount}/${snapshot.servers.length || config.exporters.length}`;
+  const heroPriorityLabel = effectivePolicy.priorityOrder.join(' → ');
+  const heroCadenceLabel =
+    periodicReconnectMs > 0 ? `${Math.round(periodicReconnectMs / 60000)} min cadence` : 'manual';
   const orderedServers = useMemo(
     () =>
       snapshot.servers
@@ -1614,8 +1628,8 @@ export default function App({ config }: AppProps) {
   }, [displayTargetServer, orderedServers]);
 
   return (
-    <div className="shell modern-shell" style={BRAND_STYLE}>
-      <header className="hero hero-redesign">
+    <div className="shell modern-shell" style={BRAND_STYLE} data-testid="app-shell">
+      <header className="hero hero-redesign" data-testid="hero">
         <div className="hero-main hero-main-tight">
           <div className="hero-topline">
             <div className="hero-brand">
@@ -1636,11 +1650,19 @@ export default function App({ config }: AppProps) {
           </div>
 
           <p className="eyebrow">BSS Seed Connect</p>
-          <h1>{config.app.title}</h1>
+          <h1 data-testid="hero-title">{config.app.title}</h1>
           <p className="hero-copy hero-copy-tight">
             Включай коннектор или сразу смотри онлайн, состав сторон и баланс часов по обоим
             серверам.
           </p>
+
+          <div className="hero-ribbon" data-testid="hero-ribbon">
+            <span className="hero-ribbon-tag">Live Ops</span>
+            <p>
+              Control room работает от публичного snapshot, а свежий lobby link забирает только в
+              момент реального перехода.
+            </p>
+          </div>
 
           <div className="hero-badges hero-badges-tight">
             <span className={classNames('status-pill', enabled ? 'status-good' : 'status-muted')}>
@@ -1663,6 +1685,24 @@ export default function App({ config }: AppProps) {
               {displayTargetServer ? `Цель: ${displayTargetServer.name}` : 'Цель не выбрана'}
             </span>
           </div>
+
+          <div className="hero-glance-grid" data-testid="hero-glance-grid">
+            <article className="hero-glance-card hero-glance-card-emphasis">
+              <span className="hero-glance-label">Live mesh</span>
+              <strong>{heroMeshLabel}</strong>
+              <p>server nodes online</p>
+            </article>
+            <article className="hero-glance-card">
+              <span className="hero-glance-label">Next action</span>
+              <strong>{nextActionValue}</strong>
+              <p>{nextActionCaption}</p>
+            </article>
+            <article className="hero-glance-card">
+              <span className="hero-glance-label">Priority rail</span>
+              <strong>{heroPriorityLabel}</strong>
+              <p>{heroCadenceLabel}</p>
+            </article>
+          </div>
         </div>
 
         <aside className="control-deck">
@@ -1679,6 +1719,7 @@ export default function App({ config }: AppProps) {
                 className={classNames('segment', productionMode && 'segment-active')}
                 onClick={productionMode ? undefined : handleModeToggle}
                 disabled={productionMode}
+                data-testid="mode-production"
               >
                 Боевой
               </button>
@@ -1686,6 +1727,7 @@ export default function App({ config }: AppProps) {
                 className={classNames('segment', isTestModeActive && 'segment-active')}
                 onClick={!productionMode ? undefined : handleModeToggle}
                 disabled={!hasConfiguredTestMode || isTestModeActive}
+                data-testid="mode-test"
               >
                 {hasConfiguredTestMode ? `Тест ${testSequencePlanLabel}` : 'Тест недоступен'}
               </button>
@@ -1700,6 +1742,8 @@ export default function App({ config }: AppProps) {
               enabled && 'power-button-live'
             )}
             onClick={enabled ? handleDisable : () => void handleEnable()}
+            data-testid="power-toggle"
+            aria-pressed={enabled}
           >
             <div className="power-button-head">
               <span className="guide-inline-step guide-inline-step-large" aria-hidden="true">
@@ -1715,13 +1759,18 @@ export default function App({ config }: AppProps) {
             <button
               className="button button-primary guide-button guide-focus guide-focus-primary"
               onClick={() => void handlePermissionsCheck()}
+              data-testid="check-browser-button"
             >
               <span className="guide-inline-step" aria-hidden="true">
                 2
               </span>
               <span>Проверить браузер</span>
             </button>
-            <button className="button" onClick={() => void refreshSnapshot()}>
+            <button
+              className="button"
+              onClick={() => void refreshSnapshot()}
+              data-testid="refresh-snapshot-button"
+            >
               Обновить сейчас
             </button>
           </div>
@@ -1865,48 +1914,69 @@ export default function App({ config }: AppProps) {
         </section>
       )}
 
-      <section className="overview-grid">
-        <article className="overview-card overview-card-spotlight">
-          <span className="overview-label">Текущая цель</span>
-          <strong>{displayTargetServer?.name || 'Подходящий сервер не найден'}</strong>
-          <p>{statusText}</p>
-        </article>
+      <section className="section-shell">
+        <div className="section-head">
+          <div>
+            <span className="section-eyebrow">Mission Board</span>
+            <h2>Что происходит прямо сейчас</h2>
+          </div>
+          <p>Сводка по цели, таймингам и общей доступности контура.</p>
+        </div>
 
-        <article className="overview-card">
-          <span className="overview-label">Куда заходить</span>
-          <strong>{weakSideSuggestion?.name || 'Стороны пока ровные'}</strong>
-          <p>{weakSideSuggestion ? 'Слабая сторона на текущем target' : 'Ждём состав сторон'}</p>
-        </article>
+        <div className="overview-grid">
+          <article
+            className="overview-card overview-card-spotlight"
+            data-testid="overview-target"
+          >
+            <span className="overview-label">Текущая цель</span>
+            <strong>{displayTargetServer?.name || 'Подходящий сервер не найден'}</strong>
+            <p>{statusText}</p>
+          </article>
 
-        <article className="overview-card">
-          <span className="overview-label">Snapshot</span>
-          <strong>{formatCompactTimestamp(snapshot.generatedAt)}</strong>
-          <p>
-            {liveServerCount}/{snapshot.servers.length || config.exporters.length} серверов online
-          </p>
-        </article>
+          <article className="overview-card">
+            <span className="overview-label">Куда заходить</span>
+            <strong>{weakSideSuggestion?.name || 'Стороны пока ровные'}</strong>
+            <p>{weakSideSuggestion ? 'Слабая сторона на текущем target' : 'Ждём состав сторон'}</p>
+          </article>
 
-        <article className="overview-card">
-          <span className="overview-label">{pendingSequence ? 'Следующий переход' : 'Cooldown'}</span>
-          <strong>
-            {pendingSequence
-              ? formatCountdown(nextFollowupCountdown)
-              : cooldownLeftMs > 0
-                ? formatCountdown(cooldownLeftMs)
-                : '—'}
-          </strong>
-          <p>
-            {pendingSequence
-              ? nextFollowupServer?.name || 'Ожидаем follow-up'
-              : enabled
-                ? 'Коннектор ждёт новый snapshot'
-                : 'Коннектор не активен'}
-          </p>
-        </article>
+          <article className="overview-card">
+            <span className="overview-label">Snapshot</span>
+            <strong>{formatCompactTimestamp(snapshot.generatedAt)}</strong>
+            <p>
+              {liveServerCount}/{snapshot.servers.length || config.exporters.length} серверов online
+            </p>
+          </article>
+
+          <article className="overview-card">
+            <span className="overview-label">{pendingSequence ? 'Следующий переход' : 'Cooldown'}</span>
+            <strong>
+              {pendingSequence
+                ? formatCountdown(nextFollowupCountdown)
+                : cooldownLeftMs > 0
+                  ? formatCountdown(cooldownLeftMs)
+                  : '—'}
+            </strong>
+            <p>
+              {pendingSequence
+                ? nextFollowupServer?.name || 'Ожидаем follow-up'
+                : enabled
+                  ? 'Коннектор ждёт новый snapshot'
+                  : 'Коннектор не активен'}
+            </p>
+          </article>
+        </div>
       </section>
 
-      <section className="server-switcher">
-        <div className="server-switcher-track">
+      <section className="section-shell server-switcher">
+        <div className="section-head">
+          <div>
+            <span className="section-eyebrow">Server Radar</span>
+            <h2>Быстрый выбор узла</h2>
+          </div>
+          <p>Выбери карточку ниже, чтобы развернуть полный tactical board сервера.</p>
+        </div>
+
+        <div className="server-switcher-track" data-testid="server-switcher-track">
           {orderedServers.map((server) => {
             const serverKey = getServerSelectionKey(server);
             const isActive = serverKey === getServerSelectionKey(activeServer);
@@ -1927,6 +1997,7 @@ export default function App({ config }: AppProps) {
                   isActive && 'server-switcher-card-active',
                   isTarget && 'server-switcher-card-target'
                 )}
+                data-testid={`server-card-${server.id}`}
               >
                 <button
                   type="button"
@@ -1957,6 +2028,7 @@ export default function App({ config }: AppProps) {
                     className="button button-small"
                     onClick={() => void handleDirectJoin(server)}
                     disabled={!canDirectJoin || joinRequestPending}
+                    data-testid={`direct-join-${server.id}`}
                   >
                     {joinRequestPending
                       ? 'Запрашиваем lobby...'
@@ -1971,7 +2043,15 @@ export default function App({ config }: AppProps) {
         </div>
       </section>
 
-      <section className="server-stack">
+      <section className="section-shell server-stack">
+        <div className="section-head">
+          <div>
+            <span className="section-eyebrow">Server Detail</span>
+            <h2>Текущий tactical board</h2>
+          </div>
+          <p>Нагрузка, прогресс рассида, состав сторон и лидерские часы по выбранному серверу.</p>
+        </div>
+
         {activeServer ? (() => {
           const server = activeServer;
           const canDirectJoin = canRequestJoinLink(server);
@@ -1990,6 +2070,7 @@ export default function App({ config }: AppProps) {
                 server.online && 'server-board-live',
                 isSameServer(server, displayTargetServer) && 'server-board-target'
               )}
+              data-testid="active-server-board"
             >
               <div className="server-board-top">
                 <div className="server-title-block">
@@ -2036,6 +2117,7 @@ export default function App({ config }: AppProps) {
                       className="button button-primary guide-button guide-focus guide-focus-accent"
                       onClick={() => void handleDirectJoin(server)}
                       disabled={!canDirectJoin || joinRequestPending}
+                      data-testid="primary-direct-join"
                     >
                       <span className="guide-inline-step" aria-hidden="true">
                         4
@@ -2141,7 +2223,7 @@ export default function App({ config }: AppProps) {
         )}
       </section>
 
-      <details className="panel panel-span panel-details">
+      <details className="panel panel-span panel-details" data-testid="diagnostics-panel">
         <summary className="details-summary">
           <span>Правила и диагностика</span>
           {diagnosticsIssueCount > 0 ? (
@@ -2218,7 +2300,7 @@ export default function App({ config }: AppProps) {
         </div>
       </details>
 
-      <details className="panel panel-span panel-details">
+      <details className="panel panel-span panel-details" data-testid="debug-log-panel">
         <summary className="details-summary">
           <span>Debug log</span>
           {debugLogCount > 0 ? <span className="badge badge-muted">{debugLogCount}</span> : null}
