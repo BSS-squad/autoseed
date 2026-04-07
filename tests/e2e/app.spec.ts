@@ -52,6 +52,8 @@ const productionSwitchRuntimeConfig = {
   }
 };
 
+const SQUADJS2_SELECTION_KEY = 'http://127.0.0.1:4173/mock/squadjs2/snapshot::2::squadjs2';
+
 function buildTeam(id: number, name: string, totalPlaytimeHours: number) {
   return {
     id,
@@ -432,6 +434,56 @@ async function mockSuccessfulPermissionCheck(page: Page) {
   });
 }
 
+async function seedStoredAutoconnectState(
+  page: Page,
+  overrides?: {
+    enabled?: boolean;
+    mode?: 'production' | 'test';
+    testSequenceDelayMs?: number;
+    lastProcessedTimestamp?: number;
+    cooldownUntil?: number;
+    activeRedirectServerKey?: string;
+  }
+) {
+  const storedState = {
+    enabled: true,
+    mode: 'production' as const,
+    testSequenceDelayMs: 0,
+    lastProcessedTimestamp: 0,
+    cooldownUntil: 0,
+    activeRedirectServerKey: '',
+    permissions: {
+      popupAllowed: true,
+      steamProtocolReady: true,
+      checkedAt: BASE_TIME
+    },
+    ...overrides
+  };
+
+  await page.addInitScript((state) => {
+    window.localStorage.setItem('steam-auto-enabled', String(state.enabled));
+    window.localStorage.setItem('steam-auto-mode', state.mode);
+    window.localStorage.setItem(
+      'steam-auto-test-sequence-delay-ms',
+      String(state.testSequenceDelayMs)
+    );
+    window.localStorage.setItem(
+      'steam-auto-last-timestamp',
+      String(state.lastProcessedTimestamp)
+    );
+    window.localStorage.setItem('steam-auto-cooldown-until', String(state.cooldownUntil));
+    if (state.activeRedirectServerKey) {
+      window.localStorage.setItem(
+        'steam-auto-active-redirect-server-key',
+        state.activeRedirectServerKey
+      );
+    } else {
+      window.localStorage.removeItem('steam-auto-active-redirect-server-key');
+    }
+    window.localStorage.setItem('steam-auto-permissions', JSON.stringify(state.permissions));
+  }, storedState);
+}
+
 test('renders the localized control room from exporter snapshots', async ({ page }) => {
   await mockAutoseedApi(page);
 
@@ -565,4 +617,26 @@ test('regenerates the production join-link only when the current target crosses 
 
   await expect.poll(() => counters.serverOneJoinLinkRequests).toBe(1);
   expect(counters.serverTwoJoinLinkRequests).toBe(1);
+});
+
+test('restores the current production target after reload without showing a stale cooldown timer', async ({
+  page
+}) => {
+  const counters = { joinLinkRequests: 0 };
+  await mockSuccessfulPermissionCheck(page);
+  await mockAutoseedApi(page, counters);
+  await seedStoredAutoconnectState(page, {
+    enabled: true,
+    lastProcessedTimestamp: BASE_TIME + 999_000,
+    cooldownUntil: BASE_TIME + 363_000,
+    activeRedirectServerKey: SQUADJS2_SELECTION_KEY
+  });
+
+  await page.goto('/');
+
+  await expect(page.getByTestId('power-toggle')).toContainText('Включён');
+  await expect(page.getByTestId('hero-next-action-value')).toHaveText('30 с');
+  await expect(page.getByTestId('overview-next-action-value')).toHaveText('30 с');
+  await page.waitForTimeout(300);
+  expect(counters.joinLinkRequests).toBe(0);
 });

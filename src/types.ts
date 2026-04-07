@@ -152,6 +152,7 @@ export type StoredState = {
   testSequenceDelayMs: number;
   lastProcessedTimestamp: number;
   cooldownUntil: number;
+  activeRedirectServerKey: string;
   permissions: BrowserPermissions | null;
 };
 

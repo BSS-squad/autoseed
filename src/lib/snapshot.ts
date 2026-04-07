@@ -33,7 +33,7 @@ type ExporterStreamSubscription = {
   reconnectAttempt: number;
 };
 
-const SNAPSHOT_POLL_INTERVAL_MS = 30_000;
+export const SNAPSHOT_POLL_INTERVAL_MS = 30_000;
 const STREAM_RECONNECT_BASE_DELAY_MS = 60_000;
 const STREAM_RECONNECT_MAX_DELAY_MS = 5 * 60_000;
 const SNAPSHOT_HEADERS = {

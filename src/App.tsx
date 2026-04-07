@@ -17,10 +17,12 @@ import {
 import {
   fetchCombinedSnapshot,
   fetchServerJoinLink,
+  SNAPSHOT_POLL_INTERVAL_MS,
   subscribeCombinedSnapshot
 } from './lib/snapshot';
 import {
   loadStoredState,
+  saveActiveRedirectServerKey,
   saveCooldownUntil,
   saveEnabled,
   saveLastProcessedTimestamp,
@@ -792,7 +794,7 @@ export default function App({ config }: AppProps) {
   const testSequenceDelayMsRef = useRef<number>(0);
   const connectorWindowStateRef = useRef<ConnectorWindowState | null>(null);
   const connectorWindowWriteBlockedRef = useRef<boolean>(false);
-  const activeRedirectServerKeyRef = useRef<string>('');
+  const activeRedirectServerKeyRef = useRef<string>(storedState.activeRedirectServerKey);
   const redirectInFlightRef = useRef<boolean>(false);
   const pendingRedirectServerKeyRef = useRef<string>('');
 
@@ -1300,6 +1302,7 @@ export default function App({ config }: AppProps) {
     saveCooldownUntil(0);
     setJoinLinkRequestServerKey('');
     activeRedirectServerKeyRef.current = '';
+    saveActiveRedirectServerKey('');
     pendingRedirectServerKeyRef.current = '';
     redirectInFlightRef.current = false;
     connectorWindowStateRef.current = null;
@@ -1411,6 +1414,7 @@ export default function App({ config }: AppProps) {
 
       const nextCooldownUntil = Date.now() + cooldownMs;
       activeRedirectServerKeyRef.current = targetServerKey;
+      saveActiveRedirectServerKey(targetServerKey);
       setLastProcessedTimestamp(snapshotTimestamp);
       saveLastProcessedTimestamp(snapshotTimestamp);
       setCooldownUntil(nextCooldownUntil);
@@ -1552,6 +1556,7 @@ export default function App({ config }: AppProps) {
     closeConnectorWindow();
     setJoinLinkRequestServerKey('');
     activeRedirectServerKeyRef.current = '';
+    saveActiveRedirectServerKey('');
     pendingRedirectServerKeyRef.current = '';
     redirectInFlightRef.current = false;
     connectorWindowStateRef.current = null;
@@ -1561,7 +1566,6 @@ export default function App({ config }: AppProps) {
     appendLog('Автоконнектор выключен.');
   };
 
-  const cooldownLeftMs = Math.max(0, cooldownUntil - now);
   const permissionsReady = Boolean(permissions?.popupAllowed && permissions?.steamProtocolReady);
   const productionMode = activeMode === 'production';
   const statusText = isTestModeActive
@@ -1582,18 +1586,20 @@ export default function App({ config }: AppProps) {
   const debugLogCount = logs.length;
   const nextActionValue = pendingSequence
     ? formatCountdown(nextFollowupCountdown)
-    : cooldownLeftMs > 0
-      ? formatCountdown(cooldownLeftMs)
+    : enabled
+      ? formatCountdown(SNAPSHOT_POLL_INTERVAL_MS)
       : 'Готово';
   const nextActionCaption = pendingSequence
     ? nextFollowupServer?.name || 'Ждём следующий сервер'
     : enabled
-      ? 'Коннектор ждёт новый снимок'
+      ? 'Ждём новый снимок для пересчёта решения'
       : 'Коннектор выключен';
   const heroMeshLabel = `${liveServerCount}/${snapshot.servers.length || config.exporters.length}`;
   const heroPriorityLabel = effectivePolicy.priorityOrder.join(' → ');
   const heroCadenceLabel =
-    periodicReconnectMs > 0 ? `${Math.round(periodicReconnectMs / 60000)} мин цикл` : 'вручную';
+    periodicReconnectMs > 0
+      ? `снимок 30 с, форс-проверка ${Math.round(periodicReconnectMs / 60000)} мин`
+      : 'снимок 30 с';
   const browserCheckLabel = permissionsReady ? 'Браузер проверен' : 'Проверить браузер';
   const orderedServers = useMemo(
     () =>
@@ -1733,7 +1739,7 @@ export default function App({ config }: AppProps) {
             </article>
             <article className="hero-glance-card">
               <span className="hero-glance-label">Следующее действие</span>
-              <strong>{nextActionValue}</strong>
+              <strong data-testid="hero-next-action-value">{nextActionValue}</strong>
               <p>{nextActionCaption}</p>
             </article>
             <article className="hero-glance-card">
@@ -1994,19 +2000,19 @@ export default function App({ config }: AppProps) {
           </article>
 
           <article className="overview-card">
-            <span className="overview-label">{pendingSequence ? 'Следующий переход' : 'Пауза'}</span>
-            <strong>
+            <span className="overview-label">{pendingSequence ? 'Следующий переход' : 'Снимок'}</span>
+            <strong data-testid="overview-next-action-value">
               {pendingSequence
                 ? formatCountdown(nextFollowupCountdown)
-                : cooldownLeftMs > 0
-                  ? formatCountdown(cooldownLeftMs)
+                : enabled
+                  ? formatCountdown(SNAPSHOT_POLL_INTERVAL_MS)
                   : '—'}
             </strong>
             <p>
               {pendingSequence
                 ? nextFollowupServer?.name || 'Ждём следующий сервер'
                 : enabled
-                  ? 'Коннектор ждёт новый снимок'
+                  ? 'Решение пересчитывается по новому снимку'
                   : 'Коннектор не активен'}
             </p>
           </article>
