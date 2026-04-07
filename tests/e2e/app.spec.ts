@@ -43,6 +43,15 @@ const testModeRuntimeConfig = {
   }
 };
 
+const productionSwitchRuntimeConfig = {
+  ...runtimeConfig,
+  policy: {
+    ...runtimeConfig.policy,
+    cooldownMs: 50,
+    periodicReconnectMs: 0
+  }
+};
+
 function buildTeam(id: number, name: string, totalPlaytimeHours: number) {
   return {
     id,
@@ -285,6 +294,88 @@ async function mockTestModeAutoseedApi(
   );
 }
 
+async function mockProductionSwitchAutoseedApi(
+  page: Page,
+  counters: { serverOneJoinLinkRequests: number; serverTwoJoinLinkRequests: number },
+  snapshotState: { serverOnePlayers: number; serverTwoPlayers: number }
+) {
+  let currentTimestamp = BASE_TIME;
+  const nextTimestamp = () => {
+    currentTimestamp += 1000;
+    return currentTimestamp;
+  };
+
+  await page.route('**/runtime-config.json', (route) =>
+    fulfillJson(route, productionSwitchRuntimeConfig)
+  );
+  await page.route('**/mock/**/events', (route) =>
+    route.fulfill({
+      status: 503,
+      contentType: 'text/plain; charset=utf-8',
+      body: 'sse unavailable in test'
+    })
+  );
+  await page.route('**/mock/squadjs1/snapshot', (route) =>
+    fulfillJson(
+      route,
+      buildSnapshot({
+        id: 1,
+        code: 'squadjs1',
+        name: '[RU] BSS Classic',
+        playerCount: snapshotState.serverOnePlayers,
+        maxPlayers: 100,
+        queueLength: 0,
+        online: true,
+        timestamp: nextTimestamp()
+      })
+    )
+  );
+  await page.route('**/mock/squadjs2/snapshot', (route) =>
+    fulfillJson(
+      route,
+      buildSnapshot({
+        id: 2,
+        code: 'squadjs2',
+        name: '[RU] BSS Spec Ops',
+        playerCount: snapshotState.serverTwoPlayers,
+        maxPlayers: 100,
+        queueLength: 2,
+        online: true,
+        timestamp: nextTimestamp()
+      })
+    )
+  );
+  await page.route('**/mock/squadjs1/join-link', async (route) => {
+    counters.serverOneJoinLinkRequests += 1;
+    await fulfillJson(route, {
+      ok: true,
+      timestamp: BASE_TIME,
+      serverId: 1,
+      serverCode: 'squadjs1',
+      serverName: '[RU] BSS Classic',
+      joinLink: REDIRECT_TARGET_URL
+    });
+  });
+  await page.route('**/mock/squadjs2/join-link', async (route) => {
+    counters.serverTwoJoinLinkRequests += 1;
+    await fulfillJson(route, {
+      ok: true,
+      timestamp: BASE_TIME,
+      serverId: 2,
+      serverCode: 'squadjs2',
+      serverName: '[RU] BSS Spec Ops',
+      joinLink: REDIRECT_TARGET_URL
+    });
+  });
+  await page.route('**/redirect-target', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'text/html; charset=utf-8',
+      body: '<!doctype html><html><body><main data-testid="redirect-target">Точка перехода</main></body></html>'
+    })
+  );
+}
+
 async function mockSuccessfulPermissionCheck(page: Page) {
   await page.addInitScript(() => {
     const createPopup = () => {
@@ -443,4 +534,35 @@ test('accepts a fresh snapshot during the pending test sequence without regenera
 
   expect(counters.firstJoinLinkRequests).toBe(1);
   await expect.poll(() => counters.secondJoinLinkRequests).toBe(1);
+});
+
+test('regenerates the production join-link only when the current target crosses the 80-player limit', async ({
+  page
+}) => {
+  const counters = { serverOneJoinLinkRequests: 0, serverTwoJoinLinkRequests: 0 };
+  const snapshotState = { serverOnePlayers: 60, serverTwoPlayers: 70 };
+  await mockSuccessfulPermissionCheck(page);
+  await mockProductionSwitchAutoseedApi(page, counters, snapshotState);
+
+  await page.goto('/');
+  await page.getByTestId('check-browser-button').click();
+  await expect(page.getByTestId('check-browser-button')).toContainText('Браузер проверен');
+
+  await page.getByTestId('power-toggle').click();
+  await expect.poll(() => counters.serverTwoJoinLinkRequests).toBe(1);
+  expect(counters.serverOneJoinLinkRequests).toBe(0);
+
+  await page.waitForTimeout(120);
+  await page.getByTestId('refresh-snapshot-button').click();
+  await page.waitForTimeout(120);
+
+  expect(counters.serverTwoJoinLinkRequests).toBe(1);
+  expect(counters.serverOneJoinLinkRequests).toBe(0);
+
+  snapshotState.serverTwoPlayers = 81;
+  await page.waitForTimeout(120);
+  await page.getByTestId('refresh-snapshot-button').click();
+
+  await expect.poll(() => counters.serverOneJoinLinkRequests).toBe(1);
+  expect(counters.serverTwoJoinLinkRequests).toBe(1);
 });

@@ -999,6 +999,12 @@ export default function App({ config }: AppProps) {
             nextTargetKey &&
             nextTargetKey === activeRedirectServerKey
         );
+        const productionTargetUnchanged = Boolean(
+          !testModeEnabled &&
+            nextTargetKey &&
+            activeRedirectServerKey &&
+            nextTargetKey === activeRedirectServerKey
+        );
         const productionTargetChanged = Boolean(
           !testModeEnabled &&
             nextTargetKey &&
@@ -1007,6 +1013,10 @@ export default function App({ config }: AppProps) {
         );
 
         if (awaitingTestFollowup) {
+          return;
+        }
+
+        if (productionTargetUnchanged) {
           return;
         }
 
