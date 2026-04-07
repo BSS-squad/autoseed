@@ -932,7 +932,6 @@ export default function App({ config }: AppProps) {
     Math.round(configuredTestSequenceDelayMs / 1000)
   );
   const testCooldownMs = Math.max(0, testModeConfig?.cooldownMs || 30000);
-  const periodicReconnectMs = Math.max(0, effectivePolicy.periodicReconnectMs || 0);
   const testSequencePlanLabel = testModeConfig?.sequenceServerIds?.join(' -> ') || '—';
   const hasManualTestSequenceDelay = testSequenceDelayMsOverride > 0;
 
@@ -1054,7 +1053,7 @@ export default function App({ config }: AppProps) {
             findServerBySelectionKey(nextSnapshot, activeRedirectServerKey) ||
             findServerBySelectionKey(snapshot, activeRedirectServerKey);
           appendLog(
-            `Боевой режим: цель сменилась с ${previousServer?.name || 'предыдущего сервера'} на ${nextRedirectPlan[0].name}, паузу пропускаем.`
+            `Боевой режим: цель сменилась с ${previousServer?.name || 'предыдущего сервера'} на ${nextRedirectPlan[0].name}, запускаю новый переход.`
           );
         }
 
@@ -1447,27 +1446,6 @@ export default function App({ config }: AppProps) {
     }
   };
 
-  const triggerPeriodicReconnect = useEffectEvent(() => {
-    if (!enabledRef.current || modeRef.current !== 'production') return;
-    if (isFetchingRef.current) return;
-
-    const targetServer = selection?.targetServer;
-    if (!targetServer) return;
-
-    appendLog(`Периодическое переподключение: запрашиваю свежий снимок для ${targetServer.name}.`);
-    void refreshSnapshot({ forceRedirect: true });
-  });
-
-  useEffect(() => {
-    if (!enabled || activeMode !== 'production' || periodicReconnectMs <= 0) return;
-
-    const timer = window.setInterval(() => {
-      triggerPeriodicReconnect();
-    }, periodicReconnectMs);
-
-    return () => window.clearInterval(timer);
-  }, [activeMode, enabled, periodicReconnectMs]);
-
   useEffect(() => {
     if (typeof window.EventSource === 'undefined') {
       const message = 'Браузер не поддерживает EventSource/SSE.';
@@ -1548,7 +1526,7 @@ export default function App({ config }: AppProps) {
       appendLog('Текущий снимок устарел: запрашиваю свежие данные перед первым переходом.');
     }
 
-    void refreshSnapshot({ forceRedirect: true });
+    void refreshSnapshot();
   };
 
   const handleDisable = () => {
@@ -1596,10 +1574,7 @@ export default function App({ config }: AppProps) {
       : 'Коннектор выключен';
   const heroMeshLabel = `${liveServerCount}/${snapshot.servers.length || config.exporters.length}`;
   const heroPriorityLabel = effectivePolicy.priorityOrder.join(' → ');
-  const heroCadenceLabel =
-    periodicReconnectMs > 0
-      ? `снимок 30 с, форс-проверка ${Math.round(periodicReconnectMs / 60000)} мин`
-      : 'снимок 30 с';
+  const heroCadenceLabel = 'снимок 30 с';
   const browserCheckLabel = permissionsReady ? 'Браузер проверен' : 'Проверить браузер';
   const orderedServers = useMemo(
     () =>
