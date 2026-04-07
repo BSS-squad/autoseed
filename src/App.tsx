@@ -990,18 +990,25 @@ export default function App({ config }: AppProps) {
           return;
         }
 
-        if (testModeEnabled && pendingSequenceRef.current?.remaining.length && !options?.forceRedirect) {
-          return;
-        }
-
         const nextTargetKey = getServerSelectionKey(nextRedirectPlan[0]);
         const activeRedirectServerKey = activeRedirectServerKeyRef.current;
+        const awaitingTestFollowup = Boolean(
+          testModeEnabled &&
+            pendingSequenceRef.current?.remaining.length &&
+            !options?.forceRedirect &&
+            nextTargetKey &&
+            nextTargetKey === activeRedirectServerKey
+        );
         const productionTargetChanged = Boolean(
           !testModeEnabled &&
             nextTargetKey &&
             activeRedirectServerKey &&
             nextTargetKey !== activeRedirectServerKey
         );
+
+        if (awaitingTestFollowup) {
+          return;
+        }
 
         if (redirectInFlightRef.current) {
           if (nextTargetKey && pendingRedirectServerKeyRef.current === nextTargetKey) {

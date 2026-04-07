@@ -421,7 +421,7 @@ test('keeps the layout usable on mobile without document-level horizontal overfl
   expect(hasNoDocumentOverflow).toBe(true);
 });
 
-test('keeps the pending test sequence and still sends the second transition after a fresh snapshot', async ({
+test('accepts a fresh snapshot during the pending test sequence without regenerating the first join-link', async ({
   page
 }) => {
   const counters = { firstJoinLinkRequests: 0, secondJoinLinkRequests: 0 };
