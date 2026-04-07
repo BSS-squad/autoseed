@@ -113,16 +113,6 @@ const BRAND_STYLE = {
   '--brand-logo': `url(${projectLogo})`
 } as CSSProperties;
 
-function formatTimestamp(value: number | string | undefined): string {
-  if (!value) return '—';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '—';
-  return new Intl.DateTimeFormat('ru-RU', {
-    dateStyle: 'short',
-    timeStyle: 'medium'
-  }).format(date);
-}
-
 function formatCompactTimestamp(value: number | string | undefined): string {
   if (!value) return '—';
   const date = new Date(value);
@@ -1559,9 +1549,6 @@ export default function App({ config }: AppProps) {
   const weakSideSuggestion = getWeakerTeam(displayTargetServer);
   const liveServerCount = snapshot.servers.filter((server) => server.online).length;
   const healthyExporterCount = Math.max(0, config.exporters.length - snapshot.errors.length);
-  const latestLog = logs[logs.length - 1] || 'Событий пока нет.';
-  const diagnosticsIssueCount = snapshot.errors.length + (fatalError ? 1 : 0);
-  const debugLogCount = logs.length;
   const nextActionValue = pendingSequence
     ? formatCountdown(nextFollowupCountdown)
     : enabled
@@ -1570,11 +1557,13 @@ export default function App({ config }: AppProps) {
   const nextActionCaption = pendingSequence
     ? nextFollowupServer?.name || 'Ждём следующий сервер'
     : enabled
-      ? 'Ждём новый снимок для пересчёта решения'
+      ? 'Статус обновляется автоматически'
       : 'Коннектор выключен';
   const heroMeshLabel = `${liveServerCount}/${snapshot.servers.length || config.exporters.length}`;
-  const heroPriorityLabel = effectivePolicy.priorityOrder.join(' → ');
-  const heroCadenceLabel = 'снимок 30 с';
+  const heroModeLabel = productionMode ? 'Боевой' : 'Тест';
+  const heroModeCaption = productionMode
+    ? 'Обычный режим работы'
+    : 'Режим для ручной проверки';
   const browserCheckLabel = permissionsReady ? 'Браузер проверен' : 'Проверить браузер';
   const orderedServers = useMemo(
     () =>
@@ -1599,10 +1588,10 @@ export default function App({ config }: AppProps) {
       step: '1',
       title: 'Выбери режим в правом верхнем блоке',
       description: hasConfiguredTestMode
-        ? 'Оставляй «Боевой» для реальной работы по правилам. «Тест» нужен только чтобы прогнать заранее заданную последовательность серверов.'
+        ? 'Для обычной работы оставляй «Боевой». «Тест» нужен только для проверки и ручного прогона.'
         : 'Сейчас доступен только «Боевой» режим, поэтому ничего переключать не нужно.',
       hints: hasConfiguredTestMode
-        ? ['Кнопки: «Боевой» или «Тест»', 'Этот блок определяет сценарий перехода']
+        ? ['Кнопки: «Боевой» или «Тест»', 'Для обычной работы оставляй «Боевой»']
         : ['Кнопка: «Боевой»', 'Тестовый режим не настроен в конфиге']
     },
     {
@@ -1610,7 +1599,7 @@ export default function App({ config }: AppProps) {
       step: '2',
       title: 'Нажми «Проверить браузер»',
       description:
-        'Проверь, что браузер умеет открыть служебное окно и передать ссылку в Steam. Пока оба индикатора не зелёные, автоконнектор не запустится.',
+        'Проверь, что браузер готов открыть окно и передать подключение в Steam. Пока оба индикатора не зелёные, автоконнектор не запустится.',
       hints: ['Кнопка: «Проверить браузер»', 'Смотри статусы окна и Steam']
     },
     {
@@ -1626,7 +1615,7 @@ export default function App({ config }: AppProps) {
       step: '4',
       title: 'Включи «Автоконнектор»',
       description:
-        'После запуска откроется служебное окно коннектора. Оно занимается запросом свежей ссылки входа и переходом в Steam и должно оставаться открытым, пока идёт работа. Если после отправки оно осталось на служебной карточке, это нормально: отдельного ответа от Steam или Squad браузер не получает.',
+        'После запуска откроется служебное окно коннектора. Не закрывай его, пока автоконнектор работает. Если после отправки оно осталось на служебной карточке, это нормально.',
       hints: ['Кнопка: «Автоконнектор»', 'Служебное окно не закрывать']
     },
     {
@@ -1634,8 +1623,8 @@ export default function App({ config }: AppProps) {
       step: '5',
       title: 'Следи за целью и, если нужно, жми прямой вход',
       description:
-        'Ниже видно целевой сервер, слабую сторону и карточку выбранного сервера. Если нужен ручной обход автоматики, используй кнопку «Подключиться напрямую», но только когда Squad уже открыт в главном меню.',
-      hints: ['Карточки: «Текущая цель» и «Куда заходить»', 'Кнопка в карточке сервера: «Подключиться напрямую»']
+        'Ниже видно, куда сейчас стоит заходить. Если нужен ручной вход, используй кнопку «Подключиться напрямую», когда Squad уже открыт в главном меню.',
+      hints: ['Карточки: «Текущая цель» и «Куда заходить»', 'Кнопка: «Подключиться напрямую»']
     }
   ];
 
@@ -1672,7 +1661,7 @@ export default function App({ config }: AppProps) {
             <InlineHelp
               label="Справка по главному экрану"
               title="Основное окно AutoSeed"
-              description="Главный экран. Здесь включается автоконнектор, выбирается режим, видна цель и состояния браузера с экспортерами."
+              description="Главный экран. Здесь включается автоконнектор, выбирается режим и видно, что готово к запуску."
               testId="hero-help"
             />
           </div>
@@ -1680,15 +1669,15 @@ export default function App({ config }: AppProps) {
           <p className="eyebrow">BSS Seed Connect</p>
           <h1 data-testid="hero-title">{config.app.title}</h1>
           <p className="hero-copy hero-copy-tight">
-            Включай коннектор или сразу смотри онлайн, состав сторон и баланс часов по обоим
-            серверам.
+            Здесь видно, что готово к запуску, куда сейчас заходить и какой сервер лучше выбрать
+            вручную.
           </p>
 
           <div className="hero-ribbon" data-testid="hero-ribbon">
-            <span className="hero-ribbon-tag">Онлайн</span>
+            <span className="hero-ribbon-tag">Быстрый старт</span>
             <p>
-              Пульт работает от публичного снимка, а свежую ссылку входа забирает только в момент
-              реального перехода.
+              Выбери режим, проверь браузер, открой Squad и оставь его в главном меню перед
+              запуском.
             </p>
           </div>
 
@@ -1716,19 +1705,19 @@ export default function App({ config }: AppProps) {
 
           <div className="hero-glance-grid" data-testid="hero-glance-grid">
             <article className="hero-glance-card hero-glance-card-emphasis">
-              <span className="hero-glance-label">Контур</span>
+              <span className="hero-glance-label">Серверы</span>
               <strong>{heroMeshLabel}</strong>
-              <p>узлов сейчас в сети</p>
+              <p>доступно сейчас</p>
             </article>
             <article className="hero-glance-card">
-              <span className="hero-glance-label">Следующее действие</span>
+              <span className="hero-glance-label">{pendingSequence ? 'Следующий переход' : 'Обновление'}</span>
               <strong data-testid="hero-next-action-value">{nextActionValue}</strong>
               <p>{nextActionCaption}</p>
             </article>
             <article className="hero-glance-card">
-              <span className="hero-glance-label">Приоритет</span>
-              <strong>{heroPriorityLabel}</strong>
-              <p>{heroCadenceLabel}</p>
+              <span className="hero-glance-label">Режим</span>
+              <strong>{heroModeLabel}</strong>
+              <p>{heroModeCaption}</p>
             </article>
           </div>
         </div>
@@ -1914,8 +1903,8 @@ export default function App({ config }: AppProps) {
         <div className="guide-spoiler-body">
           <p className="guide-spoiler-copy">
             Весь сценарий укладывается в несколько коротких действий: выбрать режим, проверить
-            браузер, открыть Squad и оставить его в главном меню, затем включить коннектор или
-            при необходимости зайти вручную в нужную цель.
+            браузер, открыть Squad и оставить его в главном меню, затем включить коннектор или при
+            необходимости зайти вручную.
           </p>
 
           <ol className="guide-steps" aria-label="Пошаговая инструкция">
@@ -1956,7 +1945,7 @@ export default function App({ config }: AppProps) {
             <span className="section-eyebrow">Сводка</span>
             <h2>Что происходит прямо сейчас</h2>
           </div>
-          <p>Сводка по цели, таймингам и общей доступности контура.</p>
+          <p>Куда заходить и что сейчас доступно.</p>
         </div>
 
         <div className="overview-grid">
@@ -1996,7 +1985,7 @@ export default function App({ config }: AppProps) {
               {pendingSequence
                 ? nextFollowupServer?.name || 'Ждём следующий сервер'
                 : enabled
-                  ? 'Решение пересчитывается по новому снимку'
+                  ? 'Статус обновляется автоматически'
                   : 'Коннектор не активен'}
             </p>
           </article>
@@ -2007,9 +1996,9 @@ export default function App({ config }: AppProps) {
         <div className="section-head">
           <div>
             <span className="section-eyebrow">Серверы</span>
-            <h2>Быстрый выбор узла</h2>
+            <h2>Выбор сервера</h2>
           </div>
-          <p>Выбери карточку ниже, чтобы развернуть полную тактическую панель сервера.</p>
+          <p>Открой карточку ниже, чтобы посмотреть состав и подключиться вручную.</p>
         </div>
 
         <div className="server-switcher-track" data-testid="server-switcher-track">
@@ -2083,9 +2072,9 @@ export default function App({ config }: AppProps) {
         <div className="section-head">
           <div>
             <span className="section-eyebrow">Выбранный сервер</span>
-            <h2>Текущая тактическая панель</h2>
+            <h2>Информация о сервере</h2>
           </div>
-          <p>Нагрузка, прогресс рассида, состав сторон и лидерские часы по выбранному серверу.</p>
+          <p>Онлайн, состав сторон и ручное подключение.</p>
         </div>
 
         {activeServer ? (() => {
@@ -2116,7 +2105,7 @@ export default function App({ config }: AppProps) {
                       <InlineHelp
                         label="Справка по карточке сервера"
                         title="Карточка выбранного сервера"
-                        description="Это главный блок цели ниже переключателя серверов. Здесь видно текущий онлайн, прогресс рассида, слабую сторону и ручную кнопку входа."
+                        description="Это основной блок выбранного сервера. Здесь видно текущий онлайн, стороны и кнопка ручного подключения."
                         testId="server-help"
                       />
                     </div>
@@ -2260,96 +2249,6 @@ export default function App({ config }: AppProps) {
         )}
       </section>
 
-      <section className="panel panel-span panel-details" data-testid="diagnostics-panel">
-        <div className="details-summary panel-section-head">
-          <span>Правила и диагностика</span>
-          {diagnosticsIssueCount > 0 ? (
-            <span className="badge badge-muted">{diagnosticsIssueCount}</span>
-          ) : null}
-        </div>
-        <p className="panel-section-copy">
-          Блок всегда открыт: здесь сразу видны текущие правила выбора цели, время последних
-          обновлений и возможные ошибки.
-        </p>
-        <div className="diagnostics-grid">
-          <div className="summary-stack">
-            <div className="summary-row">
-              <span>Режим</span>
-              <strong>{productionMode ? 'Боевой' : `Тест ${testSequencePlanLabel}`}</strong>
-            </div>
-            <div className="summary-row">
-              <span>Последний снимок</span>
-              <strong>{formatTimestamp(snapshot.generatedAt)}</strong>
-            </div>
-            <div className="summary-row">
-              <span>Последняя проверка браузера</span>
-              <strong>{permissions ? formatTimestamp(permissions.checkedAt) : '—'}</strong>
-            </div>
-            <div className="summary-row">
-              <span>Последнее событие</span>
-              <strong>{latestLog}</strong>
-            </div>
-          </div>
-
-          <div className="rule-grid">
-            <div className="rule-card">
-              <span>Приоритет</span>
-              <strong>{effectivePolicy.priorityOrder.join(' → ')}</strong>
-            </div>
-            <div className="rule-card">
-              <span>Ночь</span>
-              <strong>
-                {effectivePolicy.nightWindowStart} - {effectivePolicy.nightWindowEnd}
-              </strong>
-            </div>
-            <div className="rule-card">
-              <span>Ночная цель</span>
-              <strong>{effectivePolicy.nightPreferredServerId}</strong>
-            </div>
-            <div className="rule-card">
-              <span>Лимит сида</span>
-              <strong>&lt; {effectivePolicy.maxSeedPlayers}</strong>
-            </div>
-            <div className="rule-card">
-              <span>Порог переключения</span>
-              <strong>&gt; {effectivePolicy.switchDelta}</strong>
-            </div>
-            <div className="rule-card">
-              <span>Поток данных</span>
-              <strong>SSE /events + запасной снимок</strong>
-            </div>
-            {hasConfiguredTestMode ? (
-              <>
-                <div className="rule-card">
-                  <span>Тестовый план</span>
-                  <strong>{testSequencePlanLabel}</strong>
-                </div>
-                <div className="rule-card">
-                  <span>Задержка следующего перехода</span>
-                  <strong>
-                    {Math.round(testSequenceDelayMs / 1000)} с
-                    {hasManualTestSequenceDelay ? ' · локально' : ''}
-                  </strong>
-                </div>
-                <div className="rule-card">
-                  <span>Пауза теста</span>
-                  <strong>{Math.round(testCooldownMs / 1000)} с</strong>
-                </div>
-              </>
-            ) : null}
-          </div>
-        </div>
-      </section>
-
-      <details className="panel panel-span panel-details" data-testid="debug-log-panel">
-        <summary className="details-summary">
-          <span>Журнал событий</span>
-          {debugLogCount > 0 ? <span className="badge badge-muted">{debugLogCount}</span> : null}
-        </summary>
-        <div className="log-box">
-          {logs.length ? logs.map((line) => <pre key={line}>{line}</pre>) : <pre>Лог пуст.</pre>}
-        </div>
-      </details>
     </div>
   );
 }

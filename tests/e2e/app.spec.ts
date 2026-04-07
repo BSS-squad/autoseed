@@ -495,8 +495,8 @@ test('renders the localized control room from exporter snapshots', async ({ page
   await expect(page.getByTestId('server-card-1')).toContainText('[RU] BSS Classic');
   await expect(page.getByTestId('server-card-2')).toContainText('[RU] BSS Spec Ops');
   await expect(page.getByTestId('active-server-board')).toContainText('вход по запросу');
-  await expect(page.getByTestId('diagnostics-panel')).toContainText('Правила и диагностика');
-  await expect(page.getByTestId('diagnostics-panel')).toContainText('Последний снимок');
+  await expect(page.getByText('Как запустить')).toBeVisible();
+  await expect(page.getByText('Выбор сервера')).toBeVisible();
 });
 
 test('requests join-link on demand and navigates only after the user action', async ({ page }) => {
