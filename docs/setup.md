@@ -102,7 +102,7 @@
 - `SQUAD_HOST`: адрес, куда сам SquadJS ходит за A2S/RCON.
 - `SQUADBROWSER_API_KEY`: ключ для `POST /pub/join-link`.
 
-По умолчанию exporter ходит в `https://endback.squadbrowser.app/api` и по `SQUADBROWSER_API_KEY` получает join lobby link через `Squadbrowser API` по exact server name. Важно: lookup делается только по запросу на `GET {baseUrl}/join-link`. `snapshot` и `events` больше не должны триггерить запросы в `Squadbrowser API`. Если `Squadbrowser` не ответил валидным lobby link, exporter возвращает ошибку `503`, а frontend просто не делает redirect.
+По умолчанию exporter ходит в `https://api.squadbrowser.app/api` и по `SQUADBROWSER_API_KEY` получает join lobby link через `Squadbrowser API` по exact server name. Важно: lookup делается только по запросу на `GET {baseUrl}/join-link`. `snapshot` и `events` больше не должны триггерить запросы в `Squadbrowser API`. Если `Squadbrowser` не ответил валидным lobby link, exporter возвращает ошибку `503`, а frontend просто не делает redirect.
 
 ## 3. Что менять при переносе на другие IP и серверы
 
