@@ -8,12 +8,13 @@
 - exporter публикуется на одном домене `api.squad.leo-land.ru` с path-prefix:
   - `/squadjs1/v1/autoseed`
   - `/squadjs2/v1/autoseed`
+  - `/squadjs3/v1/autoseed`
 - exporter не отдаёт policy;
 - exporter отдаёт расширенный snapshot: server state, teams, squads, roster и playtime summary;
 - policy живёт только во frontend runtime-config;
 - текущая BSS policy:
   - ночью `nightPreferredServerId=2`
-  - днём приоритет `2 -> 1`
+  - днём приоритет `2 -> 1 -> 3`
   - лимит `maxSeedPlayers=80`
   - `switchDelta=10`
 
@@ -35,7 +36,7 @@
     "nightWindowEnd": "08:00",
     "nightPreferredServerId": 2,
     "maxSeedPlayers": 80,
-    "priorityOrder": [2, 1],
+    "priorityOrder": [2, 1, 3],
     "switchDelta": 10,
     "cooldownMs": 600000
   },
@@ -47,10 +48,16 @@
     {
       "name": "squadjs2",
       "baseUrl": "https://api.squad.leo-land.ru/squadjs2/v1/autoseed"
+    },
+    {
+      "name": "squadjs3",
+      "baseUrl": "https://api.squad.leo-land.ru/squadjs3/v1/autoseed"
     }
   ]
 }
 ```
+
+`exporters[].name` — служебная метка endpoint-а. Название сервера для UI и `Squadbrowser` lookup должно приходить из `ShowServerInfo` через exporter snapshot/join-link, а не из frontend-конфига.
 
 Если сайт публикуется не из корня домена, добавьте repository variable `VITE_BASE_PATH`, например `/autoseed/`.
 
@@ -58,13 +65,13 @@
 
 ```json
 {
-  "sequenceServerIds": [2, 1],
+  "sequenceServerIds": [2, 1, 3],
   "delayMs": 60000,
   "cooldownMs": 30000
 }
 ```
 
-Тогда в интерфейсе появится отдельный тестовый режим для ручного end-to-end прогона `2 -> 1`, а боевой режим останется отдельным. Первый hop стартует сразу при включении, а `delayMs` относится только к follow-up hop. Задержку follow-up можно локально перекрыть прямо на странице; override хранится в `localStorage` конкретного браузера.
+Тогда в интерфейсе появится отдельный тестовый режим для ручного end-to-end прогона `2 -> 1 -> 3`, а боевой режим останется отдельным. Первый hop стартует сразу при включении, а `delayMs` относится только к follow-up hop. Задержку follow-up можно локально перекрыть прямо на странице; override хранится в `localStorage` конкретного браузера.
 
 ### Важно
 
@@ -207,7 +214,7 @@ networks:
     "nightWindowEnd": "08:00",
     "nightPreferredServerId": 2,
     "maxSeedPlayers": 80,
-    "priorityOrder": [2, 1],
+    "priorityOrder": [2, 1, 3],
     "switchDelta": 10,
     "cooldownMs": 600000
   },
@@ -219,6 +226,10 @@ networks:
     {
       "name": "squadjs2",
       "baseUrl": "https://api.squad.leo-land.ru/squadjs2/v1/autoseed"
+    },
+    {
+      "name": "squadjs3",
+      "baseUrl": "https://api.squad.leo-land.ru/squadjs3/v1/autoseed"
     }
   ]
 }
@@ -234,12 +245,14 @@ networks:
 
 - `squadjs1` внутри машины слушает exporter на `localhost:32080` контейнера
 - `squadjs2` внутри машины слушает exporter на `localhost:32080` контейнера
+- `squadjs3` внутри машины слушает exporter на `localhost:32080` контейнера
 - reverse proxy должен принять HTTPS на одном домене и проксировать разные path-prefix во внутренние exporter-порты соответствующих контейнеров
 
 Ожидаемая схема:
 
 - `https://api.squad.leo-land.ru/squadjs1/v1/autoseed` -> `squadjs1:32080`
 - `https://api.squad.leo-land.ru/squadjs2/v1/autoseed` -> `squadjs2:32080`
+- `https://api.squad.leo-land.ru/squadjs3/v1/autoseed` -> `squadjs3:32080`
 
 Что требуется от инфраструктуры:
 
@@ -248,6 +261,7 @@ networks:
 - настроить path-based routing:
   - `/squadjs1` -> `squadjs1:32080`
   - `/squadjs2` -> `squadjs2:32080`
+  - `/squadjs3` -> `squadjs3:32080`
 - path не переписывать, потому что exporter уже сконфигурирован с собственным `pathPrefix`
 - не публиковать `32080` наружу напрямую, если используется reverse proxy
 
@@ -273,6 +287,10 @@ services:
   squadjs2:
     ports:
       - "32082:32080"
+
+  squadjs3:
+    ports:
+      - "32083:32080"
 ```
 
 Тогда GitHub Pages должен ходить на `http(s)://HOST:32081` и `http(s)://HOST:32082`, а на firewall надо открыть `32081/tcp` и `32082/tcp`.
@@ -287,6 +305,7 @@ services:
 
 - `32081 -> 32080/tcp` для `squadjs1`
 - `32082 -> 32080/tcp` для `squadjs2`
+- `32083 -> 32080/tcp` для `squadjs3`
 
 Для самого подключения к Squad должен быть открыт публичный игровой порт каждого Squad-сервера.
 
@@ -302,6 +321,7 @@ services:
 - `autoseed.example.com` -> GitHub Pages frontend
 - `api.squad.leo-land.ru/squadjs1/v1/autoseed` -> exporter `squadjs1`
 - `api.squad.leo-land.ru/squadjs2/v1/autoseed` -> exporter `squadjs2`
+- `api.squad.leo-land.ru/squadjs3/v1/autoseed` -> exporter `squadjs3`
 
 ## 8. Быстрый тест после деплоя
 
@@ -314,6 +334,9 @@ curl -s https://api.squad.leo-land.ru/squadjs1/v1/autoseed/join-link | jq
 curl -s https://api.squad.leo-land.ru/squadjs2/v1/autoseed/healthz | jq
 curl -s https://api.squad.leo-land.ru/squadjs2/v1/autoseed/snapshot | jq
 curl -s https://api.squad.leo-land.ru/squadjs2/v1/autoseed/join-link | jq
+curl -s https://api.squad.leo-land.ru/squadjs3/v1/autoseed/healthz | jq
+curl -s https://api.squad.leo-land.ru/squadjs3/v1/autoseed/snapshot | jq
+curl -s https://api.squad.leo-land.ru/squadjs3/v1/autoseed/join-link | jq
 ```
 
 ### Проверка GitHub Pages
