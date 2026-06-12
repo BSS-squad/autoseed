@@ -11,7 +11,7 @@ export const DEFAULT_SEED_POLICY: SeedPolicy = {
   nightWindowEnd: '08:00',
   nightPreferredServerId: 2,
   maxSeedPlayers: 80,
-  priorityOrder: [2, 1],
+  priorityOrder: [1, 2, 3],
   switchDelta: 10,
   cooldownMs: 10 * 60 * 1000,
   periodicReconnectMs: 10 * 60 * 1000

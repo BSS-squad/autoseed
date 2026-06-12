@@ -3,7 +3,7 @@
     "title": "BSS AutoConnect",
     "debugLogLimit": 80,
     "testMode": {
-      "sequenceServerIds": [2, 1, 3],
+      "sequenceServerIds": [1, 2, 3],
       "delayMs": 60000,
       "cooldownMs": 30000
     }
@@ -14,7 +14,7 @@
     "nightWindowEnd": "08:00",
     "nightPreferredServerId": 2,
     "maxSeedPlayers": 80,
-    "priorityOrder": [2, 1, 3],
+    "priorityOrder": [1, 2, 3],
     "switchDelta": 10,
     "cooldownMs": 600000,
     "periodicReconnectMs": 600000
