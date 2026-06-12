@@ -14,7 +14,7 @@ const runtimeConfig = {
     nightWindowEnd: '08:00',
     nightPreferredServerId: 2,
     maxSeedPlayers: 80,
-    priorityOrder: [2, 1],
+    priorityOrder: [1, 2, 3],
     switchDelta: 10,
     cooldownMs: 600000,
     periodicReconnectMs: 600000
@@ -504,12 +504,12 @@ test('requests join-link on demand and navigates only after the user action', as
   await mockAutoseedApi(page, counters);
 
   await page.goto('/');
-  await expect(page.getByTestId('primary-direct-join')).toBeVisible();
+  await expect(page.getByTestId('direct-join-2')).toBeVisible();
   expect(counters.joinLinkRequests).toBe(0);
 
   await Promise.all([
     page.waitForURL('**/redirect-target'),
-    page.getByTestId('primary-direct-join').click()
+    page.getByTestId('direct-join-2').click()
   ]);
 
   expect(counters.joinLinkRequests).toBe(1);
@@ -527,7 +527,6 @@ test('marks browser check as successful and keeps the button green', async ({ pa
 
   await expect(button).toContainText('Браузер проверен');
   await expect(button).toHaveClass(/button-success/);
-  await expect(page.getByText('Браузер готов')).toBeVisible();
   await expect(page.getByTestId('hero')).toContainText('Браузер готов');
 });
 
@@ -578,7 +577,7 @@ test('accepts a fresh snapshot during the pending test sequence without regenera
 
   await page.getByTestId('power-toggle').click();
   await expect.poll(() => counters.firstJoinLinkRequests).toBe(1);
-  await expect(page.getByText(/^Следующий переход$/)).toBeVisible();
+  await expect(page.getByTestId('hero-glance-grid')).toContainText('Следующий переход');
 
   await page.waitForTimeout(120);
   await page.getByTestId('refresh-snapshot-button').click();
@@ -601,22 +600,22 @@ test('regenerates the production join-link only when the current target crosses 
   await expect(page.getByTestId('check-browser-button')).toContainText('Браузер проверен');
 
   await page.getByTestId('power-toggle').click();
-  await expect.poll(() => counters.serverTwoJoinLinkRequests).toBe(1);
-  expect(counters.serverOneJoinLinkRequests).toBe(0);
-
-  await page.waitForTimeout(120);
-  await page.getByTestId('refresh-snapshot-button').click();
-  await page.waitForTimeout(120);
-
-  expect(counters.serverTwoJoinLinkRequests).toBe(1);
-  expect(counters.serverOneJoinLinkRequests).toBe(0);
-
-  snapshotState.serverTwoPlayers = 81;
-  await page.waitForTimeout(120);
-  await page.getByTestId('refresh-snapshot-button').click();
-
   await expect.poll(() => counters.serverOneJoinLinkRequests).toBe(1);
-  expect(counters.serverTwoJoinLinkRequests).toBe(1);
+  expect(counters.serverTwoJoinLinkRequests).toBe(0);
+
+  await page.waitForTimeout(120);
+  await page.getByTestId('refresh-snapshot-button').click();
+  await page.waitForTimeout(120);
+
+  expect(counters.serverOneJoinLinkRequests).toBe(1);
+  expect(counters.serverTwoJoinLinkRequests).toBe(0);
+
+  snapshotState.serverOnePlayers = 81;
+  await page.waitForTimeout(120);
+  await page.getByTestId('refresh-snapshot-button').click();
+
+  await expect.poll(() => counters.serverTwoJoinLinkRequests).toBe(1);
+  expect(counters.serverOneJoinLinkRequests).toBe(1);
 });
 
 test('restores the current production target after reload without showing a stale cooldown timer', async ({

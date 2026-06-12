@@ -126,7 +126,7 @@ Frontend на GitHub Pages должен:
 Логика выбора сервера остаётся:
 
 1. Ночной режим.
-2. Приоритет `2 -> 1 -> 3`.
+2. Приоритет `1 -> 2 -> 3` (`Mix -> Spec Ops -> Invasion`).
 3. Лимит `< 80`.
 4. `switchDelta > 10`.
 5. Fallback на самый населённый подходящий seed-сервер.
@@ -136,7 +136,7 @@ Frontend на GitHub Pages должен:
 1. Если локальное время политики попадает в диапазон `23:00–08:00`, целевым считается `nightPreferredServerId` из frontend runtime-config.
 2. В дневном режиме рассматриваются только серверы, где `online === true` и `isSeedCandidate === true`.
 3. Исключаются серверы с `playerCount >= maxSeedPlayers`.
-4. Сначала проверяется порядок `2 -> 1 -> 3`.
+4. Сначала проверяется порядок `1 -> 2 -> 3` (`Mix -> Spec Ops -> Invasion`).
 5. Если другой кандидат опережает приоритетный сервер более чем на `switchDelta`, выбирается более населённый сервер.
 6. Если приоритетного победителя нет, выбирается наиболее населённый подходящий seed-сервер.
 7. Если кандидатов нет, redirect не выполняется.
@@ -147,7 +147,7 @@ Frontend на GitHub Pages должен:
 - `nightWindowStart`: `23:00`
 - `nightWindowEnd`: `08:00`
 - `nightPreferredServerId`: `2`
-- `priorityOrder`: `2 -> 1 -> 3`
+- `priorityOrder`: `1 -> 2 -> 3` (`Mix -> Spec Ops -> Invasion`)
 - `maxSeedPlayers`: `80`
 - `switchDelta`: `10`
 

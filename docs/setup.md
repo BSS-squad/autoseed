@@ -14,7 +14,7 @@
 - policy живёт только во frontend runtime-config;
 - текущая BSS policy:
   - ночью `nightPreferredServerId=2`
-  - днём приоритет `2 -> 1 -> 3`
+  - днём приоритет `1 -> 2 -> 3` (`Mix -> Spec Ops -> Invasion`)
   - лимит `maxSeedPlayers=80`
   - `switchDelta=10`
 
@@ -36,7 +36,7 @@
     "nightWindowEnd": "08:00",
     "nightPreferredServerId": 2,
     "maxSeedPlayers": 80,
-    "priorityOrder": [2, 1, 3],
+    "priorityOrder": [1, 2, 3],
     "switchDelta": 10,
     "cooldownMs": 600000
   },
@@ -65,13 +65,13 @@
 
 ```json
 {
-  "sequenceServerIds": [2, 1, 3],
+  "sequenceServerIds": [1, 2, 3],
   "delayMs": 60000,
   "cooldownMs": 30000
 }
 ```
 
-Тогда в интерфейсе появится отдельный тестовый режим для ручного end-to-end прогона `2 -> 1 -> 3`, а боевой режим останется отдельным. Первый hop стартует сразу при включении, а `delayMs` относится только к follow-up hop. Задержку follow-up можно локально перекрыть прямо на странице; override хранится в `localStorage` конкретного браузера.
+Тогда в интерфейсе появится отдельный тестовый режим для ручного end-to-end прогона `1 -> 2 -> 3` (`Mix -> Spec Ops -> Invasion`), а боевой режим останется отдельным. Первый hop стартует сразу при включении, а `delayMs` относится только к follow-up hop. Задержку follow-up можно локально перекрыть прямо на странице; override хранится в `localStorage` конкретного браузера.
 
 ### Важно
 
@@ -214,7 +214,7 @@ networks:
     "nightWindowEnd": "08:00",
     "nightPreferredServerId": 2,
     "maxSeedPlayers": 80,
-    "priorityOrder": [2, 1, 3],
+    "priorityOrder": [1, 2, 3],
     "switchDelta": 10,
     "cooldownMs": 600000
   },

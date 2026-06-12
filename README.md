@@ -2,8 +2,6 @@
 
 Статический frontend для автоконнектора Squad и набор документов по интеграции с публичным exporter-плагином для `SquadJS`.
 
-`squadjs2` использует remote `git@github-svo:breaking-squad/squadjs2.git`, а alias `github-svo` в `~/.ssh/config` указывает на ключ `/home/kyarkov/.ssh/id_rsa_home_from_svo`. Для `git@github-svo:breaking-squad/autoseed.git` доступ по SSH есть, но remote сейчас выглядит пустым, поэтому проект в этой папке собран локально с нуля и привязан к `origin`.
-
 ## Актуальное состояние
 
 - frontend полностью статический и публикуется через GitHub Pages;
@@ -11,7 +9,7 @@
 - exporter отдаёт `healthz` и расширенный `snapshot` с общим онлайном, составом сторон, squad-структурой и часами из `PlaytimeTracker`;
 - `joinLink` больше не живёт в snapshot: frontend запрашивает его у exporter-а только по факту redirect/direct join, а exporter уже делает lookup в `Squadbrowser API` по exact server name;
 - policy живёт только во frontend runtime-config;
-- текущий приоритет выбора: ночью `serverId=2`, днём `2 -> 1 -> 3`.
+- текущий приоритет выбора: ночью `serverId=2`, днём `1 -> 2 -> 3` (`Mix -> Spec Ops -> Invasion`).
 
 ## Что реализовано
 
@@ -21,7 +19,7 @@
 - realtime-подписка на публичные exporter endpoint-ы через `SSE /events`;
 - просмотр онлайна серверов, состава сторон и баланса часов по игрокам;
 - выбор target server по frontend policy: ночному окну, приоритетам, лимиту онлайна и `switchDelta`;
-- опциональный test-sequence через runtime-config, например `2 -> 1 -> 3` с задержкой `60 s`;
+- опциональный test-sequence через runtime-config, например `1 -> 2 -> 3` с задержкой `60 s`;
 - хранение `enabled`, `lastProcessedTimestamp`, `cooldown` и permissions в `localStorage`;
 - локальный preflight-check на странице: popup, `steam://`, и явная подсказка оставить Squad в главном меню;
 - redirect через служебное popup-окно, чтобы страница не теряла состояние и могла выполнить follow-up redirect;
@@ -53,7 +51,7 @@ npm run dev
     "nightWindowEnd": "08:00",
     "nightPreferredServerId": 2,
     "maxSeedPlayers": 80,
-    "priorityOrder": [2, 1, 3],
+    "priorityOrder": [1, 2, 3],
     "switchDelta": 10,
     "cooldownMs": 600000
   },
@@ -80,13 +78,13 @@ npm run dev
 
 ```json
 {
-  "sequenceServerIds": [2, 1, 3],
+  "sequenceServerIds": [1, 2, 3],
   "delayMs": 60000,
   "cooldownMs": 30000
 }
 ```
 
-Тогда в интерфейсе появится отдельный тестовый режим, который не подменяет боевой. При включении тестового режима первый redirect запускается сразу, а `delayMs` относится только к follow-up hop. Задержку follow-up можно локально перекрыть прямо на странице; значение сохраняется в `localStorage` и не меняет общий runtime-config для остальных пользователей.
+Порядок `[1, 2, 3]` соответствует ротации `Mix -> Spec Ops -> Invasion`. Тогда в интерфейсе появится отдельный тестовый режим, который не подменяет боевой. При включении тестового режима первый redirect запускается сразу, а `delayMs` относится только к follow-up hop. Задержку follow-up можно локально перекрыть прямо на странице; значение сохраняется в `localStorage` и не меняет общий runtime-config для остальных пользователей.
 
 Важно: это публичный клиентский конфиг. Даже если он подставляется через GitHub Secrets, после билда значения становятся видимыми в браузере. Не кладите туда приватные ключи.
 
