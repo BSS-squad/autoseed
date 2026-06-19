@@ -499,7 +499,7 @@ test('renders the localized control room from exporter snapshots', async ({ page
   await expect(page.getByText('Выбор сервера')).toBeVisible();
 });
 
-test('requests join-link on demand and dispatches direct joins through the connector window', async ({
+test('requests join-link on demand and dispatches direct joins in the current tab', async ({
   page
 }) => {
   const counters = { joinLinkRequests: 0 };
@@ -509,14 +509,13 @@ test('requests join-link on demand and dispatches direct joins through the conne
   await expect(page.getByTestId('direct-join-2')).toBeVisible();
   expect(counters.joinLinkRequests).toBe(0);
 
-  const popupPromise = page.waitForEvent('popup', { timeout: 2000 });
-  await page.getByTestId('direct-join-2').click();
-  const connectorWindow = await popupPromise;
-  await connectorWindow.waitForURL('**/redirect-target');
+  await Promise.all([
+    page.waitForURL('**/redirect-target'),
+    page.getByTestId('direct-join-2').click()
+  ]);
 
   expect(counters.joinLinkRequests).toBe(1);
-  expect(connectorWindow.url()).toContain('/redirect-target');
-  await expect(page.getByTestId('hero-title')).toHaveText('BSS AutoConnect 2026');
+  await expect(page.getByTestId('redirect-target')).toHaveText('Точка перехода');
 });
 
 test('marks browser check as successful and keeps the button green', async ({ page }) => {

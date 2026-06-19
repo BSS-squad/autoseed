@@ -1347,7 +1347,18 @@ export default function App({ config }: AppProps) {
       return;
     }
 
-    await triggerJoinLink(server, null, 'direct');
+    const joinLink = await requestFreshJoinLink(server, 'direct');
+    if (!joinLink) return;
+
+    try {
+      appendLog(`Прямое подключение: ${server.name}`);
+      const openedWindow = window.open(joinLink, '_self');
+      if (!openedWindow) {
+        window.location.href = joinLink;
+      }
+    } catch {
+      appendLog(`Прямое подключение не удалось: браузер заблокировал переход к ${server.name}.`);
+    }
   };
 
   const handleModeToggle = () => {
