@@ -1184,7 +1184,8 @@ export default function App({ config }: AppProps) {
 
   const triggerJoinLink = async (
     server: ExporterServerSnapshot,
-    followupServer?: ExporterServerSnapshot | null
+    followupServer?: ExporterServerSnapshot | null,
+    reason: 'redirect' | 'direct' = 'redirect'
   ): Promise<string | null> => {
     const connectorWindow = ensureConnectorWindow();
     if (!connectorWindow) {
@@ -1206,7 +1207,7 @@ export default function App({ config }: AppProps) {
         followupServer ? testSequenceDelayMsRef.current : 0
       );
 
-      const joinLink = await requestFreshJoinLink(server, 'redirect');
+      const joinLink = await requestFreshJoinLink(server, reason);
       if (!joinLink) {
         return null;
       }
@@ -1346,15 +1347,7 @@ export default function App({ config }: AppProps) {
       return;
     }
 
-    const joinLink = await requestFreshJoinLink(server, 'direct');
-    if (!joinLink) return;
-
-    try {
-      appendLog(`Прямое подключение: ${server.name}`);
-      window.location.href = joinLink;
-    } catch {
-      appendLog(`Прямое подключение не удалось: браузер заблокировал переход к ${server.name}.`);
-    }
+    await triggerJoinLink(server, null, 'direct');
   };
 
   const handleModeToggle = () => {

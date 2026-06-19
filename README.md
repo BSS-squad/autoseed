@@ -22,7 +22,7 @@
 - опциональный test-sequence через runtime-config, например `1 -> 2 -> 3` с задержкой `60 s`;
 - хранение `enabled`, `lastProcessedTimestamp`, `cooldown` и permissions в `localStorage`;
 - локальный preflight-check на странице: popup, `steam://`, и явная подсказка оставить Squad в главном меню;
-- redirect через служебное popup-окно, чтобы страница не теряла состояние и могла выполнить follow-up redirect;
+- redirect через служебное popup-окно, чтобы страница не теряла состояние и могла выполнить follow-up redirect; ручное прямое подключение использует тот же путь;
 - документация по настройке frontend, exporter-а и `Squadbrowser` join-link lookup.
 
 ## Локальный запуск

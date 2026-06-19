@@ -499,7 +499,9 @@ test('renders the localized control room from exporter snapshots', async ({ page
   await expect(page.getByText('Выбор сервера')).toBeVisible();
 });
 
-test('requests join-link on demand and navigates only after the user action', async ({ page }) => {
+test('requests join-link on demand and dispatches direct joins through the connector window', async ({
+  page
+}) => {
   const counters = { joinLinkRequests: 0 };
   await mockAutoseedApi(page, counters);
 
@@ -507,13 +509,14 @@ test('requests join-link on demand and navigates only after the user action', as
   await expect(page.getByTestId('direct-join-2')).toBeVisible();
   expect(counters.joinLinkRequests).toBe(0);
 
-  await Promise.all([
-    page.waitForURL('**/redirect-target'),
-    page.getByTestId('direct-join-2').click()
-  ]);
+  const popupPromise = page.waitForEvent('popup', { timeout: 2000 });
+  await page.getByTestId('direct-join-2').click();
+  const connectorWindow = await popupPromise;
+  await connectorWindow.waitForURL('**/redirect-target');
 
   expect(counters.joinLinkRequests).toBe(1);
-  await expect(page.getByTestId('redirect-target')).toHaveText('Точка перехода');
+  expect(connectorWindow.url()).toContain('/redirect-target');
+  await expect(page.getByTestId('hero-title')).toHaveText('BSS AutoConnect 2026');
 });
 
 test('marks browser check as successful and keeps the button green', async ({ page }) => {
