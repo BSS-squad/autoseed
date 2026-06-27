@@ -69,7 +69,7 @@ async function expectPlayerFriendlyLanguage(page: Page) {
 - Modify: GitHub issue `breaking-squad/autoseed#5`
 
 - [x] Review the final diff and run fresh build/e2e verification.
-- [ ] Commit the implementation, integrate it into `main`, and push both `breaking-squad/autoseed` and `BSS-squad/autoseed`.
-- [ ] Wait for the public `Deploy Pages` workflow; confirm the private mirror skips Pages.
-- [ ] Verify production copy on desktop/mobile.
-- [ ] Move issue #5 to `Review` with deployment evidence and a concrete next action.
+- [x] Commit the implementation, integrate it into `main`, and push both `breaking-squad/autoseed` and `BSS-squad/autoseed`.
+- [x] Wait for the public `Deploy Pages` workflow; confirm the private mirror skips Pages.
+- [x] Verify production copy on desktop/mobile.
+- [x] Move issue #5 to `Review` with deployment evidence and a concrete next action.
