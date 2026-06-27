@@ -59,7 +59,7 @@
 **Files:**
 - Modify: GitHub issue `breaking-squad/squadjs2#28`
 
-- [ ] Inspect the final diff and repository status.
-- [ ] Commit only the planned-campaign files and push `main` to the deployment remote.
-- [ ] Wait for the `Deploy Pages` workflow and confirm success.
-- [ ] Verify the production page and update issue #28 with implementation and deployment evidence.
+- [x] Inspect the final diff and repository status.
+- [x] Commit only the planned-campaign files and push `main` to the deployment remote.
+- [x] Wait for the `Deploy Pages` workflow and confirm success.
+- [x] Verify the production page and update issue #28 with implementation and deployment evidence.
