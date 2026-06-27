@@ -220,9 +220,50 @@ input {
   object-fit: contain;
 }
 
+.hero-logo-shell-compact {
+  width: 78px;
+  height: 96px;
+  border-radius: 24px;
+}
+
 .hero-brand-copy {
   display: grid;
   gap: 6px;
+}
+
+.app-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 5px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.app-nav-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  color: var(--muted-strong);
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.app-nav-link-active {
+  background: rgba(255, 106, 61, 0.18);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px rgba(255, 106, 61, 0.18);
+}
+
+.app-nav-link:focus-visible {
+  outline: 2px solid rgba(103, 215, 255, 0.32);
+  outline-offset: 2px;
 }
 
 .hero-brand-kicker,
@@ -1542,6 +1583,241 @@ input {
   word-break: break-word;
 }
 
+.winners-shell {
+  max-width: 1280px;
+}
+
+.winners-hero,
+.winners-card,
+.winner-row,
+.winners-empty-state {
+  border: 1px solid var(--line);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.015)),
+    var(--panel);
+  backdrop-filter: blur(20px) saturate(135%);
+  box-shadow: var(--shadow-lg);
+}
+
+.winners-hero {
+  position: relative;
+  overflow: hidden;
+  padding: 26px;
+  border-radius: clamp(26px, 4vw, 38px);
+}
+
+.winners-hero::before {
+  content: '';
+  position: absolute;
+  inset: auto -80px -120px auto;
+  width: 380px;
+  height: 380px;
+  background:
+    radial-gradient(circle, rgba(255, 211, 108, 0.18), transparent 52%),
+    var(--brand-logo) center/contain no-repeat;
+  opacity: 0.16;
+  pointer-events: none;
+}
+
+.winners-hero > * {
+  position: relative;
+  z-index: 1;
+}
+
+.winners-hero-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.winners-hero-main {
+  max-width: 760px;
+  margin-top: 28px;
+}
+
+.winners-hero-main h1 {
+  margin: 0;
+  font-size: clamp(2.4rem, 6vw, 4.8rem);
+  line-height: 0.96;
+  letter-spacing: -0.055em;
+  text-wrap: balance;
+}
+
+.winners-hero-stats,
+.winners-summary-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.winners-hero-stats {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 24px;
+}
+
+.winners-hero-stats article,
+.winners-card,
+.winner-row,
+.winners-empty-state {
+  border-radius: 24px;
+}
+
+.winners-hero-stats article {
+  min-height: 112px;
+  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.winners-hero-stats span,
+.winners-meta-row,
+.winner-server,
+.winner-row-meta {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.winners-hero-stats span {
+  display: block;
+  margin-bottom: 10px;
+  color: rgba(255, 255, 255, 0.54);
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.winners-hero-stats strong {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: clamp(1.4rem, 2.6vw, 2rem);
+  line-height: 1.08;
+}
+
+.winners-summary-grid {
+  grid-template-columns: minmax(0, 1.45fr) minmax(260px, 0.8fr) minmax(220px, 0.65fr);
+}
+
+.winners-card {
+  min-height: 196px;
+  padding: 22px;
+}
+
+.winners-card-active {
+  background:
+    radial-gradient(circle at top right, rgba(255, 211, 108, 0.18), transparent 42%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.015)),
+    var(--panel);
+}
+
+.winners-card > strong {
+  display: block;
+  font-size: clamp(1.8rem, 4vw, 2.6rem);
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+.winners-card p {
+  margin: 12px 0 0;
+  color: var(--muted);
+  line-height: 1.58;
+}
+
+.winners-active-list {
+  display: grid;
+  gap: 12px;
+}
+
+.winners-active-item strong {
+  display: block;
+  font-size: clamp(1.5rem, 3vw, 2.15rem);
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+}
+
+.winners-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+  color: var(--muted-strong);
+  font-size: 0.78rem;
+}
+
+.winners-meta-row span,
+.winner-row-meta span {
+  min-height: 30px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.winners-empty-copy {
+  color: var(--muted);
+}
+
+.winners-history-list {
+  display: grid;
+  gap: 12px;
+}
+
+.winner-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: center;
+  padding: 18px;
+}
+
+.winner-row-main {
+  min-width: 0;
+}
+
+.winner-server {
+  display: block;
+  margin-bottom: 8px;
+  color: rgba(255, 255, 255, 0.54);
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.winner-row-main strong {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 1.32rem;
+  line-height: 1.18;
+}
+
+.winner-row-main p {
+  margin: 8px 0 0;
+  color: var(--muted);
+}
+
+.winner-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  color: var(--muted-strong);
+  font-size: 0.75rem;
+}
+
+.winners-empty-state {
+  padding: 26px;
+}
+
+.winners-empty-state strong {
+  display: block;
+  font-size: clamp(1.5rem, 3vw, 2rem);
+}
+
+.winners-empty-state p {
+  margin: 12px 0 0;
+  max-width: 70ch;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
 .hero,
 .panel,
 .section-shell,
@@ -1594,7 +1870,9 @@ input {
 
   .hero-glance-grid,
   .overview-grid,
-  .rule-grid {
+  .rule-grid,
+  .winners-hero-stats,
+  .winners-summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -1621,6 +1899,7 @@ input {
 
   .hero-topline,
   .hero-brand,
+  .winners-hero-top,
   .section-head,
   .server-title-row,
   .server-title-main,
@@ -1631,13 +1910,32 @@ input {
     align-items: flex-start;
   }
 
+  .app-nav {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .app-nav-link {
+    flex: 1 1 0;
+  }
+
   .hero-glance-grid,
   .compact-signal-grid,
   .overview-grid,
   .server-metrics,
   .team-kpis,
-  .rule-grid {
+  .rule-grid,
+  .winners-hero-stats,
+  .winners-summary-grid {
     grid-template-columns: 1fr;
+  }
+
+  .winner-row {
+    grid-template-columns: 1fr;
+  }
+
+  .winner-row-meta {
+    justify-content: flex-start;
   }
 
   .hero h1 {

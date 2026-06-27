@@ -106,7 +106,8 @@ function buildSnapshot({
   maxPlayers,
   queueLength,
   online,
-  timestamp = BASE_TIME
+  timestamp = BASE_TIME,
+  raffles = null
 }: {
   id: number;
   code: string;
@@ -116,6 +117,7 @@ function buildSnapshot({
   queueLength: number;
   online: boolean;
   timestamp?: number;
+  raffles?: unknown;
 }) {
   return {
     success: true,
@@ -136,9 +138,73 @@ function buildSnapshot({
         online,
         teams: [buildTeam(1, 'Vanguard', 342.6), buildTeam(2, 'Nomad', 287.4)],
         players: [],
+        raffles,
         updatedAt: BASE_TIME
       }
     ]
+  };
+}
+
+function buildRaffleSnapshot() {
+  return {
+    active: {
+      serverID: 2,
+      prize: '1000 рублей',
+      amountRubles: 1000,
+      startedAt: '2026-07-15T15:00:00.000Z',
+      endsAt: '2026-07-15T15:20:00.000Z',
+      source: 'auto',
+      participantCount: 17
+    },
+    history: [
+      {
+        id: 12,
+        serverID: 2,
+        prize: 'VIP 7 дней',
+        amountRubles: 0,
+        startedAt: '2026-07-14T18:00:00.000Z',
+        endedAt: '2026-07-14T18:20:00.000Z',
+        participants: [
+          {
+            eosID: 'winner-eos',
+            steamID: '76561198000000001',
+            name: 'Winner One',
+            joinedAt: '2026-07-14T18:05:00.000Z'
+          },
+          {
+            eosID: 'runner-eos',
+            steamID: '76561198000000002',
+            name: 'Runner Up',
+            joinedAt: '2026-07-14T18:06:00.000Z'
+          }
+        ],
+        winner: {
+          eosID: 'winner-eos',
+          steamID: '76561198000000001',
+          name: 'Winner One',
+          joinedAt: '2026-07-14T18:05:00.000Z'
+        },
+        startedBy: null,
+        source: 'manual'
+      },
+      {
+        id: 11,
+        serverID: 2,
+        prize: '500 рублей',
+        amountRubles: 500,
+        startedAt: '2026-07-13T19:00:00.000Z',
+        endedAt: '2026-07-13T19:20:00.000Z',
+        participants: [],
+        winner: null,
+        startedBy: null,
+        source: 'auto'
+      }
+    ],
+    budget: {
+      limitRubles: 20000,
+      spentRubles: 1500,
+      remainingRubles: 18500
+    }
   };
 }
 
@@ -213,6 +279,67 @@ async function mockAutoseedApi(page: Page, counters?: { joinLinkRequests: number
       status: 200,
       contentType: 'text/html; charset=utf-8',
       body: '<!doctype html><html><body><main data-testid="redirect-target">Точка перехода</main></body></html>'
+    })
+  );
+}
+
+async function mockRaffleAutoseedApi(page: Page) {
+  await page.route('**/runtime-config.json', (route) => fulfillJson(route, runtimeConfig));
+  await page.route('**/mock/**/events', (route) =>
+    route.fulfill({
+      status: 503,
+      contentType: 'text/plain; charset=utf-8',
+      body: 'sse unavailable in test'
+    })
+  );
+  await page.route('**/mock/squadjs1/snapshot', (route) =>
+    fulfillJson(
+      route,
+      buildSnapshot({
+        id: 1,
+        code: 'squadjs1',
+        name: '[RU] BSS Classic',
+        playerCount: 24,
+        maxPlayers: 100,
+        queueLength: 0,
+        online: false,
+        raffles: null
+      })
+    )
+  );
+  await page.route('**/mock/squadjs2/snapshot', (route) =>
+    fulfillJson(
+      route,
+      buildSnapshot({
+        id: 2,
+        code: 'squadjs2',
+        name: '[RU] BSS Spec Ops',
+        playerCount: 56,
+        maxPlayers: 100,
+        queueLength: 2,
+        online: true,
+        raffles: buildRaffleSnapshot()
+      })
+    )
+  );
+  await page.route('**/mock/squadjs1/join-link', (route) =>
+    fulfillJson(route, {
+      ok: true,
+      timestamp: BASE_TIME,
+      serverId: 1,
+      serverCode: 'squadjs1',
+      serverName: '[RU] BSS Classic',
+      joinLink: REDIRECT_TARGET_URL
+    })
+  );
+  await page.route('**/mock/squadjs2/join-link', (route) =>
+    fulfillJson(route, {
+      ok: true,
+      timestamp: BASE_TIME,
+      serverId: 2,
+      serverCode: 'squadjs2',
+      serverName: '[RU] BSS Spec Ops',
+      joinLink: REDIRECT_TARGET_URL
     })
   );
 }
@@ -497,6 +624,25 @@ test('renders the localized control room from exporter snapshots', async ({ page
   await expect(page.getByTestId('active-server-board')).toContainText('вход по запросу');
   await expect(page.getByText('Как запустить')).toBeVisible();
   await expect(page.getByText('Выбор сервера')).toBeVisible();
+});
+
+test('renders the winners page from raffle snapshots and links to it from the home page', async ({
+  page
+}) => {
+  await mockRaffleAutoseedApi(page);
+
+  await page.goto('/');
+  await page.getByTestId('winners-nav-link').click();
+
+  await expect(page).toHaveURL(/#winners$/);
+  await expect(page.getByTestId('winners-page')).toBeVisible();
+  await expect(page.getByTestId('winners-title')).toHaveText('Победители розыгрышей');
+  await expect(page.getByTestId('winners-active-card')).toContainText('1000 рублей');
+  await expect(page.getByTestId('winners-active-card')).toContainText('17 участников');
+  await expect(page.getByTestId('winners-budget-card')).toContainText('18 500 ₽');
+  await expect(page.getByTestId('winners-history-list')).toContainText('Winner One');
+  await expect(page.getByTestId('winners-history-list')).toContainText('VIP 7 дней');
+  await expect(page.getByTestId('winners-history-list')).toContainText('без победителя');
 });
 
 test('requests join-link on demand and dispatches direct joins in the current tab', async ({

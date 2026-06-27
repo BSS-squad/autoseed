@@ -10,8 +10,9 @@
   - `/squadjs2/v1/autoseed`
   - `/squadjs3/v1/autoseed`
 - exporter не отдаёт policy;
-- exporter отдаёт расширенный snapshot: server state, teams, squads, roster и playtime summary;
+- exporter отдаёт расширенный snapshot: server state, teams, squads, roster, playtime summary и optional `servers[].raffles`;
 - policy живёт только во frontend runtime-config;
+- страница победителей доступна по GitHub Pages hash-route `/#winners`;
 - текущая BSS policy:
   - ночью `nightPreferredServerId=2`
   - днём приоритет `1 -> 2 -> 3` (`Mix -> Spec Ops -> Invasion`)
@@ -78,6 +79,8 @@
 Этот JSON попадает в публичный frontend bundle. Никаких приватных ключей, auth token и SSH-данных туда класть нельзя.
 
 Перед любым запуском автоконнектора включите `Squad` и оставьте игру в главном меню. Это относится и к боевому режиму, и к тестовому прогону, и к ручному `Прямому подключению`: `join-link` запрашивается только перед самим переходом. Автосценарии отправляют переход через служебное окно, чтобы не терять основную страницу, а ручное прямое подключение открывает `steam://` в текущей вкладке, как SquadBrowser. В этот момент клиент `Squad` уже должен быть запущен и ждать в главном меню.
+
+Страница победителей открывается по `https://bss-squad.github.io/autoseed/#winners`. Она читает только публичное поле `servers[].raffles` из snapshot. Если Raffle-плагин на production ещё не включён и exporter отдаёт `raffles: null`, страница показывает empty state без ошибок.
 
 ## 2. SquadJS: пример exporter-плагина
 

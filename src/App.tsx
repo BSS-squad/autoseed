@@ -35,6 +35,9 @@ import type {
   AppMode,
   BrowserPermissions,
   CombinedSnapshot,
+  ExporterRaffleActiveSnapshot,
+  ExporterRaffleHistoryEntrySnapshot,
+  ExporterRaffleSnapshot,
   ExporterServerSnapshot,
   ExporterSquadSnapshot,
   ExporterTeamSnapshot,
@@ -45,6 +48,8 @@ import projectLogo from '../image.png';
 type AppProps = {
   config: AppConfig;
 };
+
+type AppRoute = 'home' | 'winners';
 
 type PendingSequence = {
   remaining: ExporterServerSnapshot[];
@@ -101,6 +106,32 @@ type InlineHelpProps = {
   testId?: string;
 };
 
+type AppNavProps = {
+  currentRoute: AppRoute;
+};
+
+type RaffleServerSnapshot = {
+  server: ExporterServerSnapshot;
+  raffles: ExporterRaffleSnapshot;
+};
+
+type ActiveRaffleView = {
+  server: ExporterServerSnapshot;
+  active: ExporterRaffleActiveSnapshot;
+};
+
+type RaffleHistoryView = {
+  server: ExporterServerSnapshot;
+  entry: ExporterRaffleHistoryEntrySnapshot;
+};
+
+type WinnersPageProps = {
+  config: AppConfig;
+  snapshot: CombinedSnapshot;
+  now: number;
+  route: AppRoute;
+};
+
 const EMPTY_SNAPSHOT: CombinedSnapshot = {
   timestamp: 0,
   generatedAt: '',
@@ -140,8 +171,49 @@ function formatHours(value: number | null | undefined): string {
   }).format(value)} ч`;
 }
 
+function formatDateTime(value: number | string | null | undefined): string {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return new Intl.DateTimeFormat('ru-RU', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(date);
+}
+
+function formatCurrencyRubles(value: number | null | undefined): string {
+  if (typeof value !== 'number' || Number.isNaN(value)) return '—';
+  return `${new Intl.NumberFormat('ru-RU', {
+    maximumFractionDigits: 0
+  }).format(Math.round(value))} ₽`;
+}
+
+function formatParticipantCount(value: number): string {
+  const count = Math.max(0, Math.round(value));
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  const suffix =
+    mod10 === 1 && mod100 !== 11
+      ? 'участник'
+      : mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)
+        ? 'участника'
+        : 'участников';
+  return `${count} ${suffix}`;
+}
+
+function formatRaffleSource(value: string): string {
+  return value === 'auto' ? 'авто' : 'ручной';
+}
+
 function classNames(...values: Array<string | false | null | undefined>): string {
   return values.filter(Boolean).join(' ');
+}
+
+function getRouteFromHash(): AppRoute {
+  if (typeof window === 'undefined') return 'home';
+  return window.location.hash === '#winners' ? 'winners' : 'home';
 }
 
 function normalizeDelaySeconds(value: number): number {
@@ -654,6 +726,217 @@ function InlineHelp({ label, title, description, testId }: InlineHelpProps) {
   );
 }
 
+function AppNav({ currentRoute }: AppNavProps) {
+  return (
+    <nav className="app-nav" aria-label="Навигация AutoSeed">
+      <a
+        className={classNames('app-nav-link', currentRoute === 'home' && 'app-nav-link-active')}
+        href="#"
+        data-testid="home-nav-link"
+      >
+        Автосид
+      </a>
+      <a
+        className={classNames(
+          'app-nav-link',
+          currentRoute === 'winners' && 'app-nav-link-active'
+        )}
+        href="#winners"
+        data-testid="winners-nav-link"
+      >
+        Победители
+      </a>
+    </nav>
+  );
+}
+
+function getRaffleServers(snapshot: CombinedSnapshot): RaffleServerSnapshot[] {
+  return snapshot.servers.flatMap((server) =>
+    server.raffles ? [{ server, raffles: server.raffles }] : []
+  );
+}
+
+function getActiveRaffles(raffleServers: RaffleServerSnapshot[]): ActiveRaffleView[] {
+  return raffleServers.flatMap(({ server, raffles }) =>
+    raffles.active ? [{ server, active: raffles.active }] : []
+  );
+}
+
+function getRaffleHistory(raffleServers: RaffleServerSnapshot[]): RaffleHistoryView[] {
+  return raffleServers
+    .flatMap(({ server, raffles }) =>
+      raffles.history.map((entry) => ({
+        server,
+        entry
+      }))
+    )
+    .sort((left, right) => {
+      const leftTime = Date.parse(left.entry.endedAt || left.entry.startedAt || '') || 0;
+      const rightTime = Date.parse(right.entry.endedAt || right.entry.startedAt || '') || 0;
+      return rightTime - leftTime;
+    });
+}
+
+function WinnersPage({ config, snapshot, now, route }: WinnersPageProps) {
+  const raffleServers = getRaffleServers(snapshot);
+  const activeRaffles = getActiveRaffles(raffleServers);
+  const history = getRaffleHistory(raffleServers);
+  const budget = raffleServers.reduce(
+    (summary, item) => ({
+      limitRubles: summary.limitRubles + item.raffles.budget.limitRubles,
+      spentRubles: summary.spentRubles + item.raffles.budget.spentRubles,
+      remainingRubles: summary.remainingRubles + item.raffles.budget.remainingRubles
+    }),
+    {
+      limitRubles: 0,
+      spentRubles: 0,
+      remainingRubles: 0
+    }
+  );
+  const latestWinner = history.find((item) => item.entry.winner)?.entry.winner || null;
+
+  return (
+    <div className="shell modern-shell winners-shell" style={BRAND_STYLE} data-testid="winners-page">
+      <header className="winners-hero">
+        <div className="winners-hero-top">
+          <div className="hero-brand">
+            <div className="hero-logo-shell hero-logo-shell-compact">
+              <img className="hero-logo" src={projectLogo} alt={`Логотип ${config.app.title}`} />
+            </div>
+            <div className="hero-brand-copy">
+              <span className="hero-brand-kicker">Mdj BSS</span>
+              <span className="hero-brand-subtitle">розыгрыши и победители</span>
+            </div>
+          </div>
+
+          <AppNav currentRoute={route} />
+        </div>
+
+        <div className="winners-hero-main">
+          <p className="eyebrow">BSS Raffle</p>
+          <h1 data-testid="winners-title">Победители розыгрышей</h1>
+          <p className="hero-copy">
+            История розыгрышей берётся из публичного AutoSeed snapshot каждого SquadJS exporter-а.
+          </p>
+        </div>
+
+        <div className="winners-hero-stats">
+          <article>
+            <span>Активно</span>
+            <strong>{activeRaffles.length}</strong>
+          </article>
+          <article>
+            <span>История</span>
+            <strong>{history.length}</strong>
+          </article>
+          <article>
+            <span>Последний победитель</span>
+            <strong>{latestWinner?.name || '—'}</strong>
+          </article>
+          <article>
+            <span>Снимок</span>
+            <strong>{formatCompactTimestamp(snapshot.generatedAt)}</strong>
+          </article>
+        </div>
+      </header>
+
+      {raffleServers.length ? (
+        <>
+          <section className="section-shell winners-summary-grid">
+            <article className="winners-card winners-card-active" data-testid="winners-active-card">
+              <span className="overview-label">Активный розыгрыш</span>
+              {activeRaffles.length ? (
+                <div className="winners-active-list">
+                  {activeRaffles.map(({ server, active }) => {
+                    const endsAtMs = Date.parse(active.endsAt || '');
+                    const countdownMs = Number.isFinite(endsAtMs) ? Math.max(0, endsAtMs - now) : 0;
+
+                    return (
+                      <div key={`${server.id}-${active.startedAt || active.prize}`} className="winners-active-item">
+                        <strong>{active.prize}</strong>
+                        <p>{server.name}</p>
+                        <div className="winners-meta-row">
+                          <span>{formatParticipantCount(active.participantCount)}</span>
+                          <span>{formatRaffleSource(active.source)}</span>
+                          <span>{active.endsAt ? formatCountdown(countdownMs) : '—'}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="winners-empty-copy">Активных розыгрышей сейчас нет.</p>
+              )}
+            </article>
+
+            <article className="winners-card" data-testid="winners-budget-card">
+              <span className="overview-label">Бюджет</span>
+              <strong>{formatCurrencyRubles(budget.remainingRubles)}</strong>
+              <p>
+                Осталось из {formatCurrencyRubles(budget.limitRubles)}. Потрачено{' '}
+                {formatCurrencyRubles(budget.spentRubles)}.
+              </p>
+            </article>
+
+            <article className="winners-card">
+              <span className="overview-label">Серверы с розыгрышами</span>
+              <strong>{raffleServers.length}</strong>
+              <p>
+                {raffleServers.map((item) => item.server.code).join(', ')}
+              </p>
+            </article>
+          </section>
+
+          <section className="section-shell">
+            <div className="section-head">
+              <div>
+                <span className="section-eyebrow">История</span>
+                <h2>Последние победители</h2>
+              </div>
+              <p>Завершённые розыгрыши из public snapshot.</p>
+            </div>
+
+            <div className="winners-history-list" data-testid="winners-history-list">
+              {history.length ? (
+                history.map(({ server, entry }) => (
+                  <article
+                    key={`${server.id}-${entry.id || entry.startedAt || entry.prize}`}
+                    className="winner-row"
+                  >
+                    <div className="winner-row-main">
+                      <span className="winner-server">{server.name}</span>
+                      <strong>{entry.winner?.name || 'без победителя'}</strong>
+                      <p>{entry.prize}</p>
+                    </div>
+                    <div className="winner-row-meta">
+                      <span>{formatDateTime(entry.endedAt || entry.startedAt)}</span>
+                      <span>{formatCurrencyRubles(entry.amountRubles)}</span>
+                      <span>{formatParticipantCount(entry.participants.length)}</span>
+                    </div>
+                  </article>
+                ))
+              ) : (
+                <div className="roster-empty">Завершённых розыгрышей пока нет.</div>
+              )}
+            </div>
+          </section>
+        </>
+      ) : (
+        <section className="section-shell">
+          <article className="winners-empty-state" data-testid="winners-empty">
+            <span className="overview-label">Raffles</span>
+            <strong>Розыгрыши пока не включены</strong>
+            <p>
+              Endpoint уже может отдавать поле `raffles`, но сейчас ни один exporter не прислал
+              активный snapshot розыгрышей.
+            </p>
+          </article>
+        </section>
+      )}
+    </div>
+  );
+}
+
 function TeamPanel({ team, opponent }: TeamPanelProps) {
   const teamHours = getTeamHours(team);
   const opponentHours = getTeamHours(opponent);
@@ -770,6 +1053,7 @@ export default function App({ config }: AppProps) {
   const [now, setNow] = useState<number>(Date.now());
   const [activeServerKey, setActiveServerKey] = useState<string>('');
   const [joinLinkRequestServerKey, setJoinLinkRequestServerKey] = useState<string>('');
+  const [route, setRoute] = useState<AppRoute>(() => getRouteFromHash());
 
   const enabledRef = useRef(enabled);
   const modeRef = useRef(mode);
@@ -830,6 +1114,13 @@ export default function App({ config }: AppProps) {
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const handleHashChange = () => setRoute(getRouteFromHash());
+    handleHashChange();
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
   const clearPendingSequence = () => {
@@ -1647,6 +1938,10 @@ export default function App({ config }: AppProps) {
     });
   }, [displayTargetServer, orderedServers]);
 
+  if (route === 'winners') {
+    return <WinnersPage config={config} snapshot={snapshot} now={now} route={route} />;
+  }
+
   return (
     <div className="shell modern-shell" style={BRAND_STYLE} data-testid="app-shell">
       <header className="hero hero-redesign" data-testid="hero">
@@ -1661,6 +1956,8 @@ export default function App({ config }: AppProps) {
                 <span className="hero-brand-subtitle">пульт автоподключения</span>
               </div>
             </div>
+
+            <AppNav currentRoute={route} />
 
             <InlineHelp
               label="Справка по главному экрану"

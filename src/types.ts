@@ -73,6 +73,48 @@ export type ExporterTeamSnapshot = {
   players: ExporterPlayerSnapshot[];
 };
 
+export type ExporterRaffleParticipantSnapshot = {
+  eosID?: string | null;
+  steamID?: string | null;
+  name: string;
+  joinedAt?: string | null;
+};
+
+export type ExporterRaffleActiveSnapshot = {
+  serverID?: number | null;
+  prize: string;
+  amountRubles: number;
+  startedAt: string | null;
+  endsAt: string | null;
+  source: string;
+  participantCount: number;
+};
+
+export type ExporterRaffleHistoryEntrySnapshot = {
+  id?: number | string | null;
+  serverID?: number | null;
+  prize: string;
+  amountRubles: number;
+  startedAt: string | null;
+  endedAt: string | null;
+  participants: ExporterRaffleParticipantSnapshot[];
+  winner: ExporterRaffleParticipantSnapshot | null;
+  startedBy: ExporterRaffleParticipantSnapshot | null;
+  source: string;
+};
+
+export type ExporterRaffleBudgetSnapshot = {
+  limitRubles: number;
+  spentRubles: number;
+  remainingRubles: number;
+};
+
+export type ExporterRaffleSnapshot = {
+  active: ExporterRaffleActiveSnapshot | null;
+  history: ExporterRaffleHistoryEntrySnapshot[];
+  budget: ExporterRaffleBudgetSnapshot;
+};
+
 export type ExporterServerSnapshot = {
   id: number;
   code: string;
@@ -86,6 +128,7 @@ export type ExporterServerSnapshot = {
   online: boolean;
   teams: ExporterTeamSnapshot[];
   players: ExporterPlayerSnapshot[];
+  raffles: ExporterRaffleSnapshot | null;
   updatedAt: number;
   sourceUrl: string;
   joinLinkUrl: string;

@@ -3,6 +3,11 @@ import type {
   ExporterEndpointConfig,
   ExporterJoinLinkResponse,
   ExporterPlayerSnapshot,
+  ExporterRaffleActiveSnapshot,
+  ExporterRaffleBudgetSnapshot,
+  ExporterRaffleHistoryEntrySnapshot,
+  ExporterRaffleParticipantSnapshot,
+  ExporterRaffleSnapshot,
   ExporterServerSnapshot,
   ExporterSnapshotPlayerResponse,
   ExporterSnapshotResponse,
@@ -39,6 +44,25 @@ const STREAM_RECONNECT_MAX_DELAY_MS = 5 * 60_000;
 const SNAPSHOT_HEADERS = {
   Accept: 'application/json'
 } as const;
+
+function getRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : null;
+}
+
+function toStringOrNull(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function toNumber(value: unknown, fallback = 0): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function toIsoStringOrNull(value: unknown): string | null {
+  if (!value) return null;
+  const date = new Date(String(value));
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
 
 function normalizeBaseUrl(value: string): string {
   return value.endsWith('/') ? value.slice(0, -1) : value;
@@ -101,6 +125,78 @@ function mapTeam(team: ExporterSnapshotTeamResponse): ExporterTeamSnapshot {
   };
 }
 
+function mapRaffleParticipant(value: unknown): ExporterRaffleParticipantSnapshot {
+  const participant = getRecord(value);
+
+  return {
+    eosID: toStringOrNull(participant?.eosID),
+    steamID: toStringOrNull(participant?.steamID),
+    name: toStringOrNull(participant?.name) || 'Игрок',
+    joinedAt: toIsoStringOrNull(participant?.joinedAt)
+  };
+}
+
+function mapRaffleActive(value: unknown): ExporterRaffleActiveSnapshot | null {
+  const active = getRecord(value);
+  if (!active) return null;
+
+  return {
+    serverID: Number(active.serverID) || null,
+    prize: toStringOrNull(active.prize) || 'Приз',
+    amountRubles: Math.max(0, Math.round(toNumber(active.amountRubles))),
+    startedAt: toIsoStringOrNull(active.startedAt),
+    endsAt: toIsoStringOrNull(active.endsAt),
+    source: toStringOrNull(active.source) || 'manual',
+    participantCount: Math.max(0, Math.round(toNumber(active.participantCount)))
+  };
+}
+
+function mapRaffleHistoryEntry(value: unknown): ExporterRaffleHistoryEntrySnapshot {
+  const entry = getRecord(value) || {};
+  const participants = Array.isArray(entry.participants)
+    ? entry.participants.map(mapRaffleParticipant)
+    : [];
+
+  return {
+    id:
+      typeof entry.id === 'number' || typeof entry.id === 'string'
+        ? entry.id
+        : null,
+    serverID: Number(entry.serverID) || null,
+    prize: toStringOrNull(entry.prize) || 'Приз',
+    amountRubles: Math.max(0, Math.round(toNumber(entry.amountRubles))),
+    startedAt: toIsoStringOrNull(entry.startedAt),
+    endedAt: toIsoStringOrNull(entry.endedAt),
+    participants,
+    winner: entry.winner ? mapRaffleParticipant(entry.winner) : null,
+    startedBy: entry.startedBy ? mapRaffleParticipant(entry.startedBy) : null,
+    source: toStringOrNull(entry.source) || 'manual'
+  };
+}
+
+function mapRaffleBudget(value: unknown): ExporterRaffleBudgetSnapshot {
+  const budget = getRecord(value) || {};
+
+  return {
+    limitRubles: Math.max(0, Math.round(toNumber(budget.limitRubles))),
+    spentRubles: Math.max(0, Math.round(toNumber(budget.spentRubles))),
+    remainingRubles: Math.max(0, Math.round(toNumber(budget.remainingRubles)))
+  };
+}
+
+function mapRaffleSnapshot(value: unknown): ExporterRaffleSnapshot | null {
+  const raffles = getRecord(value);
+  if (!raffles) return null;
+
+  return {
+    active: mapRaffleActive(raffles.active),
+    history: Array.isArray(raffles.history)
+      ? raffles.history.map(mapRaffleHistoryEntry)
+      : [],
+    budget: mapRaffleBudget(raffles.budget)
+  };
+}
+
 function mapServer(
   server: ExporterSnapshotServerResponse,
   sourceUrl: string,
@@ -119,6 +215,7 @@ function mapServer(
     online: Boolean(server.online),
     teams: Array.isArray(server.teams) ? server.teams.map(mapTeam) : [],
     players: Array.isArray(server.players) ? server.players.map(mapPlayer) : [],
+    raffles: mapRaffleSnapshot(server.raffles),
     updatedAt: Number(server.updatedAt) || Date.now(),
     sourceUrl,
     joinLinkUrl
