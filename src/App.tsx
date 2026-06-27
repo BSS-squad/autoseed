@@ -138,7 +138,6 @@ type RaffleCampaignView = {
 };
 
 type WinnersPageProps = {
-  config: AppConfig;
   snapshot: CombinedSnapshot;
   now: number;
   route: AppRoute;
@@ -150,6 +149,8 @@ const EMPTY_SNAPSHOT: CombinedSnapshot = {
   servers: [],
   errors: []
 };
+
+const APP_DISPLAY_NAME = 'Автосид BSS';
 
 const EMPTY_RAFFLE_BUDGET: RaffleBudgetView = {
   limitRubles: 0,
@@ -222,7 +223,7 @@ function formatParticipantCount(value: number): string {
 }
 
 function formatRaffleSource(value: string): string {
-  return value === 'auto' ? 'авто' : 'ручной';
+  return value === 'auto' ? 'запущен автоматически' : 'запущен администратором';
 }
 
 function parseIsoDateParts(value: string | null | undefined): { year: number; month: number; day: number } | null {
@@ -258,11 +259,7 @@ function formatCampaignHour(value: number): string {
 }
 
 function formatTimezoneOffset(minutes: number): string {
-  const sign = minutes >= 0 ? '+' : '-';
-  const absHours = Math.abs(minutes) / 60;
-  return `UTC${sign}${new Intl.NumberFormat('ru-RU', {
-    maximumFractionDigits: 1
-  }).format(absHours)}`;
+  return minutes === 180 ? 'по московскому времени' : 'по времени организаторов';
 }
 
 function formatPrimeWindow(campaign: ExporterRaffleCampaignSnapshot | null): string {
@@ -490,7 +487,7 @@ function buildConnectorWindowMarkup(context: ConnectorWindowContext): string {
   const nextStepText = hasFollowup
     ? `Следующий сервер: ${escapeHtml(followupServer!.name)} через ${Math.ceil(followupDelayMs / 1000)} с`
     : phase === 'redirect_sent'
-      ? 'Автоконнектор ждёт новый снимок. Перед следующим переходом ссылка входа будет запрошена заново.'
+      ? 'Автоподключение ждёт новые данные. Перед следующим переходом ссылка входа будет запрошена заново.'
       : 'После отправки браузер не получит отдельный ответ от Steam или Squad.';
   const snapshotText = formatCompactTimestamp(server.updatedAt);
   const joinLinkText = 'Запрашивается прямо перед переходом';
@@ -634,8 +631,8 @@ function buildConnectorWindowMarkup(context: ConnectorWindowContext): string {
       <div class="brand">
         <img class="brand-mark" src="${escapedLogo}" alt="" />
         <div class="brand-copy">
-          <p class="eyebrow">BSS AutoConnect</p>
-          <p>Служебное окно держит цепочку переходов и не даёт браузеру потерять отправку в Steam.</p>
+          <p class="eyebrow">Автосид BSS</p>
+          <p>Это окно помогает последовательно подключаться к серверам через Steam.</p>
         </div>
       </div>
       <h1>${escapeHtml(server.name)}</h1>
@@ -667,7 +664,7 @@ function buildConnectorWindowMarkup(context: ConnectorWindowContext): string {
         </div>
         <div class="row">
           <div>
-            <div class="label">Снимок</div>
+            <div class="label">Обновлено</div>
             <strong>${snapshotText}</strong>
           </div>
         </div>
@@ -763,8 +760,8 @@ function buildConnectorWindowBootMarkup(title: string): string {
       <div class="brand">
         <img src="${escapedLogo}" alt="" />
         <div>
-          <p class="eyebrow">BSS AutoConnect</p>
-          <p>Служебное окно коннектора готово. Не закрывайте его во время переключений.</p>
+          <p class="eyebrow">Автосид BSS</p>
+          <p>Окно автоподключения готово. Не закрывайте его во время переключений.</p>
         </div>
       </div>
     </div>
@@ -793,7 +790,7 @@ function InlineHelp({ label, title, description, testId }: InlineHelpProps) {
 
 function AppNav({ currentRoute }: AppNavProps) {
   return (
-    <nav className="app-nav" aria-label="Навигация AutoSeed">
+    <nav className="app-nav" aria-label="Навигация Автосида">
       <a
         className={classNames('app-nav-link', currentRoute === 'home' && 'app-nav-link-active')}
         href="#"
@@ -898,7 +895,7 @@ function getPrimaryRaffleServer(raffleServers: RaffleServerSnapshot[]): RaffleSe
   );
 }
 
-function WinnersPage({ config, snapshot, now, route }: WinnersPageProps) {
+function WinnersPage({ snapshot, now, route }: WinnersPageProps) {
   const raffleServers = getRaffleServers(snapshot);
   const activeRaffles = getActiveRaffles(raffleServers);
   const history = getRaffleHistory(raffleServers);
@@ -915,7 +912,7 @@ function WinnersPage({ config, snapshot, now, route }: WinnersPageProps) {
         <div className="winners-hero-top">
           <div className="hero-brand">
             <div className="hero-logo-shell hero-logo-shell-compact">
-              <img className="hero-logo" src={projectLogo} alt={`Логотип ${config.app.title}`} />
+              <img className="hero-logo" src={projectLogo} alt={`Логотип ${APP_DISPLAY_NAME}`} />
             </div>
             <div className="hero-brand-copy">
               <span className="hero-brand-kicker">Mdj BSS</span>
@@ -927,10 +924,10 @@ function WinnersPage({ config, snapshot, now, route }: WinnersPageProps) {
         </div>
 
         <div className="winners-hero-main">
-          <p className="eyebrow">BSS Raffle</p>
+          <p className="eyebrow">Розыгрыши BSS</p>
           <h1 data-testid="winners-title">Победители розыгрышей</h1>
           <p className="hero-copy">
-            История розыгрышей берётся из публичного AutoSeed snapshot каждого SquadJS exporter-а.
+            Здесь собраны текущие розыгрыши и история победителей со всех серверов BSS.
           </p>
         </div>
 
@@ -948,7 +945,7 @@ function WinnersPage({ config, snapshot, now, route }: WinnersPageProps) {
             <strong>{latestWinner?.name || '—'}</strong>
           </article>
           <article>
-            <span>Снимок</span>
+            <span>Обновлено</span>
             <strong>{formatCompactTimestamp(snapshot.generatedAt)}</strong>
           </article>
         </div>
@@ -1047,7 +1044,7 @@ function WinnersPage({ config, snapshot, now, route }: WinnersPageProps) {
                 <span className="section-eyebrow">История</span>
                 <h2>Последние победители</h2>
               </div>
-              <p>Завершённые розыгрыши из public snapshot.</p>
+              <p>Завершённые розыгрыши со всех серверов.</p>
             </div>
 
             <div className="winners-history-list" data-testid="winners-history-list">
@@ -1078,12 +1075,9 @@ function WinnersPage({ config, snapshot, now, route }: WinnersPageProps) {
       ) : (
         <section className="section-shell">
           <article className="winners-empty-state" data-testid="winners-empty">
-            <span className="overview-label">Raffles</span>
-            <strong>Розыгрыши пока не включены</strong>
-            <p>
-              Endpoint уже может отдавать поле `raffles`, но сейчас ни один exporter не прислал
-              активный snapshot розыгрышей.
-            </p>
+            <span className="overview-label">Розыгрыши</span>
+            <strong>Данных о розыгрышах пока нет</strong>
+            <p>Данные о розыгрышах пока не поступили. Загляните позже.</p>
           </article>
         </section>
       )}
@@ -1401,11 +1395,11 @@ export default function App({ config }: AppProps) {
         setPlannedSequence(nextRedirectPlan);
 
         if (nextSnapshot.errors.length) {
-          nextSnapshot.errors.forEach((error) => appendLog(`Ошибка экспортера: ${error}`));
+          nextSnapshot.errors.forEach((error) => appendLog(`Не удалось обновить данные сервера: ${error}`));
         }
 
         appendLog(
-          `Снимок ${source === 'manual' ? 'получен' : 'обновлён'}: цель=${
+          `Данные ${source === 'manual' ? 'получены' : 'обновлены'}: выбранный сервер=${
             nextRedirectPlan[0]?.name || nextSelection.targetServer?.name || 'нет'
           }, режим=${testModeEnabled ? 'тест' : nextSelection.nightMode ? 'ночь' : 'день'}`
         );
@@ -1470,7 +1464,7 @@ export default function App({ config }: AppProps) {
           !productionTargetChanged &&
           nextSnapshot.timestamp <= lastProcessedTimestampRef.current
         ) {
-          appendLog('Переход отменён: этот снимок уже обработан.');
+          appendLog('Переход отменён: эти данные уже обработаны.');
           return;
         }
 
@@ -1488,7 +1482,7 @@ export default function App({ config }: AppProps) {
             findServerBySelectionKey(nextSnapshot, activeRedirectServerKey) ||
             findServerBySelectionKey(snapshot, activeRedirectServerKey);
           appendLog(
-            `Боевой режим: цель сменилась с ${previousServer?.name || 'предыдущего сервера'} на ${nextRedirectPlan[0].name}, запускаю новый переход.`
+            `Обычный режим: выбранный сервер изменился с ${previousServer?.name || 'предыдущего сервера'} на ${nextRedirectPlan[0].name}, запускаю новый переход.`
           );
         }
 
@@ -1498,9 +1492,9 @@ export default function App({ config }: AppProps) {
           testModeEnabled ? testCooldownMs : nextPolicy.cooldownMs
         );
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'неизвестная ошибка снимка';
+        const message = error instanceof Error ? error.message : 'неизвестная ошибка данных';
         setFatalError(message);
-        appendLog(`Ошибка обработки снимка: ${message}`);
+        appendLog(`Ошибка обработки данных: ${message}`);
       }
     }
   );
@@ -1516,7 +1510,7 @@ export default function App({ config }: AppProps) {
       if (!nextWindow) return null;
 
       nextWindow.document.open();
-      nextWindow.document.write(buildConnectorWindowBootMarkup(config.app.title));
+      nextWindow.document.write(buildConnectorWindowBootMarkup(APP_DISPLAY_NAME));
       nextWindow.document.close();
       connectorWindowRef.current = nextWindow;
       connectorWindowWriteBlockedRef.current = false;
@@ -1537,7 +1531,7 @@ export default function App({ config }: AppProps) {
       connectorWindow.document.open();
       connectorWindow.document.write(
         buildConnectorWindowMarkup({
-          title: config.app.title,
+          title: APP_DISPLAY_NAME,
           server,
           followupServer,
           followupDelayMs,
@@ -1551,8 +1545,8 @@ export default function App({ config }: AppProps) {
       if (!connectorWindowWriteBlockedRef.current) {
         appendLog(
           phase === 'redirect_sent'
-            ? 'Не удалось обновить окно коннектора после перехода.'
-            : 'Не удалось обновить окно коннектора перед переходом.'
+            ? 'Не удалось обновить окно автоподключения после перехода.'
+            : 'Не удалось обновить окно автоподключения перед переходом.'
         );
       }
       connectorWindowWriteBlockedRef.current = true;
@@ -1664,7 +1658,7 @@ export default function App({ config }: AppProps) {
           appendLog(
             followupServer
               ? `Переход отправлен в Steam для ${server.name}. Отдельного ответа от Steam или Squad браузер не получит.`
-              : `Переход отправлен в Steam для ${server.name}. Дальше ждём только новый снимок.`
+              : `Переход отправлен в Steam для ${server.name}. Дальше ждём только новые данные.`
           );
           connectorWindowStateRef.current = {
             serverKey: getServerSelectionKey(server),
@@ -1713,7 +1707,7 @@ export default function App({ config }: AppProps) {
 
       void (async () => {
         if (!enabledRef.current) {
-          appendLog(`Следующий переход пропущен: автоконнектор уже выключен.`);
+          appendLog(`Следующий переход пропущен: автоподключение уже выключено.`);
           return;
         }
 
@@ -1815,7 +1809,7 @@ export default function App({ config }: AppProps) {
     modeRef.current = nextMode;
     setMode(nextMode);
     saveMode(nextMode);
-    appendLog(nextMode === 'test' ? 'Переключено в тестовый режим.' : 'Переключено в боевой режим.');
+    appendLog(nextMode === 'test' ? 'Переключено в тестовый режим.' : 'Переключено в обычный режим.');
     void refreshSnapshot();
   };
 
@@ -1879,7 +1873,7 @@ export default function App({ config }: AppProps) {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'неизвестная ошибка снимка';
       setFatalError(message);
-      appendLog(`Не удалось получить снимок: ${message}`);
+      appendLog(`Не удалось получить свежие данные: ${message}`);
     } finally {
       setIsFetching(false);
     }
@@ -1907,17 +1901,17 @@ export default function App({ config }: AppProps) {
 
   const handleEnable = async () => {
     if (!permissions) {
-      appendLog('Автоконнектор не запущен: сначала вручную выполните локальную проверку браузера.');
+      appendLog('Автоподключение не запущено: сначала проверьте браузер.');
       return;
     }
 
     if (!permissions.popupAllowed || !permissions.steamProtocolReady) {
-      appendLog('Автоконнектор не запущен: браузерные разрешения не подтверждены.');
+      appendLog('Автоподключение не запущено: браузер ещё не готов.');
       return;
     }
 
     if (!ensureConnectorWindow()) {
-      appendLog('Автоконнектор не запущен: не удалось открыть служебное окно.');
+      appendLog('Автоподключение не запущено: не удалось открыть вспомогательное окно.');
       return;
     }
 
@@ -1929,8 +1923,8 @@ export default function App({ config }: AppProps) {
     saveEnabled(true);
     appendLog(
       isTestModeActive
-        ? `Автоконнектор включён. Активен тестовый режим: ${testSequencePlanLabel}.`
-        : 'Автоконнектор включён.'
+        ? `Автоподключение включено. Активен тестовый режим: ${testSequencePlanLabel}.`
+        : 'Автоподключение включено.'
     );
 
     const immediateRedirectPlan =
@@ -1955,14 +1949,14 @@ export default function App({ config }: AppProps) {
         appendLog(
           isTestModeActive
             ? 'Тестовый режим: первый переход запущен сразу из текущего снимка.'
-            : 'Боевой режим: первый переход запущен сразу из текущего снимка.'
+            : 'Обычный режим: первый переход запущен сразу по текущим данным.'
         );
         return;
       }
     }
 
     if (immediateRedirectPlan.length && snapshot.timestamp > 0 && !currentSnapshotIsFresh) {
-      appendLog('Текущий снимок устарел: запрашиваю свежие данные перед первым переходом.');
+      appendLog('Текущие данные устарели: обновляю их перед первым переходом.');
     }
 
     void refreshSnapshot();
@@ -1980,7 +1974,7 @@ export default function App({ config }: AppProps) {
     enabledRef.current = false;
     setEnabled(false);
     saveEnabled(false);
-    appendLog('Автоконнектор выключен.');
+    appendLog('Автоподключение выключено.');
   };
 
   const permissionsReady = Boolean(permissions?.popupAllowed && permissions?.steamProtocolReady);
@@ -2007,9 +2001,9 @@ export default function App({ config }: AppProps) {
     ? nextFollowupServer?.name || 'Ждём следующий сервер'
     : enabled
       ? 'Статус обновляется автоматически'
-      : 'Коннектор выключен';
+      : 'Автоподключение выключено';
   const heroMeshLabel = `${liveServerCount}/${snapshot.servers.length || config.exporters.length}`;
-  const heroModeLabel = productionMode ? 'Боевой' : 'Тест';
+  const heroModeLabel = productionMode ? 'Обычный' : 'Тест';
   const heroModeCaption = productionMode
     ? 'Обычный режим работы'
     : 'Режим для ручной проверки';
@@ -2037,18 +2031,18 @@ export default function App({ config }: AppProps) {
       step: '1',
       title: 'Выбери режим в правом верхнем блоке',
       description: hasConfiguredTestMode
-        ? 'Для обычной работы оставляй «Боевой». «Тест» нужен только для проверки и ручного прогона.'
-        : 'Сейчас доступен только «Боевой» режим, поэтому ничего переключать не нужно.',
+        ? 'Для обычной работы оставляй «Обычный». «Тест» нужен только для проверки и ручного прогона.'
+        : 'Сейчас доступен только «Обычный» режим, поэтому ничего переключать не нужно.',
       hints: hasConfiguredTestMode
-        ? ['Кнопки: «Боевой» или «Тест»', 'Для обычной работы оставляй «Боевой»']
-        : ['Кнопка: «Боевой»', 'Тестовый режим не настроен в конфиге']
+        ? ['Кнопки: «Обычный» или «Тест»', 'Для обычной работы оставляй «Обычный»']
+        : ['Кнопка: «Обычный»', 'Тестовый режим сейчас недоступен']
     },
     {
       id: 'browser',
       step: '2',
       title: 'Нажми «Проверить браузер»',
       description:
-        'Проверь, что браузер готов открыть окно и передать подключение в Steam. Пока оба индикатора не зелёные, автоконнектор не запустится.',
+        'Проверь, что браузер готов открыть окно и передать подключение в Steam. Пока оба индикатора не зелёные, автоподключение не запустится.',
       hints: ['Кнопка: «Проверить браузер»', 'Смотри статусы окна и Steam']
     },
     {
@@ -2056,24 +2050,24 @@ export default function App({ config }: AppProps) {
       step: '3',
       title: 'Запусти Squad и оставь его в главном меню',
       description:
-        'Перед включением автоконнектора или ручным прямым подключением клиент Squad уже должен быть открыт и ждать в главном меню. Иначе переход в игру может не сработать или сработать нестабильно.',
+        'Перед включением автоподключения или ручным прямым подключением клиент Squad уже должен быть открыт и ждать в главном меню. Иначе переход в игру может не сработать или сработать нестабильно.',
       hints: ['Squad должен быть запущен', 'Оставь игру в главном меню']
     },
     {
       id: 'connector',
       step: '4',
-      title: 'Включи «Автоконнектор»',
+      title: 'Включи «Автоподключение»',
       description:
-        'После запуска откроется служебное окно коннектора. Не закрывай его, пока автоконнектор работает. Если после отправки оно осталось на служебной карточке, это нормально.',
-      hints: ['Кнопка: «Автоконнектор»', 'Служебное окно не закрывать']
+        'После запуска откроется окно автоподключения. Не закрывай его во время работы. Если после отправки оно осталось на вспомогательной карточке, это нормально.',
+      hints: ['Кнопка: «Автоподключение»', 'Окно автоподключения не закрывать']
     },
     {
       id: 'manual',
       step: '5',
-      title: 'Следи за целью и, если нужно, жми прямой вход',
+      title: 'Следи за выбранным сервером и при необходимости заходи вручную',
       description:
         'Ниже видно, куда сейчас стоит заходить. Если нужен ручной вход, используй кнопку «Подключиться напрямую», когда Squad уже открыт в главном меню.',
-      hints: ['Карточки: «Текущая цель» и «Куда заходить»', 'Кнопка: «Подключиться напрямую»']
+      hints: ['Карточки: «Выбранный сервер» и «Куда заходить»', 'Кнопка: «Подключиться напрямую»']
     }
   ];
 
@@ -2093,7 +2087,7 @@ export default function App({ config }: AppProps) {
   }, [displayTargetServer, orderedServers]);
 
   if (route === 'winners') {
-    return <WinnersPage config={config} snapshot={snapshot} now={now} route={route} />;
+    return <WinnersPage snapshot={snapshot} now={now} route={route} />;
   }
 
   return (
@@ -2103,11 +2097,11 @@ export default function App({ config }: AppProps) {
           <div className="hero-topline">
             <div className="hero-brand">
               <div className="hero-logo-shell">
-                <img className="hero-logo" src={projectLogo} alt={`Логотип ${config.app.title}`} />
+                <img className="hero-logo" src={projectLogo} alt={`Логотип ${APP_DISPLAY_NAME}`} />
               </div>
               <div className="hero-brand-copy">
                 <span className="hero-brand-kicker">Mdj BSS</span>
-                <span className="hero-brand-subtitle">пульт автоподключения</span>
+                <span className="hero-brand-subtitle">подключение к серверам</span>
               </div>
             </div>
 
@@ -2115,14 +2109,14 @@ export default function App({ config }: AppProps) {
 
             <InlineHelp
               label="Справка по главному экрану"
-              title="Основное окно AutoSeed"
-              description="Главный экран. Здесь включается автоконнектор, выбирается режим и видно, что готово к запуску."
+              title="Главный экран Автосида"
+              description="Здесь включается автоподключение, выбирается режим и видно, что готово к запуску."
               testId="hero-help"
             />
           </div>
 
-          <p className="eyebrow">BSS Seed Connect</p>
-          <h1 data-testid="hero-title">{config.app.title}</h1>
+          <p className="eyebrow">Автосид BSS</p>
+          <h1 data-testid="hero-title">{APP_DISPLAY_NAME}</h1>
           <p className="hero-copy hero-copy-tight">
             Здесь видно, что готово к запуску, куда сейчас заходить и какой сервер лучше выбрать
             вручную.
@@ -2138,7 +2132,7 @@ export default function App({ config }: AppProps) {
 
           <div className="hero-badges hero-badges-tight">
             <span className={classNames('status-pill', enabled ? 'status-good' : 'status-muted')}>
-              {enabled ? 'Коннектор активен' : 'Коннектор выключен'}
+              {enabled ? 'Автоподключение активно' : 'Автоподключение выключено'}
             </span>
             <span
               className={classNames(
@@ -2154,7 +2148,9 @@ export default function App({ config }: AppProps) {
                 displayTargetServer ? 'status-good' : 'status-danger'
               )}
             >
-              {displayTargetServer ? `Цель: ${displayTargetServer.name}` : 'Цель не выбрана'}
+              {displayTargetServer
+                ? `Выбранный сервер: ${displayTargetServer.name}`
+                : 'Сервер не выбран'}
             </span>
           </div>
 
@@ -2193,7 +2189,7 @@ export default function App({ config }: AppProps) {
                 disabled={productionMode}
                 data-testid="mode-production"
               >
-                Боевой
+                Обычный
               </button>
               <button
                 className={classNames('segment', isTestModeActive && 'segment-active')}
@@ -2221,7 +2217,7 @@ export default function App({ config }: AppProps) {
               <span className="guide-inline-step guide-inline-step-large" aria-hidden="true">
                 3
               </span>
-              <span className="power-caption">Автоконнектор</span>
+              <span className="power-caption">Автоподключение</span>
             </div>
             <strong>{enabled ? 'Включён' : 'Выключен'}</strong>
             <small>{statusText}</small>
@@ -2293,8 +2289,8 @@ export default function App({ config }: AppProps) {
               </div>
               <InlineHelp
                 label="Что делает окно"
-                title="Служебное окно коннектора"
-                description="Открывается после включения автоконнектора. Оно нужно только для запроса свежей ссылки входа, перехода в Steam и последующих переходов. После отправки ссылки окно может визуально остаться на служебной карточке: Steam и Squad не присылают браузеру отдельный ответ."
+                title="Окно автоподключения"
+                description="Открывается после включения автоподключения. Оно получает свежую ссылку входа и передаёт её в Steam. После отправки окно может остаться на вспомогательной карточке: Steam и Squad не присылают браузеру отдельный ответ."
                 testId="popup-help"
               />
             </div>
@@ -2328,7 +2324,7 @@ export default function App({ config }: AppProps) {
                 )}
               />
               <div>
-                <strong>Экспортеры</strong>
+                <strong>Связь с серверами</strong>
                 <p>
                   {healthyExporterCount}/{config.exporters.length}
                 </p>
@@ -2342,7 +2338,7 @@ export default function App({ config }: AppProps) {
                 )}
               />
               <div>
-                <strong>Цель</strong>
+                <strong>Выбранный сервер</strong>
                 <p>{displayTargetServer ? 'есть' : 'нет'}</p>
               </div>
             </div>
@@ -2353,13 +2349,13 @@ export default function App({ config }: AppProps) {
       <details className="panel panel-span guide-spoiler">
         <summary className="details-summary">
           <span>Как запустить</span>
-          <span className="badge badge-muted">{quickStartSteps.length} шага</span>
+          <span className="badge badge-muted">{quickStartSteps.length} шагов</span>
         </summary>
         <div className="guide-spoiler-body">
           <p className="guide-spoiler-copy">
             Весь сценарий укладывается в несколько коротких действий: выбрать режим, проверить
-            браузер, открыть Squad и оставить его в главном меню, затем включить коннектор или при
-            необходимости зайти вручную.
+            браузер, открыть Squad и оставить его в главном меню, затем включить автоподключение
+            или при необходимости зайти вручную.
           </p>
 
           <ol className="guide-steps" aria-label="Пошаговая инструкция">
@@ -2408,7 +2404,7 @@ export default function App({ config }: AppProps) {
             className="overview-card overview-card-spotlight"
             data-testid="overview-target"
           >
-            <span className="overview-label">Текущая цель</span>
+            <span className="overview-label">Выбранный сервер</span>
             <strong>{displayTargetServer?.name || 'Подходящий сервер не найден'}</strong>
             <p>{statusText}</p>
           </article>
@@ -2416,11 +2412,11 @@ export default function App({ config }: AppProps) {
           <article className="overview-card">
             <span className="overview-label">Куда заходить</span>
             <strong>{weakSideSuggestion?.name || 'Стороны пока ровные'}</strong>
-            <p>{weakSideSuggestion ? 'Слабая сторона на текущей цели' : 'Ждём состав сторон'}</p>
+            <p>{weakSideSuggestion ? 'Слабая сторона на выбранном сервере' : 'Ждём состав сторон'}</p>
           </article>
 
           <article className="overview-card">
-            <span className="overview-label">Снимок</span>
+            <span className="overview-label">Обновлено</span>
             <strong>{formatCompactTimestamp(snapshot.generatedAt)}</strong>
             <p>
               {liveServerCount}/{snapshot.servers.length || config.exporters.length} серверов в сети
@@ -2428,7 +2424,7 @@ export default function App({ config }: AppProps) {
           </article>
 
           <article className="overview-card">
-            <span className="overview-label">{pendingSequence ? 'Следующий переход' : 'Снимок'}</span>
+            <span className="overview-label">{pendingSequence ? 'Следующий переход' : 'Обновление'}</span>
             <strong data-testid="overview-next-action-value">
               {pendingSequence
                 ? formatCountdown(nextFollowupCountdown)
@@ -2441,7 +2437,7 @@ export default function App({ config }: AppProps) {
                 ? nextFollowupServer?.name || 'Ждём следующий сервер'
                 : enabled
                   ? 'Статус обновляется автоматически'
-                  : 'Коннектор не активен'}
+                  : 'Автоподключение выключено'}
             </p>
           </article>
         </div>
@@ -2497,7 +2493,7 @@ export default function App({ config }: AppProps) {
                   </div>
                   <div className="server-switcher-meta">
                     <span>{server.playerCount}/{server.maxPlayers || '—'}</span>
-                    {isTarget ? <span className="server-switcher-accent">цель</span> : null}
+                    {isTarget ? <span className="server-switcher-accent">выбран</span> : null}
                   </div>
                   <p>{switcherHoursLine}</p>
                 </button>
@@ -2583,7 +2579,7 @@ export default function App({ config }: AppProps) {
                       </span>
                       <span className="server-state state-join">вход по запросу</span>
                       {isSameServer(server, displayTargetServer) ? (
-                        <span className="server-state state-target">цель</span>
+                        <span className="server-state state-target">выбран</span>
                       ) : null}
                     </div>
                   </div>
@@ -2632,7 +2628,7 @@ export default function App({ config }: AppProps) {
                     <strong>{server.queueLength || 0}</strong>
                   </div>
                   <div className="server-metric">
-                    <span>Снимок</span>
+                    <span>Обновлено</span>
                     <strong>{formatCompactTimestamp(server.updatedAt)}</strong>
                   </div>
                 </div>
@@ -2691,7 +2687,7 @@ export default function App({ config }: AppProps) {
                 {teamTwo ? <TeamPanel team={teamTwo} opponent={teamOne || null} /> : null}
                 {!teamOne && !teamTwo ? (
                   <div className="team-panel team-panel-empty">
-                    Состав сторон пока не поступил из экспортера.
+                    Данные о составе сторон пока не поступили.
                   </div>
                 ) : null}
               </div>
@@ -2699,7 +2695,7 @@ export default function App({ config }: AppProps) {
           );
         })() : (
           <article className="server-board">
-            <div className="roster-empty">Серверы пока не пришли из экспортера.</div>
+            <div className="roster-empty">Данные о серверах пока не поступили.</div>
           </article>
         )}
       </section>

@@ -20,7 +20,7 @@ async function bootstrap() {
       </React.StrictMode>
     );
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown bootstrap error.';
+    console.error(error);
     rootElement.replaceChildren();
 
     const main = document.createElement('main');
@@ -28,10 +28,10 @@ async function bootstrap() {
     main.style.fontFamily = 'ui-sans-serif,system-ui,sans-serif';
 
     const title = document.createElement('h1');
-    title.textContent = 'AutoSeed failed to start';
+    title.textContent = 'Не удалось запустить Автосид';
 
     const text = document.createElement('p');
-    text.textContent = message;
+    text.textContent = 'Обновите страницу. Если ошибка повторится, сообщите администратору.';
 
     main.append(title, text);
     rootElement.append(main);

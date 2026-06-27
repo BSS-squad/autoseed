@@ -250,6 +250,13 @@ async function fulfillJson(route: Route, payload: unknown) {
   });
 }
 
+async function expectPlayerFriendlyLanguage(page: Page) {
+  const visibleText = await page.locator('body').innerText();
+  expect(visibleText).not.toMatch(
+    /\b(snapshot|raffle|exporter|endpoint|autoconnect)\b|снимок|экспортер|коннектор|текущая цель|боевой режим/i
+  );
+}
+
 async function mockAutoseedApi(page: Page, counters?: { joinLinkRequests: number }) {
   await page.route('**/runtime-config.json', (route) => fulfillJson(route, runtimeConfig));
   await page.route('**/mock/**/events', (route) =>
@@ -600,6 +607,30 @@ async function mockSuccessfulPermissionCheck(page: Page) {
   });
 }
 
+async function captureConnectorWindowMarkup(page: Page) {
+  await page.addInitScript(() => {
+    let markup = '';
+    const popup = {
+      document: {
+        open() {
+          markup = '';
+        },
+        write(value: string) {
+          markup += value;
+          (window as Window & { __connectorWindowMarkup?: string }).__connectorWindowMarkup = markup;
+        },
+        close() {}
+      },
+      location: { href: '' },
+      closed: false,
+      close() {},
+      focus() {}
+    };
+
+    window.open = () => popup as unknown as Window;
+  });
+}
+
 async function seedStoredAutoconnectState(
   page: Page,
   overrides?: {
@@ -655,7 +686,7 @@ test('renders the localized control room from exporter snapshots', async ({ page
 
   await page.goto('/');
 
-  await expect(page.getByTestId('hero-title')).toHaveText('BSS AutoConnect 2026');
+  await expect(page.getByTestId('hero-title')).toHaveText('Автосид BSS');
   await expect(page.getByTestId('hero-glance-grid')).toBeVisible();
   await expect(page.getByTestId('overview-target')).toContainText('[RU] BSS Spec Ops');
   await expect(page.getByTestId('server-card-1')).toContainText('[RU] BSS Classic');
@@ -663,6 +694,63 @@ test('renders the localized control room from exporter snapshots', async ({ page
   await expect(page.getByTestId('active-server-board')).toContainText('вход по запросу');
   await expect(page.getByText('Как запустить')).toBeVisible();
   await expect(page.getByText('Выбор сервера')).toBeVisible();
+});
+
+test('uses player-friendly language on the home page', async ({ page }) => {
+  await mockAutoseedApi(page);
+
+  await page.goto('/');
+
+  await expect(page.getByTestId('mode-production')).toHaveText('Обычный');
+  await expect(page.getByTestId('power-toggle')).toContainText('Автоподключение');
+  await expect(page.getByText('Выбранный сервер', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Обновлено', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Связь с серверами', { exact: true })).toBeVisible();
+  await expectPlayerFriendlyLanguage(page);
+});
+
+test('uses player-friendly language on the winners page', async ({ page }) => {
+  await page.clock.setFixedTime('2026-06-27T12:00:00.000Z');
+  await mockRaffleAutoseedApi(page);
+
+  await page.goto('/#winners');
+
+  await expect(page.getByText('Розыгрыши BSS', { exact: true })).toBeVisible();
+  await expect(page.getByText('Здесь собраны текущие розыгрыши и история победителей со всех серверов BSS.')).toBeVisible();
+  await expect(page.getByTestId('planned-campaigns')).toContainText('по московскому времени');
+  await expectPlayerFriendlyLanguage(page);
+});
+
+test('uses player-friendly language for the empty winners state', async ({ page }) => {
+  await mockAutoseedApi(page);
+
+  await page.goto('/#winners');
+
+  await expect(page.getByTestId('winners-empty')).toContainText('Розыгрыши');
+  await expect(page.getByTestId('winners-empty')).toContainText(
+    'Данные о розыгрышах пока не поступили. Загляните позже.'
+  );
+  await expectPlayerFriendlyLanguage(page);
+});
+
+test('uses player-friendly language in the autoconnect window', async ({ page }) => {
+  await captureConnectorWindowMarkup(page);
+  await seedStoredAutoconnectState(page, { enabled: false });
+  await mockAutoseedApi(page);
+
+  await page.goto('/');
+  await expect(page.getByTestId('overview-target')).toContainText('[RU] BSS Spec Ops');
+  await page.getByTestId('power-toggle').click();
+
+  await expect.poll(() =>
+    page.evaluate(() => (window as Window & { __connectorWindowMarkup?: string }).__connectorWindowMarkup || '')
+  ).toContain('Автосид BSS');
+
+  const popupText = await page.evaluate(() => {
+    const markup = (window as Window & { __connectorWindowMarkup?: string }).__connectorWindowMarkup || '';
+    return new DOMParser().parseFromString(markup, 'text/html').body.textContent || '';
+  });
+  expect(popupText).not.toMatch(/snapshot|raffle|exporter|endpoint|autoconnect|снимок|экспортер|коннектор/i);
 });
 
 test('renders multiple planned raffle campaigns as deduplicated notifications', async ({
@@ -769,6 +857,47 @@ test('keeps the layout usable on mobile without document-level horizontal overfl
   );
 
   expect(hasNoDocumentOverflow).toBe(true);
+});
+
+test('keeps a long selected server name inside the mobile viewport', async ({ page }) => {
+  await mockAutoseedApi(page);
+  await page.route('**/mock/squadjs2/snapshot', (route) =>
+    fulfillJson(
+      route,
+      buildSnapshot({
+        id: 2,
+        code: 'squadjs2',
+        name: '[RU] МирДружбаЖвачка ★ BSS ★ [SPEC OPS]',
+        playerCount: 56,
+        maxPlayers: 100,
+        queueLength: 2,
+        online: true
+      })
+    )
+  );
+  await page.setViewportSize({ width: 390, height: 844 });
+
+  await page.goto('/');
+  await expect(page.getByTestId('overview-target')).toContainText('МирДружбаЖвачка');
+
+  const dimensions = await page.evaluate(() => ({
+    viewport: document.documentElement.clientWidth,
+    document: document.documentElement.scrollWidth
+  }));
+  expect(dimensions.document).toBeLessThanOrEqual(dimensions.viewport);
+});
+
+test('keeps the desktop layout within the viewport', async ({ page }) => {
+  await mockAutoseedApi(page);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+
+  await page.goto('/');
+
+  const dimensions = await page.evaluate(() => ({
+    viewport: document.documentElement.clientWidth,
+    document: document.documentElement.scrollWidth
+  }));
+  expect(dimensions.document).toBeLessThanOrEqual(dimensions.viewport);
 });
 
 test('accepts a fresh snapshot during the pending test sequence without regenerating the first join-link', async ({

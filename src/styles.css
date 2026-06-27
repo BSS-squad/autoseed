@@ -162,7 +162,7 @@ input {
 }
 
 .hero::after {
-  inset: auto -80px -120px auto;
+  inset: auto 0 -120px auto;
   width: 420px;
   height: 420px;
   background:
@@ -1963,6 +1963,14 @@ input {
 
   .app-nav-link {
     flex: 1 1 0;
+  }
+
+  .hero-badges .status-pill {
+    max-width: 100%;
+    min-height: 34px;
+    padding-block: 7px;
+    overflow-wrap: anywhere;
+    white-space: normal;
   }
 
   .hero-glance-grid,
