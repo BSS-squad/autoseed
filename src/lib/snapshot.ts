@@ -214,6 +214,12 @@ function mapRaffleCampaign(value: unknown): ExporterRaffleCampaignSnapshot | nul
 function mapRaffleSnapshot(value: unknown): ExporterRaffleSnapshot | null {
   const raffles = getRecord(value);
   if (!raffles) return null;
+  const campaign = mapRaffleCampaign(raffles.campaign);
+  const campaigns = Array.isArray(raffles.campaigns)
+    ? raffles.campaigns
+        .map(mapRaffleCampaign)
+        .filter((entry): entry is ExporterRaffleCampaignSnapshot => Boolean(entry))
+    : [];
 
   return {
     active: mapRaffleActive(raffles.active),
@@ -221,7 +227,8 @@ function mapRaffleSnapshot(value: unknown): ExporterRaffleSnapshot | null {
       ? raffles.history.map(mapRaffleHistoryEntry)
       : [],
     budget: mapRaffleBudget(raffles.budget),
-    campaign: mapRaffleCampaign(raffles.campaign)
+    campaign,
+    campaigns: campaign ? [...campaigns, campaign] : campaigns
   };
 }
 

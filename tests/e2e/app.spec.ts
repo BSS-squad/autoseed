@@ -54,6 +54,27 @@ const productionSwitchRuntimeConfig = {
 
 const SQUADJS2_SELECTION_KEY = 'http://127.0.0.1:4173/mock/squadjs2/snapshot::2::squadjs2';
 
+const JULY_RAFFLE_CAMPAIGN = {
+  startsAt: '2026-07-01T00:00:00+03:00',
+  endsAt: '2026-08-01T00:00:00+03:00',
+  autoStartEnabled: true,
+  autoPrizes: ['1000 рублей', 'VIP 7 дней'],
+  primeTimeStartHour: 18,
+  primeTimeEndHour: 20,
+  timezoneOffsetMinutes: 180,
+  minimumPrimePlayers: 90,
+  minimumAnnouncementPlayers: 1,
+  durationSeconds: 1200,
+  progress: 0
+};
+
+const AUGUST_RAFFLE_CAMPAIGN = {
+  ...JULY_RAFFLE_CAMPAIGN,
+  startsAt: '2026-08-01T00:00:00+03:00',
+  endsAt: '2026-09-01T00:00:00+03:00',
+  autoPrizes: ['VIP 14 дней']
+};
+
 function buildTeam(id: number, name: string, totalPlaytimeHours: number) {
   return {
     id,
@@ -149,6 +170,8 @@ function buildRaffleSnapshot(
   overrides: {
     active?: unknown;
     history?: unknown[];
+    campaign?: unknown;
+    campaigns?: unknown[];
   } = {}
 ) {
   return {
@@ -213,19 +236,9 @@ function buildRaffleSnapshot(
       spentRubles: 1500,
       remainingRubles: 18500
     },
-    campaign: {
-      startsAt: '2026-07-01T00:00:00+03:00',
-      endsAt: '2026-08-01T00:00:00+03:00',
-      autoStartEnabled: true,
-      autoPrizes: ['1000 рублей', 'VIP 7 дней'],
-      primeTimeStartHour: 18,
-      primeTimeEndHour: 20,
-      timezoneOffsetMinutes: 180,
-      minimumPrimePlayers: 90,
-      minimumAnnouncementPlayers: 1,
-      durationSeconds: 1200,
-      progress: 0
-    }
+    campaign:
+      overrides.campaign === undefined ? JULY_RAFFLE_CAMPAIGN : overrides.campaign,
+    ...(overrides.campaigns === undefined ? {} : { campaigns: overrides.campaigns })
   };
 }
 
@@ -326,7 +339,9 @@ async function mockRaffleAutoseedApi(page: Page) {
         online: false,
         raffles: buildRaffleSnapshot({
           active: null,
-          history: []
+          history: [],
+          campaign: null,
+          campaigns: [JULY_RAFFLE_CAMPAIGN, AUGUST_RAFFLE_CAMPAIGN]
         })
       })
     )
@@ -650,9 +665,10 @@ test('renders the localized control room from exporter snapshots', async ({ page
   await expect(page.getByText('Выбор сервера')).toBeVisible();
 });
 
-test('renders the winners page from raffle snapshots and links to it from the home page', async ({
+test('renders multiple planned raffle campaigns as deduplicated notifications', async ({
   page
 }) => {
+  await page.clock.setFixedTime('2026-06-27T12:00:00.000Z');
   await mockRaffleAutoseedApi(page);
 
   await page.goto('/');
@@ -665,13 +681,28 @@ test('renders the winners page from raffle snapshots and links to it from the ho
   await expect(page.getByTestId('winners-active-card')).toContainText('17 участников');
   await expect(page.getByTestId('winners-budget-card')).toContainText('18 500 ₽');
   await expect(page.getByTestId('winners-budget-card')).not.toContainText('37 000 ₽');
-  await expect(page.getByTestId('winners-campaign-card')).toContainText('Июльская серия');
-  await expect(page.getByTestId('winners-campaign-card')).toContainText('1 июл. - 1 авг.');
-  await expect(page.getByTestId('winners-campaign-card')).toContainText('18:00-20:00 UTC+3');
-  await expect(page.getByTestId('winners-campaign-card')).toContainText('90+ игроков');
+  await expect(page.getByTestId('planned-campaign-notification')).toHaveCount(2);
+  await expect(page.getByTestId('planned-campaigns')).toContainText(
+    'Планируется серия розыгрышей. Не пропустите'
+  );
+  await expect(page.getByTestId('planned-campaigns')).toContainText('1 июл. - 1 авг.');
+  await expect(page.getByTestId('planned-campaigns')).toContainText('1 авг. - 1 сент.');
+  await expect(page.getByTestId('winners-campaign-card')).toHaveCount(0);
   await expect(page.getByTestId('winners-history-list')).toContainText('Winner One');
   await expect(page.getByTestId('winners-history-list')).toContainText('VIP 7 дней');
   await expect(page.getByTestId('winners-history-list')).toContainText('без победителя');
+});
+
+test('renders the series card only after its campaign has started', async ({ page }) => {
+  await page.clock.setFixedTime('2026-07-15T12:00:00.000Z');
+  await mockRaffleAutoseedApi(page);
+
+  await page.goto('/#winners');
+
+  await expect(page.getByTestId('winners-campaign-card')).toContainText('Серия розыгрышей');
+  await expect(page.getByTestId('winners-campaign-card')).toContainText('1 июл. - 1 авг.');
+  await expect(page.getByTestId('planned-campaign-notification')).toHaveCount(1);
+  await expect(page.getByTestId('planned-campaigns')).toContainText('1 авг. - 1 сент.');
 });
 
 test('requests join-link on demand and dispatches direct joins in the current tab', async ({

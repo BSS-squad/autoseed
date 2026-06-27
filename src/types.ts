@@ -128,6 +128,7 @@ export type ExporterRaffleSnapshot = {
   history: ExporterRaffleHistoryEntrySnapshot[];
   budget: ExporterRaffleBudgetSnapshot;
   campaign: ExporterRaffleCampaignSnapshot | null;
+  campaigns: ExporterRaffleCampaignSnapshot[];
 };
 
 export type ExporterServerSnapshot = {

@@ -132,6 +132,11 @@ type RaffleBudgetView = {
   remainingRubles: number;
 };
 
+type RaffleCampaignView = {
+  campaign: ExporterRaffleCampaignSnapshot;
+  budget: RaffleBudgetView;
+};
+
 type WinnersPageProps = {
   config: AppConfig;
   snapshot: CombinedSnapshot;
@@ -837,9 +842,55 @@ function getRaffleHistory(raffleServers: RaffleServerSnapshot[]): RaffleHistoryV
     });
 }
 
+function getRaffleCampaignKey(campaign: ExporterRaffleCampaignSnapshot): string {
+  return JSON.stringify([
+    campaign.startsAt,
+    campaign.endsAt,
+    campaign.autoStartEnabled,
+    campaign.autoPrizes,
+    campaign.primeTimeStartHour,
+    campaign.primeTimeEndHour,
+    campaign.timezoneOffsetMinutes,
+    campaign.minimumPrimePlayers,
+    campaign.durationSeconds
+  ]);
+}
+
+function getRaffleCampaigns(raffleServers: RaffleServerSnapshot[]): RaffleCampaignView[] {
+  const campaigns = new Map<string, RaffleCampaignView>();
+
+  for (const { raffles } of raffleServers) {
+    for (const campaign of raffles.campaigns) {
+      const key = getRaffleCampaignKey(campaign);
+      if (!campaigns.has(key)) {
+        campaigns.set(key, { campaign, budget: raffles.budget });
+      }
+    }
+  }
+
+  return [...campaigns.values()].sort((left, right) => {
+    const leftStart = Date.parse(left.campaign.startsAt || '') || Number.MAX_SAFE_INTEGER;
+    const rightStart = Date.parse(right.campaign.startsAt || '') || Number.MAX_SAFE_INTEGER;
+    return leftStart - rightStart;
+  });
+}
+
+function isPlannedCampaign(campaign: ExporterRaffleCampaignSnapshot, now: number): boolean {
+  const startsAt = Date.parse(campaign.startsAt || '');
+  return Number.isFinite(startsAt) && startsAt > now;
+}
+
+function isCurrentCampaign(campaign: ExporterRaffleCampaignSnapshot, now: number): boolean {
+  const startsAt = Date.parse(campaign.startsAt || '');
+  const endsAt = Date.parse(campaign.endsAt || '');
+  const hasStarted = !Number.isFinite(startsAt) || startsAt <= now;
+  const hasNotEnded = !Number.isFinite(endsAt) || endsAt > now;
+  return hasStarted && hasNotEnded;
+}
+
 function getPrimaryRaffleServer(raffleServers: RaffleServerSnapshot[]): RaffleServerSnapshot | null {
   return (
-    raffleServers.find(({ raffles }) => raffles.campaign) ||
+    raffleServers.find(({ raffles }) => raffles.campaigns.length) ||
     raffleServers.find(({ raffles }) => raffles.active) ||
     raffleServers.find(({ raffles }) => raffles.history.length) ||
     raffleServers[0] ||
@@ -851,9 +902,11 @@ function WinnersPage({ config, snapshot, now, route }: WinnersPageProps) {
   const raffleServers = getRaffleServers(snapshot);
   const activeRaffles = getActiveRaffles(raffleServers);
   const history = getRaffleHistory(raffleServers);
+  const campaigns = getRaffleCampaigns(raffleServers);
+  const plannedCampaigns = campaigns.filter(({ campaign }) => isPlannedCampaign(campaign, now));
+  const currentCampaign = campaigns.find(({ campaign }) => isCurrentCampaign(campaign, now)) || null;
   const primaryRaffleServer = getPrimaryRaffleServer(raffleServers);
   const budget = primaryRaffleServer?.raffles.budget || EMPTY_RAFFLE_BUDGET;
-  const campaign = primaryRaffleServer?.raffles.campaign || null;
   const latestWinner = history.find((item) => item.entry.winner)?.entry.winner || null;
 
   return (
@@ -903,17 +956,46 @@ function WinnersPage({ config, snapshot, now, route }: WinnersPageProps) {
 
       {raffleServers.length ? (
         <>
+          {plannedCampaigns.length ? (
+            <section
+              className="section-shell planned-campaigns"
+              data-testid="planned-campaigns"
+              aria-label="Планируемые серии розыгрышей"
+            >
+              {plannedCampaigns.map(({ campaign, budget: campaignBudget }) => (
+                <article
+                  className="planned-campaign-notification"
+                  data-testid="planned-campaign-notification"
+                  key={getRaffleCampaignKey(campaign)}
+                >
+                  <span className="planned-campaign-kicker">Анонс</span>
+                  <div className="planned-campaign-copy">
+                    <strong>Планируется серия розыгрышей. Не пропустите</strong>
+                  </div>
+                  <div className="winners-meta-row planned-campaign-meta">
+                    <span>{formatCampaignRange(campaign)}</span>
+                    <span>{formatPrimeWindow(campaign)}</span>
+                    <span>{campaign.minimumPrimePlayers}+ игроков</span>
+                    <span>Банк {formatCurrencyRubles(campaignBudget.limitRubles)}</span>
+                  </div>
+                </article>
+              ))}
+            </section>
+          ) : null}
+
           <section className="section-shell winners-summary-grid">
-            <article className="winners-card winners-campaign-card" data-testid="winners-campaign-card">
-              <span className="overview-label">Серия</span>
-              <strong>Июльская серия</strong>
-              <p>{formatCampaignRange(campaign)}</p>
-              <div className="winners-meta-row">
-                <span>{formatPrimeWindow(campaign)}</span>
-                <span>{campaign ? `${campaign.minimumPrimePlayers}+ игроков` : '—'}</span>
-                <span>Банк {formatCurrencyRubles(budget.limitRubles)}</span>
-              </div>
-            </article>
+            {currentCampaign ? (
+              <article className="winners-card winners-campaign-card" data-testid="winners-campaign-card">
+                <span className="overview-label">Серия</span>
+                <strong>Серия розыгрышей</strong>
+                <p>{formatCampaignRange(currentCampaign.campaign)}</p>
+                <div className="winners-meta-row">
+                  <span>{formatPrimeWindow(currentCampaign.campaign)}</span>
+                  <span>{currentCampaign.campaign.minimumPrimePlayers}+ игроков</span>
+                  <span>Банк {formatCurrencyRubles(currentCampaign.budget.limitRubles)}</span>
+                </div>
+              </article>
+            ) : null}
 
             <article className="winners-card winners-card-active" data-testid="winners-active-card">
               <span className="overview-label">Активный розыгрыш</span>

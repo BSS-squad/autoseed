@@ -15,10 +15,10 @@
 **Files:**
 - Modify: `tests/e2e/app.spec.ts`
 
-- [ ] Add a fixture with two future campaigns and a duplicate campaign from another exporter.
-- [ ] Assert two notification items render, the duplicate is removed, and `winners-campaign-card` is absent before campaign start.
-- [ ] Add a current-campaign case that asserts `winners-campaign-card` is visible.
-- [ ] Run `npx playwright test tests/e2e/app.spec.ts --grep "planned raffle campaigns"` and confirm failure is caused by the missing notification behavior.
+- [x] Add a fixture with two future campaigns and a duplicate campaign from another exporter.
+- [x] Assert two notification items render, the duplicate is removed, and `winners-campaign-card` is absent before campaign start.
+- [x] Add a current-campaign case that asserts `winners-campaign-card` is visible.
+- [x] Run the focused Playwright tests and confirm failure is caused by the missing notification behavior.
 
 ### Task 2: Normalize multiple campaigns
 
@@ -26,9 +26,9 @@
 - Modify: `src/types.ts`
 - Modify: `src/lib/snapshot.ts`
 
-- [ ] Add `campaigns: ExporterRaffleCampaignSnapshot[]` to `ExporterRaffleSnapshot`.
-- [ ] Normalize `raffles.campaigns` and append legacy `raffles.campaign` when present.
-- [ ] Keep malformed entries out through the existing `mapRaffleCampaign` parser.
+- [x] Add `campaigns: ExporterRaffleCampaignSnapshot[]` to `ExporterRaffleSnapshot`.
+- [x] Normalize `raffles.campaigns` and append legacy `raffles.campaign` when present.
+- [x] Keep malformed entries out through the existing `mapRaffleCampaign` parser.
 
 ### Task 3: Render future notifications and current series
 
@@ -36,12 +36,12 @@
 - Modify: `src/App.tsx`
 - Modify: `src/styles.css`
 
-- [ ] Collect and deduplicate campaigns by dates and campaign settings.
-- [ ] Classify campaigns as planned, current, or finished against the supplied `now` value.
-- [ ] Render planned campaigns in a full-width notification section above the summary.
-- [ ] Render the «Серия» summary card only when a current campaign exists.
-- [ ] Keep active raffle, budget, server count, and history cards unchanged.
-- [ ] Run the focused E2E test and confirm it passes.
+- [x] Collect and deduplicate campaigns by dates and campaign settings.
+- [x] Classify campaigns as planned, current, or finished against the supplied `now` value.
+- [x] Render planned campaigns in a full-width notification section above the summary.
+- [x] Render the «Серия» summary card only when a current campaign exists.
+- [x] Keep active raffle, budget, server count, and history cards unchanged.
+- [x] Run the focused E2E test and confirm it passes.
 
 ### Task 4: Document and verify
 
@@ -49,10 +49,10 @@
 - Modify: `docs/setup.md`
 - Modify: `docs/autoseed-tz.md`
 
-- [ ] Document `campaigns`, legacy compatibility, deduplication, and planned/current display rules.
-- [ ] Run `npm run build` and `npx playwright test`.
-- [ ] Start the local app and inspect `/#winners` at desktop and mobile widths with Playwright.
-- [ ] Confirm no console error/warn, framework overlay, horizontal overflow, or overlapping content.
+- [x] Document `campaigns`, legacy compatibility, deduplication, and planned/current display rules.
+- [x] Run `npm run build` and `npx playwright test`.
+- [x] Start the local app and inspect `/#winners` at desktop and mobile widths with Playwright.
+- [x] Confirm no console error/warn, framework overlay, horizontal overflow, or overlapping content.
 
 ### Task 5: Publish and deploy
 
