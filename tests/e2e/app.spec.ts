@@ -145,18 +145,26 @@ function buildSnapshot({
   };
 }
 
-function buildRaffleSnapshot() {
+function buildRaffleSnapshot(
+  overrides: {
+    active?: unknown;
+    history?: unknown[];
+  } = {}
+) {
   return {
-    active: {
-      serverID: 2,
-      prize: '1000 рублей',
-      amountRubles: 1000,
-      startedAt: '2026-07-15T15:00:00.000Z',
-      endsAt: '2026-07-15T15:20:00.000Z',
-      source: 'auto',
-      participantCount: 17
-    },
-    history: [
+    active:
+      overrides.active === undefined
+        ? {
+            serverID: 2,
+            prize: '1000 рублей',
+            amountRubles: 1000,
+            startedAt: '2026-07-15T15:00:00.000Z',
+            endsAt: '2026-07-15T15:20:00.000Z',
+            source: 'auto',
+            participantCount: 17
+          }
+        : overrides.active,
+    history: overrides.history || [
       {
         id: 12,
         serverID: 2,
@@ -204,6 +212,19 @@ function buildRaffleSnapshot() {
       limitRubles: 20000,
       spentRubles: 1500,
       remainingRubles: 18500
+    },
+    campaign: {
+      startsAt: '2026-07-01T00:00:00+03:00',
+      endsAt: '2026-08-01T00:00:00+03:00',
+      autoStartEnabled: true,
+      autoPrizes: ['1000 рублей', 'VIP 7 дней'],
+      primeTimeStartHour: 18,
+      primeTimeEndHour: 20,
+      timezoneOffsetMinutes: 180,
+      minimumPrimePlayers: 90,
+      minimumAnnouncementPlayers: 1,
+      durationSeconds: 1200,
+      progress: 0
     }
   };
 }
@@ -303,7 +324,10 @@ async function mockRaffleAutoseedApi(page: Page) {
         maxPlayers: 100,
         queueLength: 0,
         online: false,
-        raffles: null
+        raffles: buildRaffleSnapshot({
+          active: null,
+          history: []
+        })
       })
     )
   );
@@ -640,6 +664,11 @@ test('renders the winners page from raffle snapshots and links to it from the ho
   await expect(page.getByTestId('winners-active-card')).toContainText('1000 рублей');
   await expect(page.getByTestId('winners-active-card')).toContainText('17 участников');
   await expect(page.getByTestId('winners-budget-card')).toContainText('18 500 ₽');
+  await expect(page.getByTestId('winners-budget-card')).not.toContainText('37 000 ₽');
+  await expect(page.getByTestId('winners-campaign-card')).toContainText('Июльская серия');
+  await expect(page.getByTestId('winners-campaign-card')).toContainText('1 июл. - 1 авг.');
+  await expect(page.getByTestId('winners-campaign-card')).toContainText('18:00-20:00 UTC+3');
+  await expect(page.getByTestId('winners-campaign-card')).toContainText('90+ игроков');
   await expect(page.getByTestId('winners-history-list')).toContainText('Winner One');
   await expect(page.getByTestId('winners-history-list')).toContainText('VIP 7 дней');
   await expect(page.getByTestId('winners-history-list')).toContainText('без победителя');

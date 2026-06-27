@@ -5,6 +5,7 @@ import type {
   ExporterPlayerSnapshot,
   ExporterRaffleActiveSnapshot,
   ExporterRaffleBudgetSnapshot,
+  ExporterRaffleCampaignSnapshot,
   ExporterRaffleHistoryEntrySnapshot,
   ExporterRaffleParticipantSnapshot,
   ExporterRaffleSnapshot,
@@ -184,6 +185,32 @@ function mapRaffleBudget(value: unknown): ExporterRaffleBudgetSnapshot {
   };
 }
 
+function mapRaffleCampaign(value: unknown): ExporterRaffleCampaignSnapshot | null {
+  const campaign = getRecord(value);
+  if (!campaign) return null;
+
+  return {
+    startsAt: toStringOrNull(campaign.startsAt),
+    endsAt: toStringOrNull(campaign.endsAt),
+    autoStartEnabled: Boolean(campaign.autoStartEnabled),
+    autoPrizes: Array.isArray(campaign.autoPrizes)
+      ? campaign.autoPrizes
+          .map((entry) => toStringOrNull(entry))
+          .filter((entry): entry is string => Boolean(entry))
+      : [],
+    primeTimeStartHour: toNumber(campaign.primeTimeStartHour, 12),
+    primeTimeEndHour: toNumber(campaign.primeTimeEndHour, 22),
+    timezoneOffsetMinutes: Math.round(toNumber(campaign.timezoneOffsetMinutes, 180)),
+    minimumPrimePlayers: Math.max(0, Math.round(toNumber(campaign.minimumPrimePlayers, 90))),
+    minimumAnnouncementPlayers: Math.max(
+      0,
+      Math.round(toNumber(campaign.minimumAnnouncementPlayers, 1))
+    ),
+    durationSeconds: Math.max(1, Math.round(toNumber(campaign.durationSeconds, 1200))),
+    progress: Math.max(0, Math.min(1, toNumber(campaign.progress, 0)))
+  };
+}
+
 function mapRaffleSnapshot(value: unknown): ExporterRaffleSnapshot | null {
   const raffles = getRecord(value);
   if (!raffles) return null;
@@ -193,7 +220,8 @@ function mapRaffleSnapshot(value: unknown): ExporterRaffleSnapshot | null {
     history: Array.isArray(raffles.history)
       ? raffles.history.map(mapRaffleHistoryEntry)
       : [],
-    budget: mapRaffleBudget(raffles.budget)
+    budget: mapRaffleBudget(raffles.budget),
+    campaign: mapRaffleCampaign(raffles.campaign)
   };
 }
 

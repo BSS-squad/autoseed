@@ -36,6 +36,7 @@ import type {
   BrowserPermissions,
   CombinedSnapshot,
   ExporterRaffleActiveSnapshot,
+  ExporterRaffleCampaignSnapshot,
   ExporterRaffleHistoryEntrySnapshot,
   ExporterRaffleSnapshot,
   ExporterServerSnapshot,
@@ -125,6 +126,12 @@ type RaffleHistoryView = {
   entry: ExporterRaffleHistoryEntrySnapshot;
 };
 
+type RaffleBudgetView = {
+  limitRubles: number;
+  spentRubles: number;
+  remainingRubles: number;
+};
+
 type WinnersPageProps = {
   config: AppConfig;
   snapshot: CombinedSnapshot;
@@ -137,6 +144,12 @@ const EMPTY_SNAPSHOT: CombinedSnapshot = {
   generatedAt: '',
   servers: [],
   errors: []
+};
+
+const EMPTY_RAFFLE_BUDGET: RaffleBudgetView = {
+  limitRubles: 0,
+  spentRubles: 0,
+  remainingRubles: 0
 };
 
 const IMMEDIATE_REDIRECT_SNAPSHOT_MAX_AGE_MS = 15_000;
@@ -205,6 +218,53 @@ function formatParticipantCount(value: number): string {
 
 function formatRaffleSource(value: string): string {
   return value === 'auto' ? 'авто' : 'ручной';
+}
+
+function parseIsoDateParts(value: string | null | undefined): { year: number; month: number; day: number } | null {
+  if (!value) return null;
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return null;
+  return {
+    year: Number(match[1]),
+    month: Number(match[2]),
+    day: Number(match[3])
+  };
+}
+
+function formatCampaignDate(value: string | null | undefined): string {
+  const parts = parseIsoDateParts(value);
+  if (!parts) return '—';
+  return new Intl.DateTimeFormat('ru-RU', {
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC'
+  }).format(new Date(Date.UTC(parts.year, parts.month - 1, parts.day)));
+}
+
+function formatCampaignRange(campaign: ExporterRaffleCampaignSnapshot | null): string {
+  if (!campaign) return '—';
+  return `${formatCampaignDate(campaign.startsAt)} - ${formatCampaignDate(campaign.endsAt)}`;
+}
+
+function formatCampaignHour(value: number): string {
+  const hour = Math.floor(value);
+  const minutes = Math.round((value - hour) * 60);
+  return `${String(hour).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
+
+function formatTimezoneOffset(minutes: number): string {
+  const sign = minutes >= 0 ? '+' : '-';
+  const absHours = Math.abs(minutes) / 60;
+  return `UTC${sign}${new Intl.NumberFormat('ru-RU', {
+    maximumFractionDigits: 1
+  }).format(absHours)}`;
+}
+
+function formatPrimeWindow(campaign: ExporterRaffleCampaignSnapshot | null): string {
+  if (!campaign) return '—';
+  return `${formatCampaignHour(campaign.primeTimeStartHour)}-${formatCampaignHour(
+    campaign.primeTimeEndHour
+  )} ${formatTimezoneOffset(campaign.timezoneOffsetMinutes)}`;
 }
 
 function classNames(...values: Array<string | false | null | undefined>): string {
@@ -777,22 +837,23 @@ function getRaffleHistory(raffleServers: RaffleServerSnapshot[]): RaffleHistoryV
     });
 }
 
+function getPrimaryRaffleServer(raffleServers: RaffleServerSnapshot[]): RaffleServerSnapshot | null {
+  return (
+    raffleServers.find(({ raffles }) => raffles.campaign) ||
+    raffleServers.find(({ raffles }) => raffles.active) ||
+    raffleServers.find(({ raffles }) => raffles.history.length) ||
+    raffleServers[0] ||
+    null
+  );
+}
+
 function WinnersPage({ config, snapshot, now, route }: WinnersPageProps) {
   const raffleServers = getRaffleServers(snapshot);
   const activeRaffles = getActiveRaffles(raffleServers);
   const history = getRaffleHistory(raffleServers);
-  const budget = raffleServers.reduce(
-    (summary, item) => ({
-      limitRubles: summary.limitRubles + item.raffles.budget.limitRubles,
-      spentRubles: summary.spentRubles + item.raffles.budget.spentRubles,
-      remainingRubles: summary.remainingRubles + item.raffles.budget.remainingRubles
-    }),
-    {
-      limitRubles: 0,
-      spentRubles: 0,
-      remainingRubles: 0
-    }
-  );
+  const primaryRaffleServer = getPrimaryRaffleServer(raffleServers);
+  const budget = primaryRaffleServer?.raffles.budget || EMPTY_RAFFLE_BUDGET;
+  const campaign = primaryRaffleServer?.raffles.campaign || null;
   const latestWinner = history.find((item) => item.entry.winner)?.entry.winner || null;
 
   return (
@@ -843,6 +904,17 @@ function WinnersPage({ config, snapshot, now, route }: WinnersPageProps) {
       {raffleServers.length ? (
         <>
           <section className="section-shell winners-summary-grid">
+            <article className="winners-card winners-campaign-card" data-testid="winners-campaign-card">
+              <span className="overview-label">Серия</span>
+              <strong>Июльская серия</strong>
+              <p>{formatCampaignRange(campaign)}</p>
+              <div className="winners-meta-row">
+                <span>{formatPrimeWindow(campaign)}</span>
+                <span>{campaign ? `${campaign.minimumPrimePlayers}+ игроков` : '—'}</span>
+                <span>Банк {formatCurrencyRubles(budget.limitRubles)}</span>
+              </div>
+            </article>
+
             <article className="winners-card winners-card-active" data-testid="winners-active-card">
               <span className="overview-label">Активный розыгрыш</span>
               {activeRaffles.length ? (

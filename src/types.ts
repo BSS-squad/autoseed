@@ -109,10 +109,25 @@ export type ExporterRaffleBudgetSnapshot = {
   remainingRubles: number;
 };
 
+export type ExporterRaffleCampaignSnapshot = {
+  startsAt: string | null;
+  endsAt: string | null;
+  autoStartEnabled: boolean;
+  autoPrizes: string[];
+  primeTimeStartHour: number;
+  primeTimeEndHour: number;
+  timezoneOffsetMinutes: number;
+  minimumPrimePlayers: number;
+  minimumAnnouncementPlayers: number;
+  durationSeconds: number;
+  progress: number;
+};
+
 export type ExporterRaffleSnapshot = {
   active: ExporterRaffleActiveSnapshot | null;
   history: ExporterRaffleHistoryEntrySnapshot[];
   budget: ExporterRaffleBudgetSnapshot;
+  campaign: ExporterRaffleCampaignSnapshot | null;
 };
 
 export type ExporterServerSnapshot = {
