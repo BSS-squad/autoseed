@@ -101,6 +101,6 @@ await expect(page.locator('body')).not.toContainText('discord-user-42');
 - [x] Review both diffs and run fresh backend/frontend verification.
 - [x] Commit and push the `squadjs2` change to `master`; wait for the Docker workflow.
 - [x] Redeploy production SquadJS services and confirm public snapshots omit participant IDs.
-- [ ] Commit and push `autoseed` to both repositories; wait for public `Deploy Pages` and private `skipped`.
-- [ ] Verify production `/#winners` on desktop/mobile.
-- [ ] Record deployment evidence, move `autoseed#6` to `Done`, and add the privacy-contract result to `squadjs2#28`.
+- [x] Commit and push `autoseed` to both repositories; wait for public `Deploy Pages` and private `skipped`.
+- [x] Verify production `/#winners` on desktop/mobile.
+- [x] Record deployment evidence, move `autoseed#6` to `Done`, and add the privacy-contract result to `squadjs2#28`.
