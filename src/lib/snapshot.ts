@@ -130,8 +130,6 @@ function mapRaffleParticipant(value: unknown): ExporterRaffleParticipantSnapshot
   const participant = getRecord(value);
 
   return {
-    eosID: toStringOrNull(participant?.eosID),
-    steamID: toStringOrNull(participant?.steamID),
     name: toStringOrNull(participant?.name) || 'Игрок',
     joinedAt: toIsoStringOrNull(participant?.joinedAt)
   };

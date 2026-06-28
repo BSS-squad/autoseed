@@ -74,8 +74,6 @@ export type ExporterTeamSnapshot = {
 };
 
 export type ExporterRaffleParticipantSnapshot = {
-  eosID?: string | null;
-  steamID?: string | null;
   name: string;
   joinedAt?: string | null;
 };

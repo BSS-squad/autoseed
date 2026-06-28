@@ -199,19 +199,22 @@ function buildRaffleSnapshot(
           {
             eosID: 'winner-eos',
             steamID: '76561198000000001',
+            discordID: 'discord-user-42',
             name: 'Winner One',
             joinedAt: '2026-07-14T18:05:00.000Z'
           },
           {
             eosID: 'runner-eos',
             steamID: '76561198000000002',
-            name: 'Runner Up',
+            discordID: 'discord-user-43',
+            name: 'Runner_Up_With_An_Extremely_Long_Squad_Nickname_Without_Breaks',
             joinedAt: '2026-07-14T18:06:00.000Z'
           }
         ],
         winner: {
           eosID: 'winner-eos',
           steamID: '76561198000000001',
+          discordID: 'discord-user-42',
           name: 'Winner One',
           joinedAt: '2026-07-14T18:05:00.000Z'
         },
@@ -779,6 +782,34 @@ test('renders multiple planned raffle campaigns as deduplicated notifications', 
   await expect(page.getByTestId('winners-history-list')).toContainText('Winner One');
   await expect(page.getByTestId('winners-history-list')).toContainText('VIP 7 дней');
   await expect(page.getByTestId('winners-history-list')).toContainText('без победителя');
+});
+
+test('shows raffle participant nicknames without public identifiers', async ({ page }) => {
+  await page.clock.setFixedTime('2026-07-15T12:00:00.000Z');
+  await mockRaffleAutoseedApi(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+
+  await page.goto('/#winners');
+
+  const participants = page.getByTestId('winner-participants-12');
+  await expect(participants).toContainText('Участники (2)');
+  await participants.locator('summary').click();
+  await expect(participants).toContainText('Winner One');
+  await expect(participants).toContainText(
+    'Runner_Up_With_An_Extremely_Long_Squad_Nickname_Without_Breaks'
+  );
+  await expect(page.getByTestId('winner-participants-11')).toContainText('Участников не было.');
+
+  const body = page.locator('body');
+  await expect(body).not.toContainText('76561198000000001');
+  await expect(body).not.toContainText('winner-eos');
+  await expect(body).not.toContainText('discord-user-42');
+
+  const dimensions = await page.evaluate(() => ({
+    viewport: document.documentElement.clientWidth,
+    document: document.documentElement.scrollWidth
+  }));
+  expect(dimensions.document).toBeLessThanOrEqual(dimensions.viewport);
 });
 
 test('renders the series card only after its campaign has started', async ({ page }) => {

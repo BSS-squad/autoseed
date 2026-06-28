@@ -1049,23 +1049,44 @@ function WinnersPage({ snapshot, now, route }: WinnersPageProps) {
 
             <div className="winners-history-list" data-testid="winners-history-list">
               {history.length ? (
-                history.map(({ server, entry }) => (
-                  <article
-                    key={`${server.id}-${entry.id || entry.startedAt || entry.prize}`}
-                    className="winner-row"
-                  >
-                    <div className="winner-row-main">
-                      <span className="winner-server">{server.name}</span>
-                      <strong>{entry.winner?.name || 'без победителя'}</strong>
-                      <p>{entry.prize}</p>
-                    </div>
-                    <div className="winner-row-meta">
-                      <span>{formatDateTime(entry.endedAt || entry.startedAt)}</span>
-                      <span>{formatCurrencyRubles(entry.amountRubles)}</span>
-                      <span>{formatParticipantCount(entry.participants.length)}</span>
-                    </div>
-                  </article>
-                ))
+                history.map(({ server, entry }) => {
+                  const entryKey = `${server.id}-${entry.id || entry.startedAt || entry.prize}`;
+                  const participantTestId = entry.id ?? entryKey;
+
+                  return (
+                    <article key={entryKey} className="winner-row">
+                      <div className="winner-row-main">
+                        <span className="winner-server">{server.name}</span>
+                        <strong>{entry.winner?.name || 'без победителя'}</strong>
+                        <p>{entry.prize}</p>
+                      </div>
+                      <div className="winner-row-meta">
+                        <span>{formatDateTime(entry.endedAt || entry.startedAt)}</span>
+                        <span>{formatCurrencyRubles(entry.amountRubles)}</span>
+                        <span>{formatParticipantCount(entry.participants.length)}</span>
+                      </div>
+                      <details
+                        className="winner-participants"
+                        data-testid={`winner-participants-${participantTestId}`}
+                      >
+                        <summary>Участники ({entry.participants.length})</summary>
+                        {entry.participants.length ? (
+                          <ul>
+                            {entry.participants.map((participant, participantIndex) => (
+                              <li
+                                key={`${participant.name}-${participant.joinedAt || participantIndex}`}
+                              >
+                                {participant.name}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p>Участников не было.</p>
+                        )}
+                      </details>
+                    </article>
+                  );
+                })
               ) : (
                 <div className="roster-empty">Завершённых розыгрышей пока нет.</div>
               )}
