@@ -68,6 +68,13 @@ const JULY_RAFFLE_CAMPAIGN = {
   progress: 0
 };
 
+const CANCELLED_RAFFLE_CAMPAIGN = {
+  ...JULY_RAFFLE_CAMPAIGN,
+  cancelled: true,
+  cancelledAt: '2026-07-05T00:00:00+03:00',
+  autoStartEnabled: false
+};
+
 const AUGUST_RAFFLE_CAMPAIGN = {
   ...JULY_RAFFLE_CAMPAIGN,
   startsAt: '2026-08-01T00:00:00+03:00',
@@ -327,7 +334,13 @@ async function mockAutoseedApi(page: Page, counters?: { joinLinkRequests: number
   );
 }
 
-async function mockRaffleAutoseedApi(page: Page) {
+async function mockRaffleAutoseedApi(
+  page: Page,
+  overrides: {
+    squad1Raffles?: unknown;
+    squad2Raffles?: unknown;
+  } = {}
+) {
   await page.route('**/runtime-config.json', (route) => fulfillJson(route, runtimeConfig));
   await page.route('**/mock/**/events', (route) =>
     route.fulfill({
@@ -347,12 +360,15 @@ async function mockRaffleAutoseedApi(page: Page) {
         maxPlayers: 100,
         queueLength: 0,
         online: false,
-        raffles: buildRaffleSnapshot({
-          active: null,
-          history: [],
-          campaign: null,
-          campaigns: [JULY_RAFFLE_CAMPAIGN, AUGUST_RAFFLE_CAMPAIGN]
-        })
+        raffles:
+          overrides.squad1Raffles === undefined
+            ? buildRaffleSnapshot({
+                active: null,
+                history: [],
+                campaign: null,
+                campaigns: [JULY_RAFFLE_CAMPAIGN, AUGUST_RAFFLE_CAMPAIGN]
+              })
+            : overrides.squad1Raffles
       })
     )
   );
@@ -367,7 +383,10 @@ async function mockRaffleAutoseedApi(page: Page) {
         maxPlayers: 100,
         queueLength: 2,
         online: true,
-        raffles: buildRaffleSnapshot()
+        raffles:
+          overrides.squad2Raffles === undefined
+            ? buildRaffleSnapshot()
+            : overrides.squad2Raffles
       })
     )
   );
@@ -822,6 +841,31 @@ test('renders the series card only after its campaign has started', async ({ pag
   await expect(page.getByTestId('winners-campaign-card')).toContainText('1 июл. - 1 авг.');
   await expect(page.getByTestId('planned-campaign-notification')).toHaveCount(1);
   await expect(page.getByTestId('planned-campaigns')).toContainText('1 авг. - 1 сент.');
+});
+
+test('shows cancelled raffle campaign by cancellation date', async ({ page }) => {
+  await page.clock.setFixedTime('2026-07-15T12:00:00.000Z');
+  await mockRaffleAutoseedApi(page, {
+    squad1Raffles: buildRaffleSnapshot({
+      active: null,
+      history: [],
+      campaign: null,
+      campaigns: []
+    }),
+    squad2Raffles: buildRaffleSnapshot({
+      active: null,
+      campaign: CANCELLED_RAFFLE_CAMPAIGN,
+      campaigns: []
+    })
+  });
+
+  await page.goto('/#winners');
+
+  const campaignCard = page.getByTestId('winners-campaign-card');
+  await expect(campaignCard).toContainText('Серия розыгрышей отменена');
+  await expect(campaignCard).toContainText('Отменена 5 июл.');
+  await expect(campaignCard).not.toContainText('1 авг.');
+  await expect(page.getByTestId('planned-campaign-notification')).toHaveCount(0);
 });
 
 test('requests join-link on demand and dispatches direct joins in the current tab', async ({
