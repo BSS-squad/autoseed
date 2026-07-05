@@ -252,6 +252,11 @@ function formatCampaignRange(campaign: ExporterRaffleCampaignSnapshot | null): s
   return `${formatCampaignDate(campaign.startsAt)} - ${formatCampaignDate(campaign.endsAt)}`;
 }
 
+function formatCampaignCancellation(campaign: ExporterRaffleCampaignSnapshot): string {
+  const cancelledAt = formatCampaignDate(campaign.cancelledAt);
+  return cancelledAt === '—' ? 'Отменена' : `Отменена ${cancelledAt}`;
+}
+
 function formatCampaignHour(value: number): string {
   const hour = Math.floor(value);
   const minutes = Math.round((value - hour) * 60);
@@ -843,6 +848,8 @@ function getRaffleCampaignKey(campaign: ExporterRaffleCampaignSnapshot): string 
   return JSON.stringify([
     campaign.startsAt,
     campaign.endsAt,
+    campaign.cancelled,
+    campaign.cancelledAt,
     campaign.autoStartEnabled,
     campaign.autoPrizes,
     campaign.primeTimeStartHour,
@@ -873,16 +880,30 @@ function getRaffleCampaigns(raffleServers: RaffleServerSnapshot[]): RaffleCampai
 }
 
 function isPlannedCampaign(campaign: ExporterRaffleCampaignSnapshot, now: number): boolean {
+  if (campaign.cancelled) return false;
   const startsAt = Date.parse(campaign.startsAt || '');
   return Number.isFinite(startsAt) && startsAt > now;
 }
 
 function isCurrentCampaign(campaign: ExporterRaffleCampaignSnapshot, now: number): boolean {
+  if (campaign.cancelled) return false;
   const startsAt = Date.parse(campaign.startsAt || '');
   const endsAt = Date.parse(campaign.endsAt || '');
   const hasStarted = !Number.isFinite(startsAt) || startsAt <= now;
   const hasNotEnded = !Number.isFinite(endsAt) || endsAt > now;
   return hasStarted && hasNotEnded;
+}
+
+function getCancelledCampaign(campaigns: RaffleCampaignView[]): RaffleCampaignView | null {
+  return (
+    campaigns
+      .filter(({ campaign }) => campaign.cancelled)
+      .sort((left, right) => {
+        const leftTime = Date.parse(left.campaign.cancelledAt || left.campaign.startsAt || '') || 0;
+        const rightTime = Date.parse(right.campaign.cancelledAt || right.campaign.startsAt || '') || 0;
+        return rightTime - leftTime;
+      })[0] || null
+  );
 }
 
 function getPrimaryRaffleServer(raffleServers: RaffleServerSnapshot[]): RaffleServerSnapshot | null {
@@ -902,6 +923,8 @@ function WinnersPage({ snapshot, now, route }: WinnersPageProps) {
   const campaigns = getRaffleCampaigns(raffleServers);
   const plannedCampaigns = campaigns.filter(({ campaign }) => isPlannedCampaign(campaign, now));
   const currentCampaign = campaigns.find(({ campaign }) => isCurrentCampaign(campaign, now)) || null;
+  const cancelledCampaign = getCancelledCampaign(campaigns);
+  const summaryCampaign = currentCampaign || cancelledCampaign;
   const primaryRaffleServer = getPrimaryRaffleServer(raffleServers);
   const budget = primaryRaffleServer?.raffles.budget || EMPTY_RAFFLE_BUDGET;
   const latestWinner = history.find((item) => item.entry.winner)?.entry.winner || null;
@@ -981,15 +1004,21 @@ function WinnersPage({ snapshot, now, route }: WinnersPageProps) {
           ) : null}
 
           <section className="section-shell winners-summary-grid">
-            {currentCampaign ? (
+            {summaryCampaign ? (
               <article className="winners-card winners-campaign-card" data-testid="winners-campaign-card">
                 <span className="overview-label">Серия</span>
-                <strong>Серия розыгрышей</strong>
-                <p>{formatCampaignRange(currentCampaign.campaign)}</p>
+                <strong>
+                  {summaryCampaign.campaign.cancelled ? 'Серия розыгрышей отменена' : 'Серия розыгрышей'}
+                </strong>
+                <p>
+                  {summaryCampaign.campaign.cancelled
+                    ? formatCampaignCancellation(summaryCampaign.campaign)
+                    : formatCampaignRange(summaryCampaign.campaign)}
+                </p>
                 <div className="winners-meta-row">
-                  <span>{formatPrimeWindow(currentCampaign.campaign)}</span>
-                  <span>{currentCampaign.campaign.minimumPrimePlayers}+ игроков</span>
-                  <span>Банк {formatCurrencyRubles(currentCampaign.budget.limitRubles)}</span>
+                  <span>{formatPrimeWindow(summaryCampaign.campaign)}</span>
+                  <span>{summaryCampaign.campaign.minimumPrimePlayers}+ игроков</span>
+                  <span>Банк {formatCurrencyRubles(summaryCampaign.budget.limitRubles)}</span>
                 </div>
               </article>
             ) : null}

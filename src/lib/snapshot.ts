@@ -190,6 +190,8 @@ function mapRaffleCampaign(value: unknown): ExporterRaffleCampaignSnapshot | nul
   return {
     startsAt: toStringOrNull(campaign.startsAt),
     endsAt: toStringOrNull(campaign.endsAt),
+    cancelled: Boolean(campaign.cancelled),
+    cancelledAt: toStringOrNull(campaign.cancelledAt),
     autoStartEnabled: Boolean(campaign.autoStartEnabled),
     autoPrizes: Array.isArray(campaign.autoPrizes)
       ? campaign.autoPrizes

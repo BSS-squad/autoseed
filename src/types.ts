@@ -110,6 +110,8 @@ export type ExporterRaffleBudgetSnapshot = {
 export type ExporterRaffleCampaignSnapshot = {
   startsAt: string | null;
   endsAt: string | null;
+  cancelled: boolean;
+  cancelledAt: string | null;
   autoStartEnabled: boolean;
   autoPrizes: string[];
   primeTimeStartHour: number;
