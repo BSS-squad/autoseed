@@ -145,3 +145,4 @@ CI workflow лежит в `.github/workflows/deploy-pages.yml`.
 - [README.md](./README.md)
 - [docs/autoseed-tz.md](./docs/autoseed-tz.md)
 - [docs/setup.md](./docs/setup.md)
+- [docs/superpowers/specs/2026-07-05-exporter-autoseed-switching-design.md](./docs/superpowers/specs/2026-07-05-exporter-autoseed-switching-design.md)
