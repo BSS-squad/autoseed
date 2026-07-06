@@ -81,7 +81,7 @@ test('returns a degraded state when no Team Balancer report is available', () =>
   assert.equal(view.state, 'missing');
   assert.equal(view.tone, 'neutral');
   assert.equal(view.rows.length, 0);
-  assert.match(view.message, /отчета балансировки/i);
+  assert.match(view.message, /отчета по размеру команд/i);
 });
 
 test('marks recommended squad proposals as conflicting red rows', () => {
@@ -89,7 +89,7 @@ test('marks recommended squad proposals as conflicting red rows', () => {
 
   assert.equal(view.state, 'proposal');
   assert.equal(view.mode, 'squad');
-  assert.equal(view.triggerLabel, 'Разница по размеру сторон');
+  assert.equal(view.triggerLabel, 'Разница размера сторон');
   assert.equal(view.teamSizeSummary, '6:2 -> 4:4');
   assert.deepEqual(view.rows, [
     {
@@ -143,7 +143,7 @@ test('shows healthy state when the dry run does not propose moves', () => {
   assert.equal(view.state, 'healthy');
   assert.equal(view.tone, 'neutral');
   assert.equal(view.teamSizeSummary, '40:39 -> 40:39');
-  assert.match(view.message, /в допуске/i);
+  assert.equal(view.message, 'Размер команд в допуске');
 });
 
 test('degrades stale reports instead of displaying old proposals as fresh', () => {

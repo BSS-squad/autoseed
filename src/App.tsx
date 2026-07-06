@@ -1473,12 +1473,12 @@ function TeamBalancerPanel({ snapshot }: TeamBalancerPanelProps) {
     <section
       className={classNames('team-balancer-panel', `tone-${view.tone}`)}
       data-testid="team-balancer-panel"
-      aria-label="Баланс команд"
+      aria-label="Размер команд"
     >
       <div className="team-balancer-head">
         <div>
-          <span className="section-eyebrow">Баланс</span>
-          <h3>Баланс команд</h3>
+          <span className="section-eyebrow">Dry-run</span>
+          <h3>Размер команд</h3>
         </div>
         <span
           className={classNames('team-balancer-status', `team-balancer-status-${view.tone}`)}
@@ -1507,7 +1507,7 @@ function TeamBalancerPanel({ snapshot }: TeamBalancerPanelProps) {
         <div
           className="segmented-control team-balancer-modes"
           role="group"
-          aria-label="Режим предложений баланса"
+          aria-label="Режим предложений по размеру команд"
         >
           {view.modes.map((mode) => (
             <button

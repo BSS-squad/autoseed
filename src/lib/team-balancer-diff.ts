@@ -42,8 +42,8 @@ type TeamBalancerDiffOptions = {
 const DEFAULT_MODES: TeamBalancerProposalMode[] = ['squad', 'player'];
 
 const TRIGGER_LABELS: Record<string, string> = {
-  team_size_diff: 'Разница по размеру сторон',
-  team_size_within_tolerance: 'Стороны в пределах допуска',
+  team_size_diff: 'Разница размера сторон',
+  team_size_within_tolerance: 'Размер команд в допуске',
   invalid_snapshot: 'Недостаточно данных',
   max_moves_exhausted: 'Лимит переводов исчерпан'
 };
@@ -117,7 +117,7 @@ function buildTeamSizeSummary(snapshot: ExporterTeamBalancerSnapshot | null): st
 
 function buildTriggerLabel(snapshot: ExporterTeamBalancerSnapshot | null): string {
   const reason = snapshot?.signals?.triggerReason || snapshot?.reasonCodes?.[0] || '';
-  return TRIGGER_LABELS[reason] || 'Плановая проверка баланса';
+  return TRIGGER_LABELS[reason] || 'Плановая проверка размера команд';
 }
 
 function getStatusTone(status: TeamBalancerProposalStatus): TeamBalancerDiffTone {
@@ -189,8 +189,8 @@ export function buildTeamBalancerDiffView(
       tone: 'neutral',
       mode,
       modes,
-      message: 'Отчета балансировки пока нет',
-      triggerLabel: 'Плановая проверка баланса',
+      message: 'Отчета по размеру команд пока нет',
+      triggerLabel: 'Плановая проверка размера команд',
       teamSizeSummary: '—',
       updatedAtLabel: '—',
       ageMs: Number.POSITIVE_INFINITY,
@@ -210,7 +210,7 @@ export function buildTeamBalancerDiffView(
       tone: 'neutral',
       mode,
       modes,
-      message: 'Отчет балансировки устарел',
+      message: 'Отчет по размеру команд устарел',
       triggerLabel,
       teamSizeSummary,
       updatedAtLabel,
@@ -228,7 +228,7 @@ export function buildTeamBalancerDiffView(
       tone: 'neutral',
       mode,
       modes,
-      message: 'Баланс в допуске',
+      message: 'Размер команд в допуске',
       triggerLabel,
       teamSizeSummary,
       updatedAtLabel,

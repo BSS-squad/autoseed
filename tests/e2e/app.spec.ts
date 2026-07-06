@@ -1047,8 +1047,8 @@ test('renders an empty Team Balancer state when no fresh report exists', async (
 
   const panel = page.getByTestId('team-balancer-panel');
   await expect(panel).toBeVisible();
-  await expect(panel).toContainText('Баланс команд');
-  await expect(panel).toContainText('Отчета балансировки пока нет');
+  await expect(panel).toContainText('Размер команд');
+  await expect(panel).toContainText('Отчета по размеру команд пока нет');
   await expect(panel).not.toContainText('snapshot');
   await expect(panel).not.toContainText('7656119');
 });
@@ -1081,7 +1081,7 @@ test('renders healthy Team Balancer state without proposal rows', async ({ page 
   await page.getByTestId('server-card-2').locator('button').first().click();
 
   const panel = page.getByTestId('team-balancer-panel');
-  await expect(panel).toContainText('Баланс в допуске');
+  await expect(panel).toContainText('Размер команд в допуске');
   await expect(panel).toContainText('40:39 -> 40:39');
   await expect(page.getByTestId('team-balancer-diff-row')).toHaveCount(0);
 });
@@ -1097,7 +1097,7 @@ test('renders Team Balancer proposals and switches squad/player modes', async ({
 
   const panel = page.getByTestId('team-balancer-panel');
   await expect(panel).toContainText('Нужно действие');
-  await expect(panel).toContainText('Разница по размеру сторон');
+  await expect(panel).toContainText('Разница размера сторон');
   await expect(panel).toContainText('6:2 -> 4:4');
   await expect(page.getByTestId('team-balancer-diff-row')).toHaveCount(1);
   await expect(page.getByTestId('team-balancer-diff-row').first()).toContainText('Сквад alpha');
