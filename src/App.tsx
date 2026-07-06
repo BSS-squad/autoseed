@@ -9,6 +9,7 @@ import {
 } from 'react';
 
 import { runPermissionCheck } from './lib/permissions';
+import { fetchLeaderboard, LEADERBOARD_PERIODS } from './lib/leaderboards';
 import {
   buildSelectionState,
   getSelectionStatusLabel,
@@ -42,6 +43,8 @@ import type {
   ExporterServerSnapshot,
   ExporterSquadSnapshot,
   ExporterTeamSnapshot,
+  LeaderboardEntry,
+  LeaderboardPeriod,
   SelectionState
 } from './types';
 import projectLogo from '../image.png';
@@ -50,7 +53,7 @@ type AppProps = {
   config: AppConfig;
 };
 
-type AppRoute = 'home' | 'winners';
+type AppRoute = 'home' | 'winners' | 'leaderboards';
 
 type PendingSequence = {
   remaining: ExporterServerSnapshot[];
@@ -145,6 +148,14 @@ type WinnersPageProps = {
   vipShopUrl: string | null;
 };
 
+type LeaderboardsPageProps = {
+  config: AppConfig;
+  route: AppRoute;
+  vipShopUrl: string | null;
+};
+
+type LeaderboardLoadState = 'unavailable' | 'loading' | 'ready' | 'error';
+
 const EMPTY_SNAPSHOT: CombinedSnapshot = {
   timestamp: 0,
   generatedAt: '',
@@ -209,6 +220,21 @@ function formatCurrencyRubles(value: number | null | undefined): string {
   return `${new Intl.NumberFormat('ru-RU', {
     maximumFractionDigits: 0
   }).format(Math.round(value))} ₽`;
+}
+
+function formatLeaderboardNumber(value: number | null | undefined): string {
+  if (typeof value !== 'number' || Number.isNaN(value)) return '—';
+  return new Intl.NumberFormat('ru-RU', {
+    maximumFractionDigits: 0
+  }).format(Math.round(value));
+}
+
+function formatLeaderboardDecimal(value: number | null | undefined): string {
+  if (typeof value !== 'number' || Number.isNaN(value)) return '—';
+  return new Intl.NumberFormat('ru-RU', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(value);
 }
 
 function formatParticipantCount(value: number): string {
@@ -291,6 +317,7 @@ function getSafeHttpUrl(value?: string | null): string | null {
 
 function getRouteFromHash(): AppRoute {
   if (typeof window === 'undefined') return 'home';
+  if (window.location.hash === '#leaderboards') return 'leaderboards';
   return window.location.hash === '#winners' ? 'winners' : 'home';
 }
 
@@ -824,6 +851,16 @@ function AppNav({ currentRoute, vipShopUrl }: AppNavProps) {
       >
         Победители
       </a>
+      <a
+        className={classNames(
+          'app-nav-link',
+          currentRoute === 'leaderboards' && 'app-nav-link-active'
+        )}
+        href="#leaderboards"
+        data-testid="leaderboards-nav-link"
+      >
+        Топы
+      </a>
       {vipShopUrl ? (
         <a
           className="app-nav-link"
@@ -919,6 +956,170 @@ function getPrimaryRaffleServer(raffleServers: RaffleServerSnapshot[]): RaffleSe
     raffleServers.find(({ raffles }) => raffles.history.length) ||
     raffleServers[0] ||
     null
+  );
+}
+
+function LeaderboardsPage({ config, route, vipShopUrl }: LeaderboardsPageProps) {
+  const sourceUrl = useMemo(() => getSafeHttpUrl(config.leaderboards?.url), [config.leaderboards?.url]);
+  const [period, setPeriod] = useState<LeaderboardPeriod>('overall');
+  const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
+  const [generatedAt, setGeneratedAt] = useState<string | null>(null);
+  const [loadState, setLoadState] = useState<LeaderboardLoadState>(
+    sourceUrl ? 'loading' : 'unavailable'
+  );
+
+  useEffect(() => {
+    if (!sourceUrl) {
+      setEntries([]);
+      setGeneratedAt(null);
+      setLoadState('unavailable');
+      return;
+    }
+
+    let cancelled = false;
+    setLoadState('loading');
+
+    void fetchLeaderboard(sourceUrl, period)
+      .then((result) => {
+        if (cancelled) return;
+        setEntries(result.entries);
+        setGeneratedAt(result.generatedAt);
+        setLoadState('ready');
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setEntries([]);
+        setGeneratedAt(null);
+        setLoadState('error');
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [period, sourceUrl]);
+
+  const hasEntries = loadState === 'ready' && entries.length > 0;
+
+  return (
+    <div
+      className="shell modern-shell leaderboards-shell"
+      style={BRAND_STYLE}
+      data-testid="leaderboards-page"
+    >
+      <header className="winners-hero leaderboards-hero">
+        <div className="winners-hero-top">
+          <div className="hero-brand">
+            <div className="hero-logo-shell hero-logo-shell-compact">
+              <img className="hero-logo" src={projectLogo} alt={`Логотип ${APP_DISPLAY_NAME}`} />
+            </div>
+            <div className="hero-brand-copy">
+              <span className="hero-brand-kicker">Mdj BSS</span>
+              <span className="hero-brand-subtitle">статистика игроков</span>
+            </div>
+          </div>
+
+          <AppNav currentRoute={route} vipShopUrl={vipShopUrl} />
+        </div>
+
+        <div className="winners-hero-main">
+          <p className="eyebrow">Лидерборды BSS</p>
+          <h1 data-testid="leaderboards-title">Топ игроков BSS</h1>
+          <p className="hero-copy">
+            Смотри лидеров по очкам, киллам и эффективности за выбранный период.
+          </p>
+        </div>
+
+        <div className="leaderboard-periods" aria-label="Период лидерборда">
+          {LEADERBOARD_PERIODS.map((entry) => (
+            <button
+              key={entry.value}
+              type="button"
+              className={classNames(
+                'segment leaderboard-period-button',
+                period === entry.value && 'segment-active'
+              )}
+              data-testid={`leaderboard-period-${entry.value}`}
+              onClick={() => setPeriod(entry.value)}
+            >
+              <span>{entry.label}</span>
+              <small>{entry.description}</small>
+            </button>
+          ))}
+        </div>
+      </header>
+
+      <section className="section-shell leaderboard-section">
+        {loadState === 'unavailable' ? (
+          <article className="leaderboard-empty-state" data-testid="leaderboards-empty">
+            <span className="overview-label">Топы игроков</span>
+            <strong>Лидерборды пока недоступны</strong>
+            <p>Источник статистики ещё не подключён. Загляните позже.</p>
+          </article>
+        ) : null}
+
+        {loadState === 'loading' ? (
+          <article className="leaderboard-empty-state" data-testid="leaderboards-loading">
+            <span className="overview-label">Топы игроков</span>
+            <strong>Загружаем лидерборд</strong>
+            <p>Обновляем список лидеров за выбранный период.</p>
+          </article>
+        ) : null}
+
+        {loadState === 'error' ? (
+          <article className="leaderboard-empty-state" data-testid="leaderboards-error">
+            <span className="overview-label">Топы игроков</span>
+            <strong>Не удалось загрузить лидерборд</strong>
+            <p>Попробуйте обновить страницу позже.</p>
+          </article>
+        ) : null}
+
+        {loadState === 'ready' && !entries.length ? (
+          <article className="leaderboard-empty-state" data-testid="leaderboards-empty">
+            <span className="overview-label">Топы игроков</span>
+            <strong>В этом периоде пока нет игроков</strong>
+            <p>Как только появится статистика, она отобразится здесь.</p>
+          </article>
+        ) : null}
+
+        {hasEntries ? (
+          <div className="leaderboard-table-wrap" data-testid="leaderboards-table">
+            <div className="leaderboard-table-head">
+              <div>
+                <span className="overview-label">Таблица лидеров</span>
+                <strong>{LEADERBOARD_PERIODS.find((entry) => entry.value === period)?.label}</strong>
+              </div>
+              <span>Обновлено {formatCompactTimestamp(generatedAt || undefined)}</span>
+            </div>
+
+            <div className="leaderboard-table" role="table" aria-label="Топ игроков BSS">
+              <div className="leaderboard-row leaderboard-row-header" role="row">
+                <span>Место</span>
+                <span>Игрок</span>
+                <span>Очки</span>
+                <span>Киллы</span>
+                <span>K/D</span>
+                <span>Часы</span>
+              </div>
+              {entries.map((entry) => (
+                <div
+                  className="leaderboard-row"
+                  data-testid={`leaderboards-row-${entry.rank}`}
+                  role="row"
+                  key={`${entry.rank}-${entry.name}`}
+                >
+                  <span className="leaderboard-rank">#{entry.rank}</span>
+                  <strong>{entry.name}</strong>
+                  <span>{formatLeaderboardNumber(entry.score)}</span>
+                  <span>{formatLeaderboardNumber(entry.kills)}</span>
+                  <span>{formatLeaderboardDecimal(entry.kd)}</span>
+                  <span>{formatHours(entry.playtimeHours)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </section>
+    </div>
   );
 }
 
@@ -2137,6 +2338,10 @@ export default function App({ config }: AppProps) {
 
   if (route === 'winners') {
     return <WinnersPage snapshot={snapshot} now={now} route={route} vipShopUrl={vipShopUrl} />;
+  }
+
+  if (route === 'leaderboards') {
+    return <LeaderboardsPage config={config} route={route} vipShopUrl={vipShopUrl} />;
   }
 
   return (

@@ -24,6 +24,7 @@
 - локальный preflight-check на странице: popup, `steam://`, и явная подсказка оставить Squad в главном меню;
 - redirect через служебное popup-окно для автосценариев, чтобы страница не теряла состояние и могла выполнить follow-up redirect; ручное прямое подключение открывает `steam://` в текущей вкладке, как SquadBrowser;
 - опциональная публичная ссылка на внешний VIP purchase flow через `app.vipShopUrl`;
+- опциональная публичная страница лидербордов через `leaderboards.url`;
 - документация по настройке frontend, exporter-а и `Squadbrowser` join-link lookup.
 
 ## Локальный запуск
@@ -87,6 +88,18 @@ npm run dev
 ```
 
 Если URL не задан или не является `http`/`https`, ссылка в навигации не показывается. Покупка, Steam auth, wallet ledger и purchase state остаются во внешнем VIP-сервисе; `autoseed` только ведет игрока на этот публичный entrypoint.
+
+Опционально можно добавить `leaderboards.url` с абсолютным `http`/`https` URL публичного read-only endpoint-а лидербордов:
+
+```json
+{
+  "leaderboards": {
+    "url": "https://api.example.com/leaderboards"
+  }
+}
+```
+
+Frontend вызывает этот URL как `GET {url}?period=overall|week|month` и ждёт JSON с массивом `entries`, `players` или `items`. Если URL не задан или endpoint недоступен, страница `/#leaderboards` показывает понятное состояние без ошибки приложения. В этот URL нельзя класть секреты или пользовательские токены.
 
 При необходимости можно добавить отдельный `app.testMode`:
 

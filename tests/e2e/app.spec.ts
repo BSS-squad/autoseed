@@ -51,6 +51,13 @@ const vipShopRuntimeConfig = {
   }
 };
 
+const leaderboardsRuntimeConfig = {
+  ...runtimeConfig,
+  leaderboards: {
+    url: 'http://127.0.0.1:4173/mock/leaderboards'
+  }
+};
+
 const productionSwitchRuntimeConfig = {
   ...runtimeConfig,
   policy: {
@@ -357,6 +364,63 @@ async function mockAutoseedApi(
       body: '<!doctype html><html><body><main data-testid="redirect-target">Точка перехода</main></body></html>'
     })
   );
+}
+
+async function mockLeaderboardApi(page: Page) {
+  await mockAutoseedApi(page, undefined, leaderboardsRuntimeConfig);
+  await page.route('**/mock/leaderboards**', (route) => {
+    const requestUrl = new URL(route.request().url());
+    const period = requestUrl.searchParams.get('period') || 'overall';
+    const entriesByPeriod = {
+      overall: [
+        {
+          rank: 1,
+          name: 'Top Fragger',
+          score: 4200,
+          kills: 320,
+          deaths: 140,
+          kd: 2.29,
+          playtimeHours: 186.5
+        },
+        {
+          rank: 2,
+          name: 'Helpful Medic',
+          score: 3950,
+          kills: 120,
+          deaths: 80,
+          kd: 1.5,
+          playtimeHours: 142
+        }
+      ],
+      week: [
+        {
+          rank: 1,
+          name: 'Weekly Hero',
+          score: 680,
+          kills: 62,
+          deaths: 28,
+          kd: 2.21,
+          playtimeHours: 22.4
+        }
+      ],
+      month: [
+        {
+          rank: 1,
+          name: 'Monthly Leader',
+          score: 2100,
+          kills: 180,
+          deaths: 72,
+          kd: 2.5,
+          playtimeHours: 74.8
+        }
+      ]
+    } as const;
+
+    return fulfillJson(route, {
+      generatedAt: new Date(BASE_TIME).toISOString(),
+      entries: entriesByPeriod[period as keyof typeof entriesByPeriod] || []
+    });
+  });
 }
 
 async function mockRaffleAutoseedApi(page: Page) {
@@ -920,6 +984,37 @@ test('uses player-friendly language for the empty winners state', async ({ page 
   await expect(page.getByTestId('winners-empty')).toContainText('Розыгрыши');
   await expect(page.getByTestId('winners-empty')).toContainText(
     'Данные о розыгрышах пока не поступили. Загляните позже.'
+  );
+  await expectPlayerFriendlyLanguage(page);
+});
+
+test('renders public leaderboards and switches periods', async ({ page }) => {
+  await mockLeaderboardApi(page);
+
+  await page.goto('/#leaderboards');
+
+  await expect(page.getByTestId('leaderboards-page')).toBeVisible();
+  await expect(page.getByTestId('leaderboards-title')).toHaveText('Топ игроков BSS');
+  await expect(page.getByTestId('leaderboards-table')).toContainText('Top Fragger');
+  await expect(page.getByTestId('leaderboards-row-1')).toContainText('4 200');
+  await expect(page.getByTestId('leaderboards-row-1')).toContainText('2,29');
+
+  await page.getByTestId('leaderboard-period-week').click();
+
+  await expect(page.getByTestId('leaderboards-row-1')).toContainText('Weekly Hero');
+  await expect(page.getByTestId('leaderboards-row-1')).toContainText('680');
+  await expect(page.getByTestId('leaderboards-table')).not.toContainText('Top Fragger');
+  await expectPlayerFriendlyLanguage(page);
+});
+
+test('uses player-friendly language for unavailable leaderboards', async ({ page }) => {
+  await mockAutoseedApi(page);
+
+  await page.goto('/#leaderboards');
+
+  await expect(page.getByTestId('leaderboards-empty')).toContainText('Лидерборды пока недоступны');
+  await expect(page.getByTestId('leaderboards-empty')).toContainText(
+    'Источник статистики ещё не подключён.'
   );
   await expectPlayerFriendlyLanguage(page);
 });
