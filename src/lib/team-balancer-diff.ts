@@ -1,4 +1,5 @@
 import type {
+  ExporterPlayerSnapshot,
   ExporterTeamBalancerCohortSnapshot,
   ExporterTeamBalancerPlayerSnapshot,
   ExporterTeamBalancerSnapshot,
@@ -12,13 +13,11 @@ export type TeamBalancerDiffTone = 'success' | 'neutral' | 'conflict';
 
 export type TeamBalancerDiffViewState = 'missing' | 'stale' | 'healthy' | 'proposal';
 
-export type TeamBalancerDiffRow = {
-  id: string;
-  title: string;
-  subtitle: string;
-  route: string;
+export type TeamBalancerRosterMark = {
   tone: TeamBalancerDiffTone;
-  statusLabel: string;
+  label: string;
+  detail: string;
+  impactLabel: string | null;
 };
 
 export type TeamBalancerDiffView = {
@@ -32,7 +31,7 @@ export type TeamBalancerDiffView = {
   teamSizeSummary: string;
   updatedAtLabel: string;
   ageMs: number;
-  rows: TeamBalancerDiffRow[];
+  rows: never[];
 };
 
 type TeamBalancerDiffOptions = {
@@ -56,41 +55,25 @@ function formatTeamId(value: string | number | null | undefined): string {
   return text ? `Сторона ${text}` : 'Сторона не указана';
 }
 
-function formatRoute(fromTeamID: string | number | null, toTeamID: string | number | null): string {
-  return `${formatTeamId(fromTeamID)} -> ${formatTeamId(toTeamID)}`;
-}
-
-function formatPlayerCount(value: number): string {
-  const count = Math.max(0, Math.round(value));
-  const mod10 = count % 10;
-  const mod100 = count % 100;
-  const suffix =
-    mod10 === 1 && mod100 !== 11
-      ? 'игрок'
-      : mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)
-        ? 'игрока'
-        : 'игроков';
-  return `${count} ${suffix}`;
-}
-
-function formatImpactHoursFromSeconds(value: number | null | undefined): string {
+function formatImpactValue(value: number | null | undefined): string {
   if (typeof value !== 'number' || !Number.isFinite(value)) return '—';
-  const hours = Math.round(value / 3600);
-  return `${hours}ч`;
+  return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 })
+    .format(Math.round(value))
+    .replace(/\u00a0/g, ' ');
 }
 
-function resolveImpactSeconds(value: {
+function resolveImpactValue(value: {
   impactSeconds?: number | null;
   impactHours?: number | null;
   score?: number | null;
 }): number | null {
+  if (typeof value.score === 'number' && Number.isFinite(value.score)) return value.score;
   if (typeof value.impactSeconds === 'number' && Number.isFinite(value.impactSeconds)) {
     return value.impactSeconds;
   }
   if (typeof value.impactHours === 'number' && Number.isFinite(value.impactHours)) {
-    return value.impactHours * 3600;
+    return value.impactHours;
   }
-  if (typeof value.score === 'number' && Number.isFinite(value.score)) return value.score;
   return null;
 }
 
@@ -118,6 +101,11 @@ function getReportTimestamp(snapshot: ExporterTeamBalancerSnapshot): number {
   return Number.isFinite(snapshotTimestampMs) ? snapshotTimestampMs : 0;
 }
 
+function getReportAgeMs(snapshot: ExporterTeamBalancerSnapshot, nowMs: number): number {
+  const reportTimestampMs = getReportTimestamp(snapshot);
+  return reportTimestampMs ? Math.max(0, nowMs - reportTimestampMs) : Number.POSITIVE_INFINITY;
+}
+
 function formatUpdatedAt(timestampMs: number): string {
   if (!timestampMs) return '—';
   return new Intl.DateTimeFormat('ru-RU', {
@@ -133,23 +121,31 @@ function formatTeamCounts(counts: Record<string, number>): string {
   return values.length ? values.join(':') : '—';
 }
 
+function buildBeforeAfterSummary(
+  before: Record<string, number>,
+  after: Record<string, number>,
+  formatter: (counts: Record<string, number>) => string
+): string {
+  return `сейчас ${formatter(before)} · dry-run ${formatter(after)}`;
+}
+
 function buildTeamSizeSummary(snapshot: ExporterTeamBalancerSnapshot | null): string {
   const teamSize = snapshot?.signals?.teamSize;
   if (!teamSize) return '—';
-  return `${formatTeamCounts(teamSize.before)} -> ${formatTeamCounts(teamSize.after)}`;
+  return buildBeforeAfterSummary(teamSize.before, teamSize.after, formatTeamCounts);
 }
 
 function formatImpactCounts(counts: Record<string, number>): string {
   const values = Object.entries(counts)
     .sort(([left], [right]) => left.localeCompare(right, 'ru', { numeric: true }))
-    .map(([, count]) => formatImpactHoursFromSeconds(count));
+    .map(([, count]) => formatImpactValue(count));
   return values.length ? values.join(':') : '—';
 }
 
 function buildImpactSummary(snapshot: ExporterTeamBalancerSnapshot | null): string {
   const impact = snapshot?.signals?.impact;
   if (!impact?.available) return '—';
-  return `${formatImpactCounts(impact.before)} -> ${formatImpactCounts(impact.after)}`;
+  return buildBeforeAfterSummary(impact.before, impact.after, formatImpactCounts);
 }
 
 function buildTriggerLabel(snapshot: ExporterTeamBalancerSnapshot | null): string {
@@ -158,73 +154,169 @@ function buildTriggerLabel(snapshot: ExporterTeamBalancerSnapshot | null): strin
 }
 
 function getStatusTone(status: TeamBalancerProposalStatus): TeamBalancerDiffTone {
-  if (status === 'accepted' || status === 'moved' || status === 'already_target') return 'success';
+  if (status === 'accepted' || status === 'moved') return 'success';
   if (status === 'recommended') return 'conflict';
   return 'neutral';
 }
 
-function getStatusLabel(status: TeamBalancerProposalStatus): string {
-  if (status === 'accepted' || status === 'moved') return 'Перевод подтвержден';
-  if (status === 'already_target') return 'Уже на нужной стороне';
-  if (status === 'recommended') return 'Рекомендуется перенести impact';
+function getRosterLabel(status: TeamBalancerProposalStatus): string {
+  if (status === 'accepted' || status === 'moved') return 'Свежий перенос';
+  if (status === 'already_target') return 'План совпал';
+  if (status === 'recommended') return 'В плане баланса';
   return 'Без перестановки';
 }
 
-function buildCohortTitle(cohort: ExporterTeamBalancerCohortSnapshot): string {
-  if (cohort.type === 'squad' && cohort.squadID !== null && cohort.squadID !== undefined) {
-    return `Сквад ${cohort.squadID}`;
-  }
-  if (cohort.type === 'player') return 'Одиночные игроки';
-  return 'Группа игроков';
-}
-
-function buildSquadRows(cohorts: ExporterTeamBalancerCohortSnapshot[]): TeamBalancerDiffRow[] {
-  return cohorts.map((cohort) => {
-    const impactSeconds = resolveImpactSeconds(cohort);
-    const subtitleParts = [formatPlayerCount(cohort.playerCount)];
-    if (impactSeconds !== null) {
-      subtitleParts.push(`impact ${formatImpactHoursFromSeconds(impactSeconds)}`);
-    }
-
-    return {
-      id: cohort.cohortKey || `${cohort.fromTeamID || 'from'}-${cohort.toTeamID || 'to'}`,
-      title: buildCohortTitle(cohort),
-      subtitle: subtitleParts.join(' · '),
-      route: formatRoute(cohort.fromTeamID, cohort.toTeamID),
-      tone: getStatusTone(cohort.status),
-      statusLabel: getStatusLabel(cohort.status)
-    };
-  });
-}
-
-function buildPlayerRows(players: ExporterTeamBalancerPlayerSnapshot[]): TeamBalancerDiffRow[] {
-  return players.map((player, index) => {
-    const impactSeconds = resolveImpactSeconds(player);
-    const subtitleParts = [
-      player.squadID !== null && player.squadID !== undefined
-        ? `Сквад ${player.squadID}`
-        : 'Без сквада'
-    ];
-    if (impactSeconds !== null) {
-      subtitleParts.push(`impact ${formatImpactHoursFromSeconds(impactSeconds)}`);
-    }
-
-    return {
-      id: `${player.name}-${player.fromTeamID || 'from'}-${player.toTeamID || 'to'}-${index}`,
-      title: player.name || 'Игрок',
-      subtitle: subtitleParts.join(' · '),
-      route: formatRoute(player.fromTeamID, player.toTeamID),
-      tone: getStatusTone(player.status),
-      statusLabel: getStatusLabel(player.status)
-    };
-  });
-}
-
-function buildRows(
+function getModeEntries(
   snapshot: ExporterTeamBalancerSnapshot,
   mode: TeamBalancerProposalMode
-): TeamBalancerDiffRow[] {
-  return mode === 'player' ? buildPlayerRows(snapshot.players) : buildSquadRows(snapshot.cohorts);
+): Array<ExporterTeamBalancerPlayerSnapshot | ExporterTeamBalancerCohortSnapshot> {
+  return mode === 'player' ? snapshot.players : snapshot.cohorts;
+}
+
+function getModeStatuses(
+  snapshot: ExporterTeamBalancerSnapshot,
+  mode: TeamBalancerProposalMode
+): TeamBalancerProposalStatus[] {
+  const entries = getModeEntries(snapshot, mode);
+  return entries.map((entry) => entry.status);
+}
+
+function getProposalTone(
+  snapshot: ExporterTeamBalancerSnapshot,
+  mode: TeamBalancerProposalMode
+): TeamBalancerDiffTone {
+  const statuses = getModeStatuses(snapshot, mode);
+  if (statuses.some((status) => getStatusTone(status) === 'conflict')) return 'conflict';
+  if (statuses.some((status) => getStatusTone(status) === 'success')) return 'success';
+  return 'neutral';
+}
+
+function normalizeComparable(value: string | number | null | undefined): string {
+  return String(value ?? '').trim().toLowerCase();
+}
+
+function isSameTeamId(
+  left: string | number | null | undefined,
+  right: string | number | null | undefined
+): boolean {
+  const normalizedLeft = normalizeComparable(left);
+  const normalizedRight = normalizeComparable(right);
+  return Boolean(normalizedLeft && normalizedRight && normalizedLeft === normalizedRight);
+}
+
+function getVisibleTeamIdForStatus(
+  status: TeamBalancerProposalStatus,
+  fromTeamID: string | null,
+  toTeamID: string | null
+): string | null {
+  if (status === 'recommended') return fromTeamID;
+  if (status === 'accepted' || status === 'moved' || status === 'already_target') return toTeamID;
+  return null;
+}
+
+function isVisibleOnCurrentTeam(
+  status: TeamBalancerProposalStatus,
+  currentTeamID: string | number | null | undefined,
+  fromTeamID: string | null,
+  toTeamID: string | null
+): boolean {
+  const visibleTeamID = getVisibleTeamIdForStatus(status, fromTeamID, toTeamID);
+  return isSameTeamId(currentTeamID, visibleTeamID);
+}
+
+function matchesSquad(player: ExporterPlayerSnapshot, squadID: string | number | null): boolean {
+  const target = normalizeComparable(squadID);
+  if (!target) return false;
+
+  const playerSquadID = normalizeComparable(player.squadId);
+  if (playerSquadID && playerSquadID === target) return true;
+
+  const playerSquadName = normalizeComparable(player.squadName);
+  return Boolean(
+    playerSquadName &&
+      (playerSquadName === target ||
+        playerSquadName.endsWith(` ${target}`) ||
+        playerSquadName.includes(target))
+  );
+}
+
+function matchesRosterPlayer(
+  proposal: ExporterTeamBalancerPlayerSnapshot,
+  player: ExporterPlayerSnapshot
+): boolean {
+  const proposalName = normalizeComparable(proposal.name);
+  const playerName = normalizeComparable(player.name);
+  if (!proposalName || proposalName !== playerName) return false;
+  if (proposal.squadID === null || proposal.squadID === undefined) return true;
+  return matchesSquad(player, proposal.squadID);
+}
+
+function buildRosterMarkFromEntry(entry: {
+  status: TeamBalancerProposalStatus;
+  toTeamID: string | null;
+  score?: number | null;
+  impactSeconds?: number | null;
+  impactHours?: number | null;
+}): TeamBalancerRosterMark {
+  const impactValue = resolveImpactValue(entry);
+  return {
+    tone: getStatusTone(entry.status),
+    label: getRosterLabel(entry.status),
+    detail: `Финальная сторона: ${formatTeamId(entry.toTeamID)}`,
+    impactLabel: impactValue === null ? null : `impact ${formatImpactValue(impactValue)}`
+  };
+}
+
+function compareMarkPriority(
+  left: { status: TeamBalancerProposalStatus },
+  right: { status: TeamBalancerProposalStatus }
+): number {
+  const priorities: Record<string, number> = {
+    moved: 4,
+    accepted: 4,
+    already_target: 3,
+    recommended: 2,
+    noop: 1
+  };
+  return (priorities[right.status] || 0) - (priorities[left.status] || 0);
+}
+
+export function buildTeamBalancerRosterMark(
+  snapshot: ExporterTeamBalancerSnapshot | null,
+  requestedMode: TeamBalancerProposalMode,
+  teamID: string | number | null | undefined,
+  player: ExporterPlayerSnapshot,
+  options: TeamBalancerDiffOptions = {}
+): TeamBalancerRosterMark | null {
+  if (!snapshot) return null;
+
+  const mode = resolveMode(snapshot, requestedMode);
+  const nowMs = options.nowMs ?? Date.now();
+  const freshnessMs = options.freshnessMs ?? TEAM_BALANCER_FRESHNESS_MS;
+  const ageMs = getReportAgeMs(snapshot, nowMs);
+  if (ageMs > freshnessMs) return null;
+
+  const currentTeamID = teamID ?? player.teamId ?? null;
+
+  if (mode === 'player') {
+    const proposal = [...snapshot.players]
+      .filter(
+        (entry) =>
+          isVisibleOnCurrentTeam(entry.status, currentTeamID, entry.fromTeamID, entry.toTeamID) &&
+          matchesRosterPlayer(entry, player)
+      )
+      .sort(compareMarkPriority)[0];
+    return proposal ? buildRosterMarkFromEntry(proposal) : null;
+  }
+
+  const cohort = [...snapshot.cohorts]
+    .filter(
+      (entry) =>
+        isVisibleOnCurrentTeam(entry.status, currentTeamID, entry.fromTeamID, entry.toTeamID) &&
+        matchesSquad(player, entry.squadID)
+    )
+    .sort(compareMarkPriority)[0];
+  return cohort ? buildRosterMarkFromEntry(cohort) : null;
 }
 
 export function buildTeamBalancerDiffView(
@@ -254,7 +346,7 @@ export function buildTeamBalancerDiffView(
   }
 
   const reportTimestampMs = getReportTimestamp(snapshot);
-  const ageMs = reportTimestampMs ? Math.max(0, nowMs - reportTimestampMs) : Number.POSITIVE_INFINITY;
+  const ageMs = getReportAgeMs(snapshot, nowMs);
   const triggerLabel = buildTriggerLabel(snapshot);
   const impactSummary = buildImpactSummary(snapshot);
   const teamSizeSummary = buildTeamSizeSummary(snapshot);
@@ -276,8 +368,7 @@ export function buildTeamBalancerDiffView(
     };
   }
 
-  const rows = buildRows(snapshot, mode);
-  const hasProposal = snapshot.action === 'recommend' && rows.length > 0;
+  const hasProposal = snapshot.action === 'recommend' && getModeEntries(snapshot, mode).length > 0;
 
   if (!hasProposal) {
     return {
@@ -297,7 +388,7 @@ export function buildTeamBalancerDiffView(
 
   return {
     state: 'proposal',
-    tone: rows.some((row) => row.tone === 'conflict') ? 'conflict' : 'success',
+    tone: getProposalTone(snapshot, mode),
     mode,
     modes,
     message: 'Нужно действие',
@@ -306,6 +397,6 @@ export function buildTeamBalancerDiffView(
     teamSizeSummary,
     updatedAtLabel,
     ageMs,
-    rows
+    rows: []
   };
 }

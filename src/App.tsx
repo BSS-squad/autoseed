@@ -21,7 +21,7 @@ import {
   SNAPSHOT_POLL_INTERVAL_MS,
   subscribeCombinedSnapshot
 } from './lib/snapshot';
-import { buildTeamBalancerDiffView } from './lib/team-balancer-diff';
+import { buildTeamBalancerDiffView, buildTeamBalancerRosterMark } from './lib/team-balancer-diff';
 import {
   loadStoredState,
   saveActiveRedirectServerKey,
@@ -72,10 +72,14 @@ type SnapshotUpdateSource = 'manual' | 'stream';
 type TeamPanelProps = {
   team: ExporterTeamSnapshot;
   opponent: ExporterTeamSnapshot | null;
+  teamBalancerSnapshot: ExporterTeamBalancerSnapshot | null;
+  teamBalancerMode: TeamBalancerProposalMode;
 };
 
 type TeamBalancerPanelProps = {
   snapshot: ExporterTeamBalancerSnapshot | null;
+  proposalMode: TeamBalancerProposalMode;
+  onProposalModeChange: (mode: TeamBalancerProposalMode) => void;
 };
 
 type TeamRosterGroup = {
@@ -1370,7 +1374,7 @@ function WinnersPage({ snapshot, now, route, vipShopUrl }: WinnersPageProps) {
   );
 }
 
-function TeamPanel({ team, opponent }: TeamPanelProps) {
+function TeamPanel({ team, opponent, teamBalancerSnapshot, teamBalancerMode }: TeamPanelProps) {
   const teamHours = getTeamHours(team);
   const opponentHours = getTeamHours(opponent);
   const hoursDelta = teamHours - opponentHours;
@@ -1431,25 +1435,57 @@ function TeamPanel({ team, opponent }: TeamPanelProps) {
               </header>
 
               <div className="squad-group-body">
-                {group.players.map((player) => (
-                  <article
-                    key={`${player.steamId || player.eosId || player.name}-${player.teamId || 0}`}
-                    className="roster-row"
-                  >
-                    <div className="roster-main">
-                      <div className="roster-name-row">
-                        <strong>{player.name}</strong>
-                        {player.isCommander ? (
-                          <span className="role-pill role-pill-cmd">CMD</span>
-                        ) : null}
-                        {!player.isCommander && player.isLeader ? (
-                          <span className="role-pill role-pill-sl">SL</span>
+                {group.players.map((player) => {
+                  const teamBalancerMark = buildTeamBalancerRosterMark(
+                    teamBalancerSnapshot,
+                    teamBalancerMode,
+                    team.id ?? player.teamId ?? null,
+                    player
+                  );
+
+                  return (
+                    <article
+                      key={`${player.steamId || player.eosId || player.name}-${player.teamId || 0}`}
+                      className={classNames(
+                        'roster-row',
+                        teamBalancerMark && `roster-row-balancer-${teamBalancerMark.tone}`
+                      )}
+                      data-testid={teamBalancerMark ? 'team-balancer-roster-mark' : undefined}
+                      data-team-balancer-tone={teamBalancerMark?.tone}
+                    >
+                      <div className="roster-main">
+                        <div className="roster-name-row">
+                          <strong>{player.name}</strong>
+                          {player.isCommander ? (
+                            <span className="role-pill role-pill-cmd">CMD</span>
+                          ) : null}
+                          {!player.isCommander && player.isLeader ? (
+                            <span className="role-pill role-pill-sl">SL</span>
+                          ) : null}
+                          {teamBalancerMark ? (
+                            <span
+                              className={classNames(
+                                'roster-balance-badge',
+                                `roster-balance-badge-${teamBalancerMark.tone}`
+                              )}
+                            >
+                              {teamBalancerMark.label}
+                            </span>
+                          ) : null}
+                        </div>
+                        {teamBalancerMark ? (
+                          <div className="roster-balance-detail">
+                            <span>{teamBalancerMark.detail}</span>
+                            {teamBalancerMark.impactLabel ? (
+                              <span>{teamBalancerMark.impactLabel}</span>
+                            ) : null}
+                          </div>
                         ) : null}
                       </div>
-                    </div>
-                    <div className="roster-hours">{formatHours(player.playtimeHours)}</div>
-                  </article>
-                ))}
+                      <div className="roster-hours">{formatHours(player.playtimeHours)}</div>
+                    </article>
+                  );
+                })}
               </div>
             </section>
           ))
@@ -1461,8 +1497,11 @@ function TeamPanel({ team, opponent }: TeamPanelProps) {
   );
 }
 
-function TeamBalancerPanel({ snapshot }: TeamBalancerPanelProps) {
-  const [proposalMode, setProposalMode] = useState<TeamBalancerProposalMode>('squad');
+function TeamBalancerPanel({
+  snapshot,
+  proposalMode,
+  onProposalModeChange
+}: TeamBalancerPanelProps) {
   const view = useMemo(
     () => buildTeamBalancerDiffView(snapshot, proposalMode),
     [proposalMode, snapshot]
@@ -1518,7 +1557,7 @@ function TeamBalancerPanel({ snapshot }: TeamBalancerPanelProps) {
               key={mode}
               type="button"
               className={classNames('segment', view.mode === mode && 'segment-active')}
-              onClick={() => setProposalMode(mode)}
+              onClick={() => onProposalModeChange(mode)}
               data-testid={`team-balancer-mode-${mode}`}
             >
               {mode === 'squad' ? 'Сквады' : 'Игроки'}
@@ -1527,24 +1566,7 @@ function TeamBalancerPanel({ snapshot }: TeamBalancerPanelProps) {
         </div>
       ) : null}
 
-      {view.rows.length ? (
-        <div className="team-balancer-diff-list">
-          {view.rows.map((row) => (
-            <article
-              key={row.id}
-              className={classNames('team-balancer-diff-row', `tone-${row.tone}`)}
-              data-testid="team-balancer-diff-row"
-            >
-              <div className="team-balancer-diff-main">
-                <strong>{row.title}</strong>
-                <span>{row.subtitle}</span>
-              </div>
-              <div className="team-balancer-diff-route">{row.route}</div>
-              <span className="team-balancer-diff-status">{row.statusLabel}</span>
-            </article>
-          ))}
-        </div>
-      ) : (
+      {view.state === 'proposal' ? null : (
         <div className="team-balancer-empty">{view.message}</div>
       )}
     </section>
@@ -1578,6 +1600,8 @@ export default function App({ config }: AppProps) {
   const [activeServerKey, setActiveServerKey] = useState<string>('');
   const [joinLinkRequestServerKey, setJoinLinkRequestServerKey] = useState<string>('');
   const [route, setRoute] = useState<AppRoute>(() => getRouteFromHash());
+  const [teamBalancerProposalMode, setTeamBalancerProposalMode] =
+    useState<TeamBalancerProposalMode>('squad');
 
   const enabledRef = useRef(enabled);
   const modeRef = useRef(mode);
@@ -3062,11 +3086,29 @@ export default function App({ config }: AppProps) {
 
               {server.error ? <p className="error-text">{server.error}</p> : null}
 
-              <TeamBalancerPanel snapshot={server.teamBalancer} />
+              <TeamBalancerPanel
+                snapshot={server.teamBalancer}
+                proposalMode={teamBalancerProposalMode}
+                onProposalModeChange={setTeamBalancerProposalMode}
+              />
 
               <div className="teams-grid">
-                {teamOne ? <TeamPanel team={teamOne} opponent={teamTwo || null} /> : null}
-                {teamTwo ? <TeamPanel team={teamTwo} opponent={teamOne || null} /> : null}
+                {teamOne ? (
+                  <TeamPanel
+                    team={teamOne}
+                    opponent={teamTwo || null}
+                    teamBalancerSnapshot={server.teamBalancer}
+                    teamBalancerMode={teamBalancerProposalMode}
+                  />
+                ) : null}
+                {teamTwo ? (
+                  <TeamPanel
+                    team={teamTwo}
+                    opponent={teamOne || null}
+                    teamBalancerSnapshot={server.teamBalancer}
+                    teamBalancerMode={teamBalancerProposalMode}
+                  />
+                ) : null}
                 {!teamOne && !teamTwo ? (
                   <div className="team-panel team-panel-empty">
                     Данные о составе сторон пока не поступили.

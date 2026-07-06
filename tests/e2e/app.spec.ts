@@ -235,13 +235,13 @@ function buildTeamBalancerProposalSnapshot(overrides: Record<string, unknown> = 
       },
       impact: {
         available: true,
-        metric: 'playtimeSeconds',
-        unit: 'seconds',
-        before: { 1: 1800 * 60 * 60, 2: 900 * 60 * 60 },
-        after: { 1: 1440 * 60 * 60, 2: 1260 * 60 * 60 },
-        diffBefore: 900 * 60 * 60,
-        diffAfter: 180 * 60 * 60,
-        moved: 360 * 60 * 60
+        metric: 'autobalancerScore',
+        unit: 'score',
+        before: { 1: 1800, 2: 900 },
+        after: { 1: 1440, 2: 1260 },
+        diffBefore: 900,
+        diffAfter: 180,
+        moved: 360
       },
       winStreak: null,
       ticketDiff: null,
@@ -258,22 +258,18 @@ function buildTeamBalancerProposalSnapshot(overrides: Record<string, unknown> = 
         playerCount: 2,
         status: 'recommended',
         confidence: null,
-        score: 360 * 60 * 60,
-        impactSeconds: 360 * 60 * 60,
-        impactHours: 360
+        score: 360
       }
     ],
     players: [
       {
-        name: 'Player alpha-1',
+        name: 'Vanguard Commander',
         fromTeamID: '1',
         toTeamID: '2',
         squadID: 'alpha',
         status: 'recommended',
         confidence: null,
-        score: 200 * 60 * 60,
-        impactSeconds: 200 * 60 * 60,
-        impactHours: 200
+        score: 200
       },
       {
         name: 'Player alpha-2',
@@ -282,9 +278,7 @@ function buildTeamBalancerProposalSnapshot(overrides: Record<string, unknown> = 
         squadID: 'alpha',
         status: 'recommended',
         confidence: null,
-        score: 160 * 60 * 60,
-        impactSeconds: 160 * 60 * 60,
-        impactHours: 160
+        score: 160
       }
     ],
     ...overrides
@@ -1086,12 +1080,12 @@ test('renders healthy Team Balancer state without proposal rows', async ({ page 
         },
         impact: {
           available: true,
-          metric: 'playtimeSeconds',
-          unit: 'seconds',
-          before: { 1: 1200 * 60 * 60, 2: 1180 * 60 * 60 },
-          after: { 1: 1200 * 60 * 60, 2: 1180 * 60 * 60 },
-          diffBefore: 20 * 60 * 60,
-          diffAfter: 20 * 60 * 60,
+          metric: 'autobalancerScore',
+          unit: 'score',
+          before: { 1: 1200, 2: 1180 },
+          after: { 1: 1200, 2: 1180 },
+          diffBefore: 20,
+          diffAfter: 20,
           moved: 0
         },
         winStreak: null,
@@ -1108,12 +1102,12 @@ test('renders healthy Team Balancer state without proposal rows', async ({ page 
 
   const panel = page.getByTestId('team-balancer-panel');
   await expect(panel).toContainText('Импакт в допуске');
-  await expect(panel).toContainText('1200ч:1180ч -> 1200ч:1180ч');
-  await expect(panel).toContainText('40:39 -> 40:39');
+  await expect(panel).toContainText('сейчас 1 200:1 180 · dry-run 1 200:1 180');
+  await expect(panel).toContainText('сейчас 40:39 · dry-run 40:39');
   await expect(page.getByTestId('team-balancer-diff-row')).toHaveCount(0);
 });
 
-test('renders Team Balancer proposals and switches squad/player modes', async ({ page }) => {
+test('renders Team Balancer marks inside the current roster and switches squad/player modes', async ({ page }) => {
   await page.clock.setFixedTime('2026-07-06T12:01:00.000Z');
   await mockAutoseedApi(page, undefined, runtimeConfig, {
     squadjs2TeamBalancer: buildTeamBalancerProposalSnapshot()
@@ -1125,23 +1119,26 @@ test('renders Team Balancer proposals and switches squad/player modes', async ({
   const panel = page.getByTestId('team-balancer-panel');
   await expect(panel).toContainText('Нужно действие');
   await expect(panel).toContainText('Перекос импакта');
-  await expect(panel).toContainText('1800ч:900ч -> 1440ч:1260ч');
-  await expect(panel).toContainText('6:2 -> 4:4');
-  await expect(page.getByTestId('team-balancer-diff-row')).toHaveCount(1);
-  await expect(page.getByTestId('team-balancer-diff-row').first()).toContainText('Сквад alpha');
-  await expect(page.getByTestId('team-balancer-diff-row').first()).toContainText(
-    'Рекомендуется перенести impact'
-  );
-  await expect(page.getByTestId('team-balancer-diff-row').first()).toContainText('impact 360ч');
-  await expect(page.getByTestId('team-balancer-diff-row').first()).toHaveClass(/tone-conflict/);
+  await expect(panel).toContainText('сейчас 1 800:900 · dry-run 1 440:1 260');
+  await expect(panel).toContainText('сейчас 6:2 · dry-run 4:4');
+  await expect(panel).not.toContainText('->');
+  await expect(panel).not.toContainText(/impact\s+\d+\s*ч/);
+  await expect(page.getByTestId('team-balancer-diff-row')).toHaveCount(0);
+
+  const markedRosterRow = page.getByTestId('team-balancer-roster-mark');
+  await expect(markedRosterRow).toHaveCount(1);
+  await expect(markedRosterRow.first()).toContainText('Vanguard Commander');
+  await expect(markedRosterRow.first()).toContainText('В плане баланса');
+  await expect(markedRosterRow.first()).toContainText('Финальная сторона: Сторона 2');
+  await expect(markedRosterRow.first()).toContainText('impact 360');
+  await expect(markedRosterRow.first()).toHaveAttribute('data-team-balancer-tone', 'conflict');
 
   await page.getByTestId('team-balancer-mode-player').click();
 
-  await expect(page.getByTestId('team-balancer-diff-row')).toHaveCount(2);
-  await expect(page.getByTestId('team-balancer-diff-row').first()).toContainText(
-    'Player alpha-1'
-  );
-  await expect(page.getByTestId('team-balancer-diff-row').first()).toContainText('impact 200ч');
+  await expect(page.getByTestId('team-balancer-diff-row')).toHaveCount(0);
+  await expect(markedRosterRow).toHaveCount(1);
+  await expect(markedRosterRow.first()).toContainText('Vanguard Commander');
+  await expect(markedRosterRow.first()).toContainText('impact 200');
   await expect(panel).not.toContainText('steamID');
   await expect(panel).not.toContainText('playerIds');
 });
