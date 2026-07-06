@@ -63,6 +63,9 @@ type TeamBalancerDiffOptions = {
 const DEFAULT_MODES: TeamBalancerProposalMode[] = ['squad', 'player'];
 
 const TRIGGER_LABELS: Record<string, string> = {
+  scramble_elo: 'Scramble по ELO',
+  scramble_skill: 'Scramble по силе',
+  scramble_size: 'Scramble по составу',
   impact_diff: 'Перекос импакта',
   team_impact_within_tolerance: 'Импакт в допуске',
   team_size_diff: 'Разница размера сторон',
@@ -113,6 +116,13 @@ function resolveImpactValue(value: {
     return value.impactHours;
   }
   return null;
+}
+
+function getScoreLabel(snapshot: ExporterTeamBalancerSnapshot | null): string {
+  const metric = snapshot?.signals?.skill?.metric || snapshot?.signals?.impact?.metric || '';
+  if (metric === 'playtimeSeconds') return 'impact';
+  if (metric === 'eloMu') return 'score';
+  return metric ? 'score' : 'impact';
 }
 
 function normalizeModes(snapshot: ExporterTeamBalancerSnapshot | null): TeamBalancerProposalMode[] {
@@ -181,14 +191,14 @@ function formatImpactCounts(counts: Record<string, number>): string {
 }
 
 function buildImpactSummary(snapshot: ExporterTeamBalancerSnapshot | null): string {
-  const impact = snapshot?.signals?.impact;
-  if (!impact?.available) return '—';
-  return buildBeforeAfterSummary(impact.before, impact.after, formatImpactCounts);
+  const metric = snapshot?.signals?.skill?.available ? snapshot.signals.skill : snapshot?.signals?.impact;
+  if (!metric?.available) return '—';
+  return buildBeforeAfterSummary(metric.before, metric.after, formatImpactCounts);
 }
 
 function buildTriggerLabel(snapshot: ExporterTeamBalancerSnapshot | null): string {
   const reason = snapshot?.signals?.triggerReason || snapshot?.reasonCodes?.[0] || '';
-  return TRIGGER_LABELS[reason] || 'Плановая проверка impact';
+  return TRIGGER_LABELS[reason] || 'Плановая проверка состава';
 }
 
 function buildVoteGateSafetyCard(
@@ -403,14 +413,16 @@ function buildTeamBalancerRoundSignals(
 }
 
 function getStatusTone(status: TeamBalancerProposalStatus): TeamBalancerDiffTone {
+  if (status === 'move_pending') return 'conflict';
   if (status === 'accepted' || status === 'moved') return 'success';
   if (status === 'recommended') return 'conflict';
   return 'neutral';
 }
 
 function getRosterLabel(status: TeamBalancerProposalStatus): string {
-  if (status === 'accepted' || status === 'moved') return 'Свежий перенос';
-  if (status === 'already_target') return 'План совпал';
+  if (status === 'accepted' || status === 'moved') return 'Смена учтена';
+  if (status === 'already_target') return 'На месте';
+  if (status === 'move_pending') return 'Нужна смена';
   if (status === 'recommended') return 'В плане баланса';
   return 'Без перестановки';
 }
@@ -456,8 +468,11 @@ function isSameTeamId(
 function getVisibleTeamIdForStatus(
   status: TeamBalancerProposalStatus,
   fromTeamID: string | null,
-  toTeamID: string | null
+  toTeamID: string | null,
+  currentTeamID?: string | null
 ): string | null {
+  if (currentTeamID) return currentTeamID;
+  if (status === 'move_pending') return fromTeamID;
   if (status === 'recommended') return fromTeamID;
   if (status === 'accepted' || status === 'moved' || status === 'already_target') return toTeamID;
   return null;
@@ -467,9 +482,10 @@ function isVisibleOnCurrentTeam(
   status: TeamBalancerProposalStatus,
   currentTeamID: string | number | null | undefined,
   fromTeamID: string | null,
-  toTeamID: string | null
+  toTeamID: string | null,
+  entryCurrentTeamID?: string | null
 ): boolean {
-  const visibleTeamID = getVisibleTeamIdForStatus(status, fromTeamID, toTeamID);
+  const visibleTeamID = getVisibleTeamIdForStatus(status, fromTeamID, toTeamID, entryCurrentTeamID);
   return isSameTeamId(currentTeamID, visibleTeamID);
 }
 
@@ -489,6 +505,12 @@ function matchesSquad(player: ExporterPlayerSnapshot, squadID: string | number |
   );
 }
 
+function matchesSquadName(player: ExporterPlayerSnapshot, squadName: string | null | undefined): boolean {
+  const target = normalizeComparable(squadName);
+  if (!target) return false;
+  return normalizeComparable(player.squadName) === target;
+}
+
 function matchesRosterPlayer(
   proposal: ExporterTeamBalancerPlayerSnapshot,
   player: ExporterPlayerSnapshot
@@ -503,16 +525,19 @@ function matchesRosterPlayer(
 function buildRosterMarkFromEntry(entry: {
   status: TeamBalancerProposalStatus;
   toTeamID: string | null;
+  expectedTeamID?: string | null;
   score?: number | null;
   impactSeconds?: number | null;
   impactHours?: number | null;
-}): TeamBalancerRosterMark {
+}, snapshot: ExporterTeamBalancerSnapshot | null): TeamBalancerRosterMark {
   const impactValue = resolveImpactValue(entry);
+  const scoreLabel = getScoreLabel(snapshot);
+  const expectedTeamID = entry.expectedTeamID || entry.toTeamID;
   return {
     tone: getStatusTone(entry.status),
     label: getRosterLabel(entry.status),
-    detail: `Финальная сторона: ${formatTeamId(entry.toTeamID)}`,
-    impactLabel: impactValue === null ? null : `impact ${formatImpactValue(impactValue)}`
+    detail: `Ожидаемая сторона: ${formatTeamId(expectedTeamID)}`,
+    impactLabel: impactValue === null ? null : `${scoreLabel} ${formatImpactValue(impactValue)}`
   };
 }
 
@@ -525,6 +550,7 @@ function compareMarkPriority(
     accepted: 4,
     already_target: 3,
     recommended: 2,
+    move_pending: 2,
     noop: 1
   };
   return (priorities[right.status] || 0) - (priorities[left.status] || 0);
@@ -546,26 +572,40 @@ export function buildTeamBalancerRosterMark(
   if (ageMs > freshnessMs) return null;
 
   const currentTeamID = teamID ?? player.teamId ?? null;
+  const isScrambleV2 = (snapshot.schemaVersion || 1) >= 2;
 
-  if (mode === 'player') {
+  if (mode === 'player' || isScrambleV2) {
     const proposal = [...snapshot.players]
       .filter(
         (entry) =>
-          isVisibleOnCurrentTeam(entry.status, currentTeamID, entry.fromTeamID, entry.toTeamID) &&
+          isVisibleOnCurrentTeam(
+            entry.status,
+            currentTeamID,
+            entry.fromTeamID,
+            entry.toTeamID,
+            entry.currentTeamID
+          ) &&
           matchesRosterPlayer(entry, player)
       )
       .sort(compareMarkPriority)[0];
-    return proposal ? buildRosterMarkFromEntry(proposal) : null;
+    if (proposal) return buildRosterMarkFromEntry(proposal, snapshot);
+    if (mode === 'player') return null;
   }
 
   const cohort = [...snapshot.cohorts]
     .filter(
       (entry) =>
-        isVisibleOnCurrentTeam(entry.status, currentTeamID, entry.fromTeamID, entry.toTeamID) &&
-        matchesSquad(player, entry.squadID)
+        isVisibleOnCurrentTeam(
+          entry.status,
+          currentTeamID,
+          entry.fromTeamID,
+          entry.toTeamID,
+          entry.currentTeamID
+        ) &&
+        (matchesSquad(player, entry.squadID) || matchesSquadName(player, entry.squadName))
     )
     .sort(compareMarkPriority)[0];
-  return cohort ? buildRosterMarkFromEntry(cohort) : null;
+  return cohort ? buildRosterMarkFromEntry(cohort, snapshot) : null;
 }
 
 export function buildTeamBalancerDiffView(
@@ -585,7 +625,7 @@ export function buildTeamBalancerDiffView(
       mode,
       modes,
       message: 'Отчета по dry-run балансу пока нет',
-      triggerLabel: 'Плановая проверка impact',
+      triggerLabel: 'Плановая проверка состава',
       impactSummary: '—',
       teamSizeSummary: '—',
       updatedAtLabel: '—',
