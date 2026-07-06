@@ -1546,6 +1546,22 @@ function TeamBalancerPanel({
         </div>
       </div>
 
+      {view.safetyCards.length ? (
+        <div className="team-balancer-safety-grid" data-testid="team-balancer-safety">
+          {view.safetyCards.map((card) => (
+            <div
+              key={card.id}
+              className={classNames('team-balancer-safety-card', `tone-${card.tone}`)}
+              data-testid={`team-balancer-safety-${card.id}`}
+            >
+              <span>{card.label}</span>
+              <strong>{card.value}</strong>
+              {card.detail ? <p>{card.detail}</p> : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+
       {showModeSwitch ? (
         <div
           className="segmented-control team-balancer-modes"

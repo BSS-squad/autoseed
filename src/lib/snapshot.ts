@@ -17,9 +17,12 @@ import type {
   ExporterSnapshotTeamResponse,
   ExporterSquadSnapshot,
   ExporterTeamBalancerCohortSnapshot,
+  ExporterTeamBalancerExecutionSnapshot,
+  ExporterTeamBalancerModeratorDecisionSnapshot,
   ExporterTeamBalancerPlayerSnapshot,
   ExporterTeamBalancerSignalsSnapshot,
   ExporterTeamBalancerSnapshot,
+  ExporterTeamBalancerVoteGateSnapshot,
   ExporterTeamSnapshot
 } from '../types';
 
@@ -338,6 +341,61 @@ function mapTeamBalancerPlayer(value: unknown): ExporterTeamBalancerPlayerSnapsh
   };
 }
 
+function mapTeamBalancerVoteGate(value: unknown): ExporterTeamBalancerVoteGateSnapshot | null {
+  const voteGate = getRecord(value);
+  if (!voteGate) return null;
+
+  return {
+    enabled: Boolean(voteGate.enabled),
+    quorumPercent: Math.max(0, toNumber(voteGate.quorumPercent)),
+    passThresholdPercent: Math.max(0, toNumber(voteGate.passThresholdPercent)),
+    eligiblePlayerCount: Math.max(0, Math.round(toNumber(voteGate.eligiblePlayerCount))),
+    requiredVotes: Math.max(0, Math.round(toNumber(voteGate.requiredVotes))),
+    totalVotes: Math.max(0, Math.round(toNumber(voteGate.totalVotes))),
+    yesVotes: Math.max(0, Math.round(toNumber(voteGate.yesVotes))),
+    noVotes: Math.max(0, Math.round(toNumber(voteGate.noVotes))),
+    quorumMet: Boolean(voteGate.quorumMet),
+    passThresholdMet: Boolean(voteGate.passThresholdMet),
+    approved: Boolean(voteGate.approved)
+  };
+}
+
+function mapTeamBalancerModeratorDecision(
+  value: unknown
+): ExporterTeamBalancerModeratorDecisionSnapshot | null {
+  const decision = getRecord(value);
+  if (!decision) return null;
+
+  return {
+    required: Boolean(decision.required),
+    approved: Boolean(decision.approved),
+    vetoed: Boolean(decision.vetoed),
+    action: toStringOrNull(decision.action),
+    reason: toStringOrNull(decision.reason),
+    note: toStringOrNull(decision.note),
+    moderatorName: toStringOrNull(decision.moderatorName),
+    createdAt: toIsoStringOrNull(decision.createdAt)
+  };
+}
+
+function mapTeamBalancerExecution(value: unknown): ExporterTeamBalancerExecutionSnapshot | null {
+  const execution = getRecord(value);
+  if (!execution) return null;
+
+  return {
+    enabled: Boolean(execution.enabled),
+    status: toStringOrNull(execution.status) || 'disabled',
+    plannedMoves: Math.max(0, Math.round(toNumber(execution.plannedMoves))),
+    plannedPlayers: Math.max(0, Math.round(toNumber(execution.plannedPlayers))),
+    attemptedPlayers: Math.max(0, Math.round(toNumber(execution.attemptedPlayers))),
+    succeededPlayers: Math.max(0, Math.round(toNumber(execution.succeededPlayers))),
+    failedPlayers: Math.max(0, Math.round(toNumber(execution.failedPlayers))),
+    totalRconAttempts: Math.max(0, Math.round(toNumber(execution.totalRconAttempts))),
+    maxAttemptsPerPlayer: Math.max(0, Math.round(toNumber(execution.maxAttemptsPerPlayer))),
+    completedAt: toIsoStringOrNull(execution.completedAt)
+  };
+}
+
 function mapTeamBalancerSnapshot(value: unknown): ExporterTeamBalancerSnapshot | null {
   const snapshot = getRecord(value);
   if (!snapshot) return null;
@@ -379,7 +437,10 @@ function mapTeamBalancerSnapshot(value: unknown): ExporterTeamBalancerSnapshot |
     signals: mapTeamBalancerSignals(snapshot.signals),
     summary: toStringOrNull(snapshot.summary),
     cohorts,
-    players
+    players,
+    voteGate: mapTeamBalancerVoteGate(snapshot.voteGate),
+    moderatorDecision: mapTeamBalancerModeratorDecision(snapshot.moderatorDecision),
+    execution: mapTeamBalancerExecution(snapshot.execution)
   };
 }
 

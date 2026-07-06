@@ -214,6 +214,44 @@ export type ExporterTeamBalancerPlayerSnapshot = {
   impactHours?: number | null;
 };
 
+export type ExporterTeamBalancerVoteGateSnapshot = {
+  enabled: boolean;
+  quorumPercent: number;
+  passThresholdPercent: number;
+  eligiblePlayerCount: number;
+  requiredVotes: number;
+  totalVotes: number;
+  yesVotes: number;
+  noVotes: number;
+  quorumMet: boolean;
+  passThresholdMet: boolean;
+  approved: boolean;
+};
+
+export type ExporterTeamBalancerModeratorDecisionSnapshot = {
+  required: boolean;
+  approved: boolean;
+  vetoed: boolean;
+  action: string | null;
+  reason: string | null;
+  note: string | null;
+  moderatorName: string | null;
+  createdAt: string | null;
+};
+
+export type ExporterTeamBalancerExecutionSnapshot = {
+  enabled: boolean;
+  status: string;
+  plannedMoves: number;
+  plannedPlayers: number;
+  attemptedPlayers: number;
+  succeededPlayers: number;
+  failedPlayers: number;
+  totalRconAttempts: number;
+  maxAttemptsPerPlayer: number;
+  completedAt: string | null;
+};
+
 export type ExporterTeamBalancerSnapshot = {
   version: number;
   generatedAt: string | null;
@@ -231,6 +269,9 @@ export type ExporterTeamBalancerSnapshot = {
   summary: string | null;
   cohorts: ExporterTeamBalancerCohortSnapshot[];
   players: ExporterTeamBalancerPlayerSnapshot[];
+  voteGate: ExporterTeamBalancerVoteGateSnapshot | null;
+  moderatorDecision: ExporterTeamBalancerModeratorDecisionSnapshot | null;
+  execution: ExporterTeamBalancerExecutionSnapshot | null;
 };
 
 export type ExporterServerSnapshot = {

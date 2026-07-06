@@ -1,8 +1,11 @@
 import type {
   ExporterPlayerSnapshot,
   ExporterTeamBalancerCohortSnapshot,
+  ExporterTeamBalancerExecutionSnapshot,
+  ExporterTeamBalancerModeratorDecisionSnapshot,
   ExporterTeamBalancerPlayerSnapshot,
   ExporterTeamBalancerSnapshot,
+  ExporterTeamBalancerVoteGateSnapshot,
   TeamBalancerProposalMode,
   TeamBalancerProposalStatus
 } from '../types';
@@ -20,6 +23,14 @@ export type TeamBalancerRosterMark = {
   impactLabel: string | null;
 };
 
+export type TeamBalancerSafetyCard = {
+  id: 'vote' | 'moderator' | 'execution';
+  tone: TeamBalancerDiffTone;
+  label: string;
+  value: string;
+  detail: string | null;
+};
+
 export type TeamBalancerDiffView = {
   state: TeamBalancerDiffViewState;
   tone: TeamBalancerDiffTone;
@@ -31,6 +42,7 @@ export type TeamBalancerDiffView = {
   teamSizeSummary: string;
   updatedAtLabel: string;
   ageMs: number;
+  safetyCards: TeamBalancerSafetyCard[];
   rows: never[];
 };
 
@@ -60,6 +72,18 @@ function formatImpactValue(value: number | null | undefined): string {
   return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 })
     .format(Math.round(value))
     .replace(/\u00a0/g, ' ');
+}
+
+function formatPercent(value: number | null | undefined): string {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '0%';
+  return `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 })
+    .format(Math.max(0, value))
+    .replace(/\u00a0/g, ' ')}%`;
+}
+
+function joinDetailParts(parts: Array<string | null | undefined>): string | null {
+  const filtered = parts.map((part) => String(part || '').trim()).filter(Boolean);
+  return filtered.length ? filtered.join(' · ') : null;
 }
 
 function resolveImpactValue(value: {
@@ -151,6 +175,126 @@ function buildImpactSummary(snapshot: ExporterTeamBalancerSnapshot | null): stri
 function buildTriggerLabel(snapshot: ExporterTeamBalancerSnapshot | null): string {
   const reason = snapshot?.signals?.triggerReason || snapshot?.reasonCodes?.[0] || '';
   return TRIGGER_LABELS[reason] || 'Плановая проверка impact';
+}
+
+function buildVoteGateSafetyCard(
+  voteGate: ExporterTeamBalancerVoteGateSnapshot | null
+): TeamBalancerSafetyCard | null {
+  if (!voteGate) return null;
+
+  return {
+    id: 'vote',
+    tone: !voteGate.enabled ? 'neutral' : voteGate.approved ? 'success' : 'conflict',
+    label: 'Голосование',
+    value: voteGate.enabled ? `${voteGate.yesVotes}/${voteGate.requiredVotes}` : 'Выключено',
+    detail: voteGate.enabled
+      ? `за ${voteGate.yesVotes} · против ${voteGate.noVotes} · кворум ${formatPercent(
+          voteGate.quorumPercent
+        )} · проход ${formatPercent(voteGate.passThresholdPercent)}`
+      : null
+  };
+}
+
+function buildModeratorDecisionSafetyCard(
+  decision: ExporterTeamBalancerModeratorDecisionSnapshot | null
+): TeamBalancerSafetyCard | null {
+  if (!decision) return null;
+
+  if (decision.vetoed) {
+    return {
+      id: 'moderator',
+      tone: 'conflict',
+      label: 'Модератор',
+      value: `Veto${decision.reason ? `: ${decision.reason}` : ''}`,
+      detail: joinDetailParts([decision.moderatorName, decision.note])
+    };
+  }
+
+  if (decision.approved) {
+    return {
+      id: 'moderator',
+      tone: 'success',
+      label: 'Модератор',
+      value: 'Одобрено',
+      detail: joinDetailParts([decision.moderatorName, decision.note])
+    };
+  }
+
+  if (decision.required) {
+    return {
+      id: 'moderator',
+      tone: 'conflict',
+      label: 'Модератор',
+      value: 'Требуется решение',
+      detail: joinDetailParts([decision.reason, decision.note])
+    };
+  }
+
+  return {
+    id: 'moderator',
+    tone: 'neutral',
+    label: 'Модератор',
+    value: 'Не требуется',
+    detail: joinDetailParts([decision.reason, decision.note])
+  };
+}
+
+function getExecutionValue(execution: ExporterTeamBalancerExecutionSnapshot): string {
+  const status = execution.enabled ? execution.status : 'disabled';
+  const labels: Record<string, string> = {
+    disabled: 'Выключено',
+    pending: 'Ожидает',
+    queued: 'Ожидает',
+    running: 'Выполняется',
+    in_progress: 'Выполняется',
+    completed: 'Выполнено',
+    success: 'Выполнено',
+    blocked: 'Заблокировано',
+    failed: 'Ошибка',
+    partial_failed: 'Ошибка',
+    error: 'Ошибка'
+  };
+  return labels[status] || status;
+}
+
+function getExecutionTone(execution: ExporterTeamBalancerExecutionSnapshot): TeamBalancerDiffTone {
+  if (!execution.enabled || execution.status === 'disabled') return 'neutral';
+  if (execution.status === 'completed' || execution.status === 'success') return 'success';
+  if (
+    execution.status === 'blocked' ||
+    execution.status === 'failed' ||
+    execution.status === 'partial_failed' ||
+    execution.status === 'error'
+  ) {
+    return 'conflict';
+  }
+  return 'neutral';
+}
+
+function buildExecutionSafetyCard(
+  execution: ExporterTeamBalancerExecutionSnapshot | null
+): TeamBalancerSafetyCard | null {
+  if (!execution) return null;
+
+  return {
+    id: 'execution',
+    tone: getExecutionTone(execution),
+    label: 'Исполнение',
+    value: getExecutionValue(execution),
+    detail: `игроки ${execution.succeededPlayers}/${execution.plannedPlayers} · попытки ${execution.totalRconAttempts} · лимит ${execution.maxAttemptsPerPlayer}`
+  };
+}
+
+function buildTeamBalancerSafetyCards(
+  snapshot: ExporterTeamBalancerSnapshot | null
+): TeamBalancerSafetyCard[] {
+  if (!snapshot) return [];
+
+  return [
+    buildVoteGateSafetyCard(snapshot.voteGate),
+    buildModeratorDecisionSafetyCard(snapshot.moderatorDecision),
+    buildExecutionSafetyCard(snapshot.execution)
+  ].filter((card): card is TeamBalancerSafetyCard => Boolean(card));
 }
 
 function getStatusTone(status: TeamBalancerProposalStatus): TeamBalancerDiffTone {
@@ -341,6 +485,7 @@ export function buildTeamBalancerDiffView(
       teamSizeSummary: '—',
       updatedAtLabel: '—',
       ageMs: Number.POSITIVE_INFINITY,
+      safetyCards: [],
       rows: []
     };
   }
@@ -364,10 +509,12 @@ export function buildTeamBalancerDiffView(
       teamSizeSummary,
       updatedAtLabel,
       ageMs,
+      safetyCards: [],
       rows: []
     };
   }
 
+  const safetyCards = buildTeamBalancerSafetyCards(snapshot);
   const hasProposal = snapshot.action === 'recommend' && getModeEntries(snapshot, mode).length > 0;
 
   if (!hasProposal) {
@@ -382,6 +529,7 @@ export function buildTeamBalancerDiffView(
       teamSizeSummary,
       updatedAtLabel,
       ageMs,
+      safetyCards,
       rows: []
     };
   }
@@ -397,6 +545,7 @@ export function buildTeamBalancerDiffView(
     teamSizeSummary,
     updatedAtLabel,
     ageMs,
+    safetyCards,
     rows: []
   };
 }

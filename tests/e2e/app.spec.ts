@@ -1110,7 +1110,43 @@ test('renders healthy Team Balancer state without proposal rows', async ({ page 
 test('renders Team Balancer marks inside the current roster and switches squad/player modes', async ({ page }) => {
   await page.clock.setFixedTime('2026-07-06T12:01:00.000Z');
   await mockAutoseedApi(page, undefined, runtimeConfig, {
-    squadjs2TeamBalancer: buildTeamBalancerProposalSnapshot()
+    squadjs2TeamBalancer: buildTeamBalancerProposalSnapshot({
+      voteGate: {
+        enabled: true,
+        quorumPercent: 25,
+        passThresholdPercent: 60,
+        eligiblePlayerCount: 10,
+        requiredVotes: 3,
+        totalVotes: 3,
+        yesVotes: 2,
+        noVotes: 1,
+        quorumMet: true,
+        passThresholdMet: true,
+        approved: true
+      },
+      moderatorDecision: {
+        required: true,
+        approved: false,
+        vetoed: true,
+        action: 'veto',
+        reason: 'technical',
+        note: 'wait for next round',
+        moderatorName: 'Moderator',
+        createdAt: '2026-07-06T12:00:30.000Z'
+      },
+      execution: {
+        enabled: true,
+        status: 'blocked',
+        plannedMoves: 1,
+        plannedPlayers: 2,
+        attemptedPlayers: 0,
+        succeededPlayers: 0,
+        failedPlayers: 0,
+        totalRconAttempts: 0,
+        maxAttemptsPerPlayer: 2,
+        completedAt: null
+      }
+    })
   });
 
   await page.goto('/');
@@ -1121,6 +1157,12 @@ test('renders Team Balancer marks inside the current roster and switches squad/p
   await expect(panel).toContainText('Перекос импакта');
   await expect(panel).toContainText('сейчас 1 800:900 · dry-run 1 440:1 260');
   await expect(panel).toContainText('сейчас 6:2 · dry-run 4:4');
+  await expect(page.getByTestId('team-balancer-safety-vote')).toContainText('Голосование');
+  await expect(page.getByTestId('team-balancer-safety-vote')).toContainText('2/3');
+  await expect(page.getByTestId('team-balancer-safety-vote')).toContainText('за 2 · против 1');
+  await expect(page.getByTestId('team-balancer-safety-moderator')).toContainText('Veto: technical');
+  await expect(page.getByTestId('team-balancer-safety-execution')).toContainText('Заблокировано');
+  await expect(page.getByTestId('team-balancer-safety-execution')).toContainText('игроки 0/2');
   await expect(panel).not.toContainText('->');
   await expect(panel).not.toContainText(/impact\s+\d+\s*ч/);
   await expect(page.getByTestId('team-balancer-diff-row')).toHaveCount(0);

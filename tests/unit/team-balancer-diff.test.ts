@@ -82,6 +82,9 @@ function buildProposalSnapshot(
         score: 160
       }
     ],
+    voteGate: null,
+    moderatorDecision: null,
+    execution: null,
     ...overrides
   };
 }
@@ -138,6 +141,76 @@ test('marks recommended squad impact proposals inside the current roster', () =>
     impactLabel: 'impact 360'
   });
   assert.doesNotMatch(serialized, /->|\d+\s*ч|Рекомендуется перенести|Уже на нужной стороне/);
+});
+
+test('summarizes Team Balancer safety gates without leaking private identifiers', () => {
+  const view = buildTeamBalancerDiffView(
+    buildProposalSnapshot({
+      voteGate: {
+        enabled: true,
+        quorumPercent: 25,
+        passThresholdPercent: 60,
+        eligiblePlayerCount: 10,
+        requiredVotes: 3,
+        totalVotes: 3,
+        yesVotes: 2,
+        noVotes: 1,
+        quorumMet: true,
+        passThresholdMet: true,
+        approved: true
+      },
+      moderatorDecision: {
+        required: true,
+        approved: false,
+        vetoed: true,
+        action: 'veto',
+        reason: 'technical',
+        note: 'wait for next round',
+        moderatorName: 'Moderator',
+        createdAt: '2026-07-06T12:00:30.000Z'
+      },
+      execution: {
+        enabled: true,
+        status: 'blocked',
+        plannedMoves: 1,
+        plannedPlayers: 2,
+        attemptedPlayers: 0,
+        succeededPlayers: 0,
+        failedPlayers: 0,
+        totalRconAttempts: 0,
+        maxAttemptsPerPlayer: 2,
+        completedAt: null
+      }
+    }),
+    'squad',
+    { nowMs: NOW_MS }
+  );
+  const serialized = JSON.stringify(view.safetyCards);
+
+  assert.deepEqual(view.safetyCards, [
+    {
+      id: 'vote',
+      tone: 'success',
+      label: 'Голосование',
+      value: '2/3',
+      detail: 'за 2 · против 1 · кворум 25% · проход 60%'
+    },
+    {
+      id: 'moderator',
+      tone: 'conflict',
+      label: 'Модератор',
+      value: 'Veto: technical',
+      detail: 'Moderator · wait for next round'
+    },
+    {
+      id: 'execution',
+      tone: 'conflict',
+      label: 'Исполнение',
+      value: 'Заблокировано',
+      detail: 'игроки 0/2 · попытки 0 · лимит 2'
+    }
+  ]);
+  assert.doesNotMatch(serialized, /eosID|steamID|discordID|playerIds|7656119|->/);
 });
 
 test('marks player-level proposals without exposing private identifiers', () => {
