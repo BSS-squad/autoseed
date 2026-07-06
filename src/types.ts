@@ -6,6 +6,7 @@ export type AppConfig = {
     testMode?: TestModeConfig;
   };
   policy?: Partial<SeedPolicy>;
+  leaderboards?: LeaderboardsEndpointConfig;
   exporters: ExporterEndpointConfig[];
 };
 
@@ -30,6 +31,28 @@ export type SeedPolicy = {
 export type ExporterEndpointConfig = {
   name: string;
   baseUrl: string;
+};
+
+export type LeaderboardsEndpointConfig = {
+  url?: string;
+};
+
+export type LeaderboardPeriod = 'overall' | 'week' | 'month';
+
+export type LeaderboardEntry = {
+  rank: number;
+  name: string;
+  score: number | null;
+  kills: number | null;
+  deaths: number | null;
+  kd: number | null;
+  playtimeHours: number | null;
+};
+
+export type LeaderboardResponse = {
+  period: LeaderboardPeriod;
+  generatedAt: string | null;
+  entries: LeaderboardEntry[];
 };
 
 export type ExporterPlayerSnapshot = {

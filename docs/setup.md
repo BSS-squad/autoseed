@@ -64,6 +64,8 @@
 
 Опционально можно добавить `app.vipShopUrl` с абсолютным `http`/`https` URL внешнего VIP-сервиса. Тогда в навигации появится ссылка `VIP`; если значение пустое или не `http`/`https`, ссылка не показывается. В этот URL нельзя класть секреты или пользовательские токены, потому что runtime-config публичен.
 
+Опционально можно добавить `leaderboards.url` с абсолютным `http`/`https` URL публичного read-only endpoint-а лидербордов. Страница `/#leaderboards` вызывает его как `GET {url}?period=overall|week|month` и поддерживает JSON с массивом `entries`, `players` или `items`. Если URL не задан или endpoint недоступен, сайт показывает понятное состояние без падения. В этот URL нельзя класть секреты или пользовательские токены, потому что runtime-config публичен.
+
 Опционально можно добавить `app.testMode`:
 
 ```json
@@ -127,6 +129,7 @@
 - `policy.switchDelta`
 - `policy.cooldownMs`
 - `app.vipShopUrl` для публичной ссылки на внешний VIP purchase flow
+- `leaderboards.url` для публичной страницы лидербордов
 
 ### Меняется на каждом сервере SquadJS
 
