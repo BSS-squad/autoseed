@@ -9,6 +9,7 @@ import {
 } from 'react';
 
 import { runPermissionCheck } from './lib/permissions';
+import { fetchLeaderboard, LEADERBOARD_PERIODS } from './lib/leaderboards';
 import {
   buildSelectionState,
   getSelectionStatusLabel,
@@ -20,6 +21,7 @@ import {
   SNAPSHOT_POLL_INTERVAL_MS,
   subscribeCombinedSnapshot
 } from './lib/snapshot';
+import { buildTeamBalancerDiffView } from './lib/team-balancer-diff';
 import {
   loadStoredState,
   saveActiveRedirectServerKey,
@@ -41,8 +43,12 @@ import type {
   ExporterRaffleSnapshot,
   ExporterServerSnapshot,
   ExporterSquadSnapshot,
+  ExporterTeamBalancerSnapshot,
   ExporterTeamSnapshot,
-  SelectionState
+  LeaderboardEntry,
+  LeaderboardPeriod,
+  SelectionState,
+  TeamBalancerProposalMode
 } from './types';
 import projectLogo from '../image.png';
 
@@ -50,7 +56,7 @@ type AppProps = {
   config: AppConfig;
 };
 
-type AppRoute = 'home' | 'winners';
+type AppRoute = 'home' | 'winners' | 'leaderboards';
 
 type PendingSequence = {
   remaining: ExporterServerSnapshot[];
@@ -66,6 +72,10 @@ type SnapshotUpdateSource = 'manual' | 'stream';
 type TeamPanelProps = {
   team: ExporterTeamSnapshot;
   opponent: ExporterTeamSnapshot | null;
+};
+
+type TeamBalancerPanelProps = {
+  snapshot: ExporterTeamBalancerSnapshot | null;
 };
 
 type TeamRosterGroup = {
@@ -109,6 +119,7 @@ type InlineHelpProps = {
 
 type AppNavProps = {
   currentRoute: AppRoute;
+  vipShopUrl?: string | null;
 };
 
 type RaffleServerSnapshot = {
@@ -141,7 +152,16 @@ type WinnersPageProps = {
   snapshot: CombinedSnapshot;
   now: number;
   route: AppRoute;
+  vipShopUrl: string | null;
 };
+
+type LeaderboardsPageProps = {
+  config: AppConfig;
+  route: AppRoute;
+  vipShopUrl: string | null;
+};
+
+type LeaderboardLoadState = 'unavailable' | 'loading' | 'ready' | 'error';
 
 const EMPTY_SNAPSHOT: CombinedSnapshot = {
   timestamp: 0,
@@ -207,6 +227,21 @@ function formatCurrencyRubles(value: number | null | undefined): string {
   return `${new Intl.NumberFormat('ru-RU', {
     maximumFractionDigits: 0
   }).format(Math.round(value))} ₽`;
+}
+
+function formatLeaderboardNumber(value: number | null | undefined): string {
+  if (typeof value !== 'number' || Number.isNaN(value)) return '—';
+  return new Intl.NumberFormat('ru-RU', {
+    maximumFractionDigits: 0
+  }).format(Math.round(value));
+}
+
+function formatLeaderboardDecimal(value: number | null | undefined): string {
+  if (typeof value !== 'number' || Number.isNaN(value)) return '—';
+  return new Intl.NumberFormat('ru-RU', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(value);
 }
 
 function formatParticipantCount(value: number): string {
@@ -278,8 +313,23 @@ function classNames(...values: Array<string | false | null | undefined>): string
   return values.filter(Boolean).join(' ');
 }
 
+function getSafeHttpUrl(value?: string | null): string | null {
+  if (!value) return null;
+
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? trimmed : null;
+  } catch {
+    return null;
+  }
+}
+
 function getRouteFromHash(): AppRoute {
   if (typeof window === 'undefined') return 'home';
+  if (window.location.hash === '#leaderboards') return 'leaderboards';
   return window.location.hash === '#winners' ? 'winners' : 'home';
 }
 
@@ -793,7 +843,7 @@ function InlineHelp({ label, title, description, testId }: InlineHelpProps) {
   );
 }
 
-function AppNav({ currentRoute }: AppNavProps) {
+function AppNav({ currentRoute, vipShopUrl }: AppNavProps) {
   return (
     <nav className="app-nav" aria-label="Навигация Автосида">
       <a
@@ -813,6 +863,27 @@ function AppNav({ currentRoute }: AppNavProps) {
       >
         Победители
       </a>
+      <a
+        className={classNames(
+          'app-nav-link',
+          currentRoute === 'leaderboards' && 'app-nav-link-active'
+        )}
+        href="#leaderboards"
+        data-testid="leaderboards-nav-link"
+      >
+        Топы
+      </a>
+      {vipShopUrl ? (
+        <a
+          className="app-nav-link"
+          href={vipShopUrl}
+          target="_blank"
+          rel="noreferrer noopener"
+          data-testid="vip-shop-nav-link"
+        >
+          VIP
+        </a>
+      ) : null}
     </nav>
   );
 }
@@ -916,7 +987,171 @@ function getPrimaryRaffleServer(raffleServers: RaffleServerSnapshot[]): RaffleSe
   );
 }
 
-function WinnersPage({ snapshot, now, route }: WinnersPageProps) {
+function LeaderboardsPage({ config, route, vipShopUrl }: LeaderboardsPageProps) {
+  const sourceUrl = useMemo(() => getSafeHttpUrl(config.leaderboards?.url), [config.leaderboards?.url]);
+  const [period, setPeriod] = useState<LeaderboardPeriod>('overall');
+  const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
+  const [generatedAt, setGeneratedAt] = useState<string | null>(null);
+  const [loadState, setLoadState] = useState<LeaderboardLoadState>(
+    sourceUrl ? 'loading' : 'unavailable'
+  );
+
+  useEffect(() => {
+    if (!sourceUrl) {
+      setEntries([]);
+      setGeneratedAt(null);
+      setLoadState('unavailable');
+      return;
+    }
+
+    let cancelled = false;
+    setLoadState('loading');
+
+    void fetchLeaderboard(sourceUrl, period)
+      .then((result) => {
+        if (cancelled) return;
+        setEntries(result.entries);
+        setGeneratedAt(result.generatedAt);
+        setLoadState('ready');
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setEntries([]);
+        setGeneratedAt(null);
+        setLoadState('error');
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [period, sourceUrl]);
+
+  const hasEntries = loadState === 'ready' && entries.length > 0;
+
+  return (
+    <div
+      className="shell modern-shell leaderboards-shell"
+      style={BRAND_STYLE}
+      data-testid="leaderboards-page"
+    >
+      <header className="winners-hero leaderboards-hero">
+        <div className="winners-hero-top">
+          <div className="hero-brand">
+            <div className="hero-logo-shell hero-logo-shell-compact">
+              <img className="hero-logo" src={projectLogo} alt={`Логотип ${APP_DISPLAY_NAME}`} />
+            </div>
+            <div className="hero-brand-copy">
+              <span className="hero-brand-kicker">Mdj BSS</span>
+              <span className="hero-brand-subtitle">статистика игроков</span>
+            </div>
+          </div>
+
+          <AppNav currentRoute={route} vipShopUrl={vipShopUrl} />
+        </div>
+
+        <div className="winners-hero-main">
+          <p className="eyebrow">Лидерборды BSS</p>
+          <h1 data-testid="leaderboards-title">Топ игроков BSS</h1>
+          <p className="hero-copy">
+            Смотри лидеров по очкам, киллам и эффективности за выбранный период.
+          </p>
+        </div>
+
+        <div className="leaderboard-periods" aria-label="Период лидерборда">
+          {LEADERBOARD_PERIODS.map((entry) => (
+            <button
+              key={entry.value}
+              type="button"
+              className={classNames(
+                'segment leaderboard-period-button',
+                period === entry.value && 'segment-active'
+              )}
+              data-testid={`leaderboard-period-${entry.value}`}
+              onClick={() => setPeriod(entry.value)}
+            >
+              <span>{entry.label}</span>
+              <small>{entry.description}</small>
+            </button>
+          ))}
+        </div>
+      </header>
+
+      <section className="section-shell leaderboard-section">
+        {loadState === 'unavailable' ? (
+          <article className="leaderboard-empty-state" data-testid="leaderboards-empty">
+            <span className="overview-label">Топы игроков</span>
+            <strong>Лидерборды пока недоступны</strong>
+            <p>Источник статистики ещё не подключён. Загляните позже.</p>
+          </article>
+        ) : null}
+
+        {loadState === 'loading' ? (
+          <article className="leaderboard-empty-state" data-testid="leaderboards-loading">
+            <span className="overview-label">Топы игроков</span>
+            <strong>Загружаем лидерборд</strong>
+            <p>Обновляем список лидеров за выбранный период.</p>
+          </article>
+        ) : null}
+
+        {loadState === 'error' ? (
+          <article className="leaderboard-empty-state" data-testid="leaderboards-error">
+            <span className="overview-label">Топы игроков</span>
+            <strong>Не удалось загрузить лидерборд</strong>
+            <p>Попробуйте обновить страницу позже.</p>
+          </article>
+        ) : null}
+
+        {loadState === 'ready' && !entries.length ? (
+          <article className="leaderboard-empty-state" data-testid="leaderboards-empty">
+            <span className="overview-label">Топы игроков</span>
+            <strong>В этом периоде пока нет игроков</strong>
+            <p>Как только появится статистика, она отобразится здесь.</p>
+          </article>
+        ) : null}
+
+        {hasEntries ? (
+          <div className="leaderboard-table-wrap" data-testid="leaderboards-table">
+            <div className="leaderboard-table-head">
+              <div>
+                <span className="overview-label">Таблица лидеров</span>
+                <strong>{LEADERBOARD_PERIODS.find((entry) => entry.value === period)?.label}</strong>
+              </div>
+              <span>Обновлено {formatCompactTimestamp(generatedAt || undefined)}</span>
+            </div>
+
+            <div className="leaderboard-table" role="table" aria-label="Топ игроков BSS">
+              <div className="leaderboard-row leaderboard-row-header" role="row">
+                <span>Место</span>
+                <span>Игрок</span>
+                <span>Очки</span>
+                <span>Киллы</span>
+                <span>K/D</span>
+                <span>Часы</span>
+              </div>
+              {entries.map((entry) => (
+                <div
+                  className="leaderboard-row"
+                  data-testid={`leaderboards-row-${entry.rank}`}
+                  role="row"
+                  key={`${entry.rank}-${entry.name}`}
+                >
+                  <span className="leaderboard-rank">#{entry.rank}</span>
+                  <strong>{entry.name}</strong>
+                  <span>{formatLeaderboardNumber(entry.score)}</span>
+                  <span>{formatLeaderboardNumber(entry.kills)}</span>
+                  <span>{formatLeaderboardDecimal(entry.kd)}</span>
+                  <span>{formatHours(entry.playtimeHours)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </section>
+    </div>
+  );
+}
+
+function WinnersPage({ snapshot, now, route, vipShopUrl }: WinnersPageProps) {
   const raffleServers = getRaffleServers(snapshot);
   const activeRaffles = getActiveRaffles(raffleServers);
   const history = getRaffleHistory(raffleServers);
@@ -943,7 +1178,7 @@ function WinnersPage({ snapshot, now, route }: WinnersPageProps) {
             </div>
           </div>
 
-          <AppNav currentRoute={route} />
+          <AppNav currentRoute={route} vipShopUrl={vipShopUrl} />
         </div>
 
         <div className="winners-hero-main">
@@ -1226,9 +1461,96 @@ function TeamPanel({ team, opponent }: TeamPanelProps) {
   );
 }
 
+function TeamBalancerPanel({ snapshot }: TeamBalancerPanelProps) {
+  const [proposalMode, setProposalMode] = useState<TeamBalancerProposalMode>('squad');
+  const view = useMemo(
+    () => buildTeamBalancerDiffView(snapshot, proposalMode),
+    [proposalMode, snapshot]
+  );
+  const showModeSwitch = Boolean(snapshot && view.modes.length > 1);
+
+  return (
+    <section
+      className={classNames('team-balancer-panel', `tone-${view.tone}`)}
+      data-testid="team-balancer-panel"
+      aria-label="Баланс команд"
+    >
+      <div className="team-balancer-head">
+        <div>
+          <span className="section-eyebrow">Баланс</span>
+          <h3>Баланс команд</h3>
+        </div>
+        <span
+          className={classNames('team-balancer-status', `team-balancer-status-${view.tone}`)}
+          data-testid="team-balancer-state"
+        >
+          {view.message}
+        </span>
+      </div>
+
+      <div className="team-balancer-meta">
+        <div>
+          <span>Причина</span>
+          <strong>{view.triggerLabel}</strong>
+        </div>
+        <div>
+          <span>Размер сторон</span>
+          <strong>{view.teamSizeSummary}</strong>
+        </div>
+        <div>
+          <span>Обновлено</span>
+          <strong>{view.updatedAtLabel}</strong>
+        </div>
+      </div>
+
+      {showModeSwitch ? (
+        <div
+          className="segmented-control team-balancer-modes"
+          role="group"
+          aria-label="Режим предложений баланса"
+        >
+          {view.modes.map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              className={classNames('segment', view.mode === mode && 'segment-active')}
+              onClick={() => setProposalMode(mode)}
+              data-testid={`team-balancer-mode-${mode}`}
+            >
+              {mode === 'squad' ? 'Сквады' : 'Игроки'}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {view.rows.length ? (
+        <div className="team-balancer-diff-list">
+          {view.rows.map((row) => (
+            <article
+              key={row.id}
+              className={classNames('team-balancer-diff-row', `tone-${row.tone}`)}
+              data-testid="team-balancer-diff-row"
+            >
+              <div className="team-balancer-diff-main">
+                <strong>{row.title}</strong>
+                <span>{row.subtitle}</span>
+              </div>
+              <div className="team-balancer-diff-route">{row.route}</div>
+              <span className="team-balancer-diff-status">{row.statusLabel}</span>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <div className="team-balancer-empty">{view.message}</div>
+      )}
+    </section>
+  );
+}
+
 export default function App({ config }: AppProps) {
   const storedState = useMemo(() => loadStoredState(), []);
   const hasConfiguredTestMode = Boolean(config.app.testMode?.sequenceServerIds?.length);
+  const vipShopUrl = getSafeHttpUrl(config.app.vipShopUrl);
   const [snapshot, setSnapshot] = useState<CombinedSnapshot>(EMPTY_SNAPSHOT);
   const [permissions, setPermissions] = useState<BrowserPermissions | null>(storedState.permissions);
   const [enabled, setEnabled] = useState<boolean>(storedState.enabled);
@@ -2137,7 +2459,11 @@ export default function App({ config }: AppProps) {
   }, [displayTargetServer, orderedServers]);
 
   if (route === 'winners') {
-    return <WinnersPage snapshot={snapshot} now={now} route={route} />;
+    return <WinnersPage snapshot={snapshot} now={now} route={route} vipShopUrl={vipShopUrl} />;
+  }
+
+  if (route === 'leaderboards') {
+    return <LeaderboardsPage config={config} route={route} vipShopUrl={vipShopUrl} />;
   }
 
   return (
@@ -2155,7 +2481,7 @@ export default function App({ config }: AppProps) {
               </div>
             </div>
 
-            <AppNav currentRoute={route} />
+            <AppNav currentRoute={route} vipShopUrl={vipShopUrl} />
 
             <InlineHelp
               label="Справка по главному экрану"
@@ -2731,6 +3057,8 @@ export default function App({ config }: AppProps) {
               </div>
 
               {server.error ? <p className="error-text">{server.error}</p> : null}
+
+              <TeamBalancerPanel snapshot={server.teamBalancer} />
 
               <div className="teams-grid">
                 {teamOne ? <TeamPanel team={teamOne} opponent={teamTwo || null} /> : null}
