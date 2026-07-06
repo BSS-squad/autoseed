@@ -173,6 +173,16 @@ export type ExporterTeamBalancerSignalsSnapshot = {
     diffBefore: number;
     diffAfter: number;
   };
+  impact: {
+    available: boolean;
+    metric: string;
+    unit: string;
+    before: Record<string, number>;
+    after: Record<string, number>;
+    diffBefore: number;
+    diffAfter: number;
+    moved: number;
+  } | null;
   winStreak: unknown | null;
   ticketDiff: unknown | null;
   recentRoundSeverity: unknown | null;
@@ -188,6 +198,8 @@ export type ExporterTeamBalancerCohortSnapshot = {
   status: TeamBalancerProposalStatus;
   confidence: number | null;
   score: number | null;
+  impactSeconds?: number | null;
+  impactHours?: number | null;
 };
 
 export type ExporterTeamBalancerPlayerSnapshot = {
@@ -198,6 +210,8 @@ export type ExporterTeamBalancerPlayerSnapshot = {
   status: TeamBalancerProposalStatus;
   confidence: number | null;
   score: number | null;
+  impactSeconds?: number | null;
+  impactHours?: number | null;
 };
 
 export type ExporterTeamBalancerSnapshot = {

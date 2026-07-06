@@ -268,6 +268,7 @@ function mapTeamBalancerCounts(value: unknown): Record<string, number> {
 function mapTeamBalancerSignals(value: unknown): ExporterTeamBalancerSignalsSnapshot {
   const signals = getRecord(value) || {};
   const teamSize = getRecord(signals.teamSize) || {};
+  const impact = getRecord(signals.impact);
 
   return {
     triggerReason: toStringOrNull(signals.triggerReason),
@@ -277,6 +278,18 @@ function mapTeamBalancerSignals(value: unknown): ExporterTeamBalancerSignalsSnap
       diffBefore: Math.max(0, Math.round(toNumber(teamSize.diffBefore))),
       diffAfter: Math.max(0, Math.round(toNumber(teamSize.diffAfter)))
     },
+    impact: impact
+      ? {
+          available: Boolean(impact.available),
+          metric: toStringOrNull(impact.metric) || 'playtimeSeconds',
+          unit: toStringOrNull(impact.unit) || 'seconds',
+          before: mapTeamBalancerCounts(impact.before),
+          after: mapTeamBalancerCounts(impact.after),
+          diffBefore: Math.max(0, Math.round(toNumber(impact.diffBefore))),
+          diffAfter: Math.max(0, Math.round(toNumber(impact.diffAfter))),
+          moved: Math.max(0, Math.round(toNumber(impact.moved)))
+        }
+      : null,
     winStreak: signals.winStreak ?? null,
     ticketDiff: signals.ticketDiff ?? null,
     recentRoundSeverity: signals.recentRoundSeverity ?? null
@@ -299,7 +312,9 @@ function mapTeamBalancerCohort(value: unknown): ExporterTeamBalancerCohortSnapsh
     playerCount: Math.max(0, Math.round(toNumber(cohort.playerCount))),
     status: toStringOrNull(cohort.status) || 'noop',
     confidence: toFiniteNumberOrNull(cohort.confidence),
-    score: toFiniteNumberOrNull(cohort.score)
+    score: toFiniteNumberOrNull(cohort.score),
+    impactSeconds: toFiniteNumberOrNull(cohort.impactSeconds),
+    impactHours: toFiniteNumberOrNull(cohort.impactHours)
   };
 }
 
@@ -317,7 +332,9 @@ function mapTeamBalancerPlayer(value: unknown): ExporterTeamBalancerPlayerSnapsh
         : null,
     status: toStringOrNull(player.status) || 'noop',
     confidence: toFiniteNumberOrNull(player.confidence),
-    score: toFiniteNumberOrNull(player.score)
+    score: toFiniteNumberOrNull(player.score),
+    impactSeconds: toFiniteNumberOrNull(player.impactSeconds),
+    impactHours: toFiniteNumberOrNull(player.impactHours)
   };
 }
 
