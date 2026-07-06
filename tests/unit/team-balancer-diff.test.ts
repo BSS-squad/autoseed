@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 
 import {
   buildTeamBalancerDiffView,
+  buildTeamBalancerRosterMark,
   TEAM_BALANCER_FRESHNESS_MS
 } from '../../src/lib/team-balancer-diff.ts';
-import type { ExporterTeamBalancerSnapshot } from '../../src/types.ts';
+import type { ExporterPlayerSnapshot, ExporterTeamBalancerSnapshot } from '../../src/types.ts';
 
 const NOW_MS = Date.parse('2026-07-06T12:01:00.000Z');
 
@@ -35,13 +36,13 @@ function buildProposalSnapshot(
       },
       impact: {
         available: true,
-        metric: 'playtimeSeconds',
-        unit: 'seconds',
-        before: { 1: 1800 * 60 * 60, 2: 900 * 60 * 60 },
-        after: { 1: 1440 * 60 * 60, 2: 1260 * 60 * 60 },
-        diffBefore: 900 * 60 * 60,
-        diffAfter: 180 * 60 * 60,
-        moved: 360 * 60 * 60
+        metric: 'autobalancerScore',
+        unit: 'score',
+        before: { 1: 1800, 2: 900 },
+        after: { 1: 1440, 2: 1260 },
+        diffBefore: 900,
+        diffAfter: 180,
+        moved: 360
       },
       winStreak: null,
       ticketDiff: null,
@@ -58,9 +59,7 @@ function buildProposalSnapshot(
         playerCount: 2,
         status: 'recommended',
         confidence: null,
-        score: 360 * 60 * 60,
-        impactSeconds: 360 * 60 * 60,
-        impactHours: 360
+        score: 360
       }
     ],
     players: [
@@ -71,9 +70,7 @@ function buildProposalSnapshot(
         squadID: 'alpha',
         status: 'recommended',
         confidence: null,
-        score: 200 * 60 * 60,
-        impactSeconds: 200 * 60 * 60,
-        impactHours: 200
+        score: 200
       },
       {
         name: 'Player alpha-2',
@@ -82,11 +79,28 @@ function buildProposalSnapshot(
         squadID: 'alpha',
         status: 'recommended',
         confidence: null,
-        score: 160 * 60 * 60,
-        impactSeconds: 160 * 60 * 60,
-        impactHours: 160
+        score: 160
       }
     ],
+    ...overrides
+  };
+}
+
+function buildRosterPlayer(overrides: Partial<ExporterPlayerSnapshot> = {}): ExporterPlayerSnapshot {
+  return {
+    eosId: 'eos-alpha-1',
+    steamId: 'steam-alpha-1',
+    name: 'Player alpha-1',
+    teamId: 1,
+    teamName: 'Vanguard',
+    squadId: 10,
+    squadName: 'Vanguard Alpha',
+    role: 'Rifleman',
+    isLeader: false,
+    isCommander: false,
+    playtimeSeconds: 7200,
+    playtimeHours: 2,
+    playtimeSource: 'test',
     ...overrides
   };
 }
@@ -100,36 +114,116 @@ test('returns a degraded state when no Team Balancer report is available', () =>
   assert.match(view.message, /dry-run балансу/i);
 });
 
-test('marks recommended squad impact proposals as conflicting red rows', () => {
+test('marks recommended squad impact proposals inside the current roster', () => {
   const view = buildTeamBalancerDiffView(buildProposalSnapshot(), 'squad', { nowMs: NOW_MS });
+  const mark = buildTeamBalancerRosterMark(
+    buildProposalSnapshot(),
+    'squad',
+    1,
+    buildRosterPlayer(),
+    { nowMs: NOW_MS }
+  );
+  const serialized = JSON.stringify({ view, mark });
 
   assert.equal(view.state, 'proposal');
   assert.equal(view.mode, 'squad');
   assert.equal(view.triggerLabel, 'Перекос импакта');
-  assert.equal(view.teamSizeSummary, '6:2 -> 4:4');
-  assert.equal(view.impactSummary, '1800ч:900ч -> 1440ч:1260ч');
-  assert.deepEqual(view.rows, [
-    {
-      id: 'squad:1:alpha',
-      title: 'Сквад alpha',
-      subtitle: '2 игрока · impact 360ч',
-      route: 'Сторона 1 -> Сторона 2',
-      tone: 'conflict',
-      statusLabel: 'Рекомендуется перенести impact'
-    }
-  ]);
+  assert.equal(view.teamSizeSummary, 'сейчас 6:2 · dry-run 4:4');
+  assert.equal(view.impactSummary, 'сейчас 1 800:900 · dry-run 1 440:1 260');
+  assert.equal(view.rows.length, 0);
+  assert.deepEqual(mark, {
+    tone: 'conflict',
+    label: 'В плане баланса',
+    detail: 'Финальная сторона: Сторона 2',
+    impactLabel: 'impact 360'
+  });
+  assert.doesNotMatch(serialized, /->|\d+\s*ч|Рекомендуется перенести|Уже на нужной стороне/);
 });
 
-test('builds player-level proposal rows without exposing private identifiers', () => {
-  const view = buildTeamBalancerDiffView(buildProposalSnapshot(), 'player', { nowMs: NOW_MS });
-  const serialized = JSON.stringify(view);
+test('marks player-level proposals without exposing private identifiers', () => {
+  const snapshot = buildProposalSnapshot();
+  const view = buildTeamBalancerDiffView(snapshot, 'player', { nowMs: NOW_MS });
+  const mark = buildTeamBalancerRosterMark(snapshot, 'player', 1, buildRosterPlayer(), {
+    nowMs: NOW_MS
+  });
+  const serialized = JSON.stringify({ view, mark });
 
   assert.equal(view.mode, 'player');
-  assert.equal(view.rows.length, 2);
-  assert.equal(view.rows[0].title, 'Player alpha-1');
-  assert.equal(view.rows[0].subtitle, 'Сквад alpha · impact 200ч');
-  assert.equal(view.rows[0].tone, 'conflict');
+  assert.equal(view.rows.length, 0);
+  assert.deepEqual(mark, {
+    tone: 'conflict',
+    label: 'В плане баланса',
+    detail: 'Финальная сторона: Сторона 2',
+    impactLabel: 'impact 200'
+  });
   assert.doesNotMatch(serialized, /eosID|steamID|discordID|playerIds|7656119/);
+});
+
+test('uses neutral roster tone when the player is already aligned with the report', () => {
+  const snapshot = buildProposalSnapshot({
+    cohorts: [
+      {
+        type: 'squad',
+        cohortKey: 'squad:1:alpha',
+        fromTeamID: '1',
+        toTeamID: '2',
+        squadID: 'alpha',
+        playerCount: 2,
+        status: 'already_target',
+        confidence: null,
+        score: 360
+      }
+    ],
+    players: []
+  });
+
+  const mark = buildTeamBalancerRosterMark(
+    snapshot,
+    'squad',
+    2,
+    buildRosterPlayer({ teamId: 2 }),
+    { nowMs: NOW_MS }
+  );
+
+  assert.deepEqual(mark, {
+    tone: 'neutral',
+    label: 'План совпал',
+    detail: 'Финальная сторона: Сторона 2',
+    impactLabel: 'impact 360'
+  });
+});
+
+test('uses success roster tone for moves confirmed by the balancer window', () => {
+  const snapshot = buildProposalSnapshot({
+    action: 'noop',
+    result: 'balanced',
+    players: [
+      {
+        name: 'Player alpha-1',
+        fromTeamID: '1',
+        toTeamID: '2',
+        squadID: 'alpha',
+        status: 'moved',
+        confidence: null,
+        score: 200
+      }
+    ]
+  });
+
+  const mark = buildTeamBalancerRosterMark(
+    snapshot,
+    'player',
+    2,
+    buildRosterPlayer({ teamId: 2 }),
+    { nowMs: NOW_MS }
+  );
+
+  assert.deepEqual(mark, {
+    tone: 'success',
+    label: 'Свежий перенос',
+    detail: 'Финальная сторона: Сторона 2',
+    impactLabel: 'impact 200'
+  });
 });
 
 test('shows healthy state when the dry run does not propose moves', () => {
@@ -148,12 +242,12 @@ test('shows healthy state when the dry run does not propose moves', () => {
         },
         impact: {
           available: true,
-          metric: 'playtimeSeconds',
-          unit: 'seconds',
-          before: { 1: 1200 * 60 * 60, 2: 1180 * 60 * 60 },
-          after: { 1: 1200 * 60 * 60, 2: 1180 * 60 * 60 },
-          diffBefore: 20 * 60 * 60,
-          diffAfter: 20 * 60 * 60,
+          metric: 'autobalancerScore',
+          unit: 'score',
+          before: { 1: 1200, 2: 1180 },
+          after: { 1: 1200, 2: 1180 },
+          diffBefore: 20,
+          diffAfter: 20,
           moved: 0
         },
         winStreak: null,
@@ -169,8 +263,8 @@ test('shows healthy state when the dry run does not propose moves', () => {
 
   assert.equal(view.state, 'healthy');
   assert.equal(view.tone, 'neutral');
-  assert.equal(view.teamSizeSummary, '40:39 -> 40:39');
-  assert.equal(view.impactSummary, '1200ч:1180ч -> 1200ч:1180ч');
+  assert.equal(view.teamSizeSummary, 'сейчас 40:39 · dry-run 40:39');
+  assert.equal(view.impactSummary, 'сейчас 1 200:1 180 · dry-run 1 200:1 180');
   assert.equal(view.message, 'Импакт в допуске');
 });
 

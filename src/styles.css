@@ -1661,6 +1661,27 @@ input {
   border-radius: 18px;
 }
 
+.roster-row-balancer-conflict {
+  border-color: rgba(255, 120, 120, 0.34);
+  background:
+    linear-gradient(90deg, rgba(255, 120, 120, 0.12), rgba(255, 255, 255, 0.03) 62%),
+    rgba(255, 255, 255, 0.03);
+}
+
+.roster-row-balancer-neutral {
+  border-color: rgba(178, 190, 205, 0.22);
+  background:
+    linear-gradient(90deg, rgba(178, 190, 205, 0.08), rgba(255, 255, 255, 0.03) 62%),
+    rgba(255, 255, 255, 0.03);
+}
+
+.roster-row-balancer-success {
+  border-color: rgba(104, 230, 166, 0.32);
+  background:
+    linear-gradient(90deg, rgba(104, 230, 166, 0.12), rgba(255, 255, 255, 0.03) 62%),
+    rgba(255, 255, 255, 0.03);
+}
+
 .roster-main {
   min-width: 0;
 }
@@ -1674,6 +1695,46 @@ input {
 
 .roster-name-row strong {
   font-size: 0.98rem;
+}
+
+.roster-balance-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--muted-strong);
+  font-size: 0.72rem;
+  font-weight: 850;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.roster-balance-badge-conflict {
+  background: rgba(255, 120, 120, 0.14);
+  color: var(--danger);
+}
+
+.roster-balance-badge-neutral {
+  background: rgba(178, 190, 205, 0.1);
+  color: rgba(220, 226, 236, 0.78);
+}
+
+.roster-balance-badge-success {
+  background: rgba(104, 230, 166, 0.14);
+  color: var(--lime);
+}
+
+.roster-balance-detail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 7px;
+  color: rgba(255, 255, 255, 0.52);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  line-height: 1.35;
 }
 
 .roster-hours {
