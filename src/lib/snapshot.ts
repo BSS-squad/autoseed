@@ -16,6 +16,10 @@ import type {
   ExporterSnapshotSquadResponse,
   ExporterSnapshotTeamResponse,
   ExporterSquadSnapshot,
+  ExporterTeamBalancerCohortSnapshot,
+  ExporterTeamBalancerPlayerSnapshot,
+  ExporterTeamBalancerSignalsSnapshot,
+  ExporterTeamBalancerSnapshot,
   ExporterTeamSnapshot
 } from '../types';
 
@@ -57,6 +61,11 @@ function toStringOrNull(value: unknown): string | null {
 function toNumber(value: unknown, fallback = 0): number {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function toFiniteNumberOrNull(value: unknown): number | null {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function toIsoStringOrNull(value: unknown): string | null {
@@ -230,6 +239,131 @@ function mapRaffleSnapshot(value: unknown): ExporterRaffleSnapshot | null {
   };
 }
 
+function mapTeamBalancerMode(value: unknown): 'squad' | 'player' | null {
+  return value === 'squad' || value === 'player' ? value : null;
+}
+
+function mapTeamBalancerModes(value: unknown): Array<'squad' | 'player'> {
+  if (!Array.isArray(value)) return ['squad', 'player'];
+  const modes = value
+    .map(mapTeamBalancerMode)
+    .filter((entry): entry is 'squad' | 'player' => Boolean(entry));
+  return modes.length ? modes : ['squad', 'player'];
+}
+
+function mapTeamBalancerCounts(value: unknown): Record<string, number> {
+  const counts = getRecord(value);
+  if (!counts) return {};
+
+  return Object.fromEntries(
+    Object.entries(counts).map(([key, item]) => [
+      key,
+      Math.max(0, Math.round(toNumber(item)))
+    ])
+  );
+}
+
+function mapTeamBalancerSignals(value: unknown): ExporterTeamBalancerSignalsSnapshot {
+  const signals = getRecord(value) || {};
+  const teamSize = getRecord(signals.teamSize) || {};
+
+  return {
+    triggerReason: toStringOrNull(signals.triggerReason),
+    teamSize: {
+      before: mapTeamBalancerCounts(teamSize.before),
+      after: mapTeamBalancerCounts(teamSize.after),
+      diffBefore: Math.max(0, Math.round(toNumber(teamSize.diffBefore))),
+      diffAfter: Math.max(0, Math.round(toNumber(teamSize.diffAfter)))
+    },
+    winStreak: signals.winStreak ?? null,
+    ticketDiff: signals.ticketDiff ?? null,
+    recentRoundSeverity: signals.recentRoundSeverity ?? null
+  };
+}
+
+function mapTeamBalancerCohort(value: unknown): ExporterTeamBalancerCohortSnapshot | null {
+  const cohort = getRecord(value);
+  if (!cohort) return null;
+
+  return {
+    type: toStringOrNull(cohort.type) || 'squad',
+    cohortKey: toStringOrNull(cohort.cohortKey) || '',
+    fromTeamID: toStringOrNull(cohort.fromTeamID),
+    toTeamID: toStringOrNull(cohort.toTeamID),
+    squadID:
+      typeof cohort.squadID === 'number' || typeof cohort.squadID === 'string'
+        ? cohort.squadID
+        : null,
+    playerCount: Math.max(0, Math.round(toNumber(cohort.playerCount))),
+    status: toStringOrNull(cohort.status) || 'noop',
+    confidence: toFiniteNumberOrNull(cohort.confidence),
+    score: toFiniteNumberOrNull(cohort.score)
+  };
+}
+
+function mapTeamBalancerPlayer(value: unknown): ExporterTeamBalancerPlayerSnapshot | null {
+  const player = getRecord(value);
+  if (!player) return null;
+
+  return {
+    name: toStringOrNull(player.name) || 'Игрок',
+    fromTeamID: toStringOrNull(player.fromTeamID),
+    toTeamID: toStringOrNull(player.toTeamID),
+    squadID:
+      typeof player.squadID === 'number' || typeof player.squadID === 'string'
+        ? player.squadID
+        : null,
+    status: toStringOrNull(player.status) || 'noop',
+    confidence: toFiniteNumberOrNull(player.confidence),
+    score: toFiniteNumberOrNull(player.score)
+  };
+}
+
+function mapTeamBalancerSnapshot(value: unknown): ExporterTeamBalancerSnapshot | null {
+  const snapshot = getRecord(value);
+  if (!snapshot) return null;
+
+  const availableProposalModes = mapTeamBalancerModes(snapshot.availableProposalModes);
+  const defaultProposalMode =
+    mapTeamBalancerMode(snapshot.defaultProposalMode) || availableProposalModes[0] || 'squad';
+  const cohorts = Array.isArray(snapshot.cohorts)
+    ? snapshot.cohorts
+        .map(mapTeamBalancerCohort)
+        .filter((entry): entry is ExporterTeamBalancerCohortSnapshot => Boolean(entry))
+    : [];
+  const players = Array.isArray(snapshot.players)
+    ? snapshot.players
+        .map(mapTeamBalancerPlayer)
+        .filter((entry): entry is ExporterTeamBalancerPlayerSnapshot => Boolean(entry))
+    : [];
+
+  return {
+    version: Math.max(1, Math.round(toNumber(snapshot.version, 1))),
+    generatedAt: toIsoStringOrNull(snapshot.generatedAt),
+    decisionId: toStringOrNull(snapshot.decisionId),
+    serverId:
+      typeof snapshot.serverId === 'number' || typeof snapshot.serverId === 'string'
+        ? snapshot.serverId
+        : null,
+    mode: toStringOrNull(snapshot.mode) || 'dry-run',
+    action: toStringOrNull(snapshot.action) || 'noop',
+    result: toStringOrNull(snapshot.result),
+    trigger: toStringOrNull(snapshot.trigger),
+    snapshotTimestamp: toIsoStringOrNull(snapshot.snapshotTimestamp),
+    availableProposalModes,
+    defaultProposalMode,
+    reasonCodes: Array.isArray(snapshot.reasonCodes)
+      ? snapshot.reasonCodes
+          .map((entry) => toStringOrNull(entry))
+          .filter((entry): entry is string => Boolean(entry))
+      : [],
+    signals: mapTeamBalancerSignals(snapshot.signals),
+    summary: toStringOrNull(snapshot.summary),
+    cohorts,
+    players
+  };
+}
+
 function mapServer(
   server: ExporterSnapshotServerResponse,
   sourceUrl: string,
@@ -249,6 +383,7 @@ function mapServer(
     teams: Array.isArray(server.teams) ? server.teams.map(mapTeam) : [],
     players: Array.isArray(server.players) ? server.players.map(mapPlayer) : [],
     raffles: mapRaffleSnapshot(server.raffles),
+    teamBalancer: mapTeamBalancerSnapshot(server.teamBalancer),
     updatedAt: Number(server.updatedAt) || Date.now(),
     sourceUrl,
     joinLinkUrl

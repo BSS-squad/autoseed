@@ -163,7 +163,8 @@ function buildSnapshot({
   queueLength,
   online,
   timestamp = BASE_TIME,
-  raffles = null
+  raffles = null,
+  teamBalancer = null
 }: {
   id: number;
   code: string;
@@ -174,6 +175,7 @@ function buildSnapshot({
   online: boolean;
   timestamp?: number;
   raffles?: unknown;
+  teamBalancer?: unknown;
 }) {
   return {
     success: true,
@@ -195,9 +197,74 @@ function buildSnapshot({
         teams: [buildTeam(1, 'Vanguard', 342.6), buildTeam(2, 'Nomad', 287.4)],
         players: [],
         raffles,
+        teamBalancer,
         updatedAt: BASE_TIME
       }
     ]
+  };
+}
+
+function buildTeamBalancerProposalSnapshot(overrides: Record<string, unknown> = {}) {
+  return {
+    version: 1,
+    generatedAt: '2026-07-06T12:00:00.000Z',
+    decisionId: 'decision-1',
+    serverId: 'squadjs2',
+    mode: 'dry-run',
+    action: 'recommend',
+    result: 'proposal',
+    trigger: 'UPDATED_PLAYER_INFORMATION',
+    snapshotTimestamp: '2026-07-06T11:59:55.000Z',
+    availableProposalModes: ['squad', 'player'],
+    defaultProposalMode: 'squad',
+    reasonCodes: [],
+    signals: {
+      triggerReason: 'team_size_diff',
+      teamSize: {
+        before: { 1: 6, 2: 2 },
+        after: { 1: 4, 2: 4 },
+        diffBefore: 4,
+        diffAfter: 0
+      },
+      winStreak: null,
+      ticketDiff: null,
+      recentRoundSeverity: null
+    },
+    summary: 'Recommended 2 player move from Team 1 to Team 2.',
+    cohorts: [
+      {
+        type: 'squad',
+        cohortKey: 'squad:1:alpha',
+        fromTeamID: '1',
+        toTeamID: '2',
+        squadID: 'alpha',
+        playerCount: 2,
+        status: 'recommended',
+        confidence: null,
+        score: null
+      }
+    ],
+    players: [
+      {
+        name: 'Player alpha-1',
+        fromTeamID: '1',
+        toTeamID: '2',
+        squadID: 'alpha',
+        status: 'recommended',
+        confidence: null,
+        score: null
+      },
+      {
+        name: 'Player alpha-2',
+        fromTeamID: '1',
+        toTeamID: '2',
+        squadID: 'alpha',
+        status: 'recommended',
+        confidence: null,
+        score: null
+      }
+    ],
+    ...overrides
   };
 }
 
@@ -298,7 +365,8 @@ async function expectPlayerFriendlyLanguage(page: Page) {
 async function mockAutoseedApi(
   page: Page,
   counters?: { joinLinkRequests: number },
-  config = runtimeConfig
+  config = runtimeConfig,
+  options: { squadjs2TeamBalancer?: unknown } = {}
 ) {
   await page.route('**/runtime-config.json', (route) => fulfillJson(route, config));
   await page.route('**/mock/**/events', (route) =>
@@ -332,7 +400,8 @@ async function mockAutoseedApi(
         playerCount: 56,
         maxPlayers: 100,
         queueLength: 2,
-        online: true
+        online: true,
+        teamBalancer: options.squadjs2TeamBalancer ?? null
       })
     )
   );
@@ -949,6 +1018,83 @@ test('uses configured night preferred server over day priority order', async ({ 
   await page.goto('/');
 
   await expect(page.getByTestId('overview-target')).toContainText('[RU] BSS Spec Ops');
+});
+
+test('renders an empty Team Balancer state when no fresh report exists', async ({ page }) => {
+  await page.clock.setFixedTime('2026-07-06T12:01:00.000Z');
+  await mockAutoseedApi(page);
+
+  await page.goto('/');
+
+  const panel = page.getByTestId('team-balancer-panel');
+  await expect(panel).toBeVisible();
+  await expect(panel).toContainText('Баланс команд');
+  await expect(panel).toContainText('Отчета балансировки пока нет');
+  await expect(panel).not.toContainText('snapshot');
+  await expect(panel).not.toContainText('7656119');
+});
+
+test('renders healthy Team Balancer state without proposal rows', async ({ page }) => {
+  await page.clock.setFixedTime('2026-07-06T12:01:00.000Z');
+  await mockAutoseedApi(page, undefined, runtimeConfig, {
+    squadjs2TeamBalancer: buildTeamBalancerProposalSnapshot({
+      action: 'noop',
+      result: 'balanced',
+      reasonCodes: ['team_size_within_tolerance'],
+      signals: {
+        triggerReason: 'team_size_within_tolerance',
+        teamSize: {
+          before: { 1: 40, 2: 39 },
+          after: { 1: 40, 2: 39 },
+          diffBefore: 1,
+          diffAfter: 1
+        },
+        winStreak: null,
+        ticketDiff: null,
+        recentRoundSeverity: null
+      },
+      cohorts: [],
+      players: []
+    })
+  });
+
+  await page.goto('/');
+  await page.getByTestId('server-card-2').locator('button').first().click();
+
+  const panel = page.getByTestId('team-balancer-panel');
+  await expect(panel).toContainText('Баланс в допуске');
+  await expect(panel).toContainText('40:39 -> 40:39');
+  await expect(page.getByTestId('team-balancer-diff-row')).toHaveCount(0);
+});
+
+test('renders Team Balancer proposals and switches squad/player modes', async ({ page }) => {
+  await page.clock.setFixedTime('2026-07-06T12:01:00.000Z');
+  await mockAutoseedApi(page, undefined, runtimeConfig, {
+    squadjs2TeamBalancer: buildTeamBalancerProposalSnapshot()
+  });
+
+  await page.goto('/');
+  await page.getByTestId('server-card-2').locator('button').first().click();
+
+  const panel = page.getByTestId('team-balancer-panel');
+  await expect(panel).toContainText('Нужно действие');
+  await expect(panel).toContainText('Разница по размеру сторон');
+  await expect(panel).toContainText('6:2 -> 4:4');
+  await expect(page.getByTestId('team-balancer-diff-row')).toHaveCount(1);
+  await expect(page.getByTestId('team-balancer-diff-row').first()).toContainText('Сквад alpha');
+  await expect(page.getByTestId('team-balancer-diff-row').first()).toContainText(
+    'Рекомендуется перевести'
+  );
+  await expect(page.getByTestId('team-balancer-diff-row').first()).toHaveClass(/tone-conflict/);
+
+  await page.getByTestId('team-balancer-mode-player').click();
+
+  await expect(page.getByTestId('team-balancer-diff-row')).toHaveCount(2);
+  await expect(page.getByTestId('team-balancer-diff-row').first()).toContainText(
+    'Player alpha-1'
+  );
+  await expect(panel).not.toContainText('steamID');
+  await expect(panel).not.toContainText('playerIds');
 });
 
 test('uses player-friendly language on the home page', async ({ page }) => {
