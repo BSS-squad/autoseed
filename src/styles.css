@@ -1379,6 +1379,183 @@ input {
   color: #ffb6b6;
 }
 
+.team-balancer-panel {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.032);
+}
+
+.team-balancer-panel.tone-conflict {
+  border-color: rgba(255, 140, 140, 0.26);
+  background:
+    linear-gradient(135deg, rgba(255, 140, 140, 0.08), transparent 58%),
+    rgba(255, 255, 255, 0.032);
+}
+
+.team-balancer-panel.tone-success {
+  border-color: rgba(118, 242, 184, 0.24);
+}
+
+.team-balancer-head,
+.team-balancer-diff-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.team-balancer-head h3 {
+  margin: 5px 0 0;
+  font-size: 1.18rem;
+  line-height: 1.15;
+}
+
+.team-balancer-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--muted-strong);
+  font-size: 0.82rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.team-balancer-status-conflict {
+  border-color: rgba(255, 140, 140, 0.28);
+  background: rgba(255, 140, 140, 0.1);
+  color: var(--danger);
+}
+
+.team-balancer-status-success {
+  border-color: rgba(118, 242, 184, 0.26);
+  background: rgba(118, 242, 184, 0.1);
+  color: var(--lime);
+}
+
+.team-balancer-meta {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(140px, 0.8fr) minmax(110px, 0.55fr);
+  gap: 10px;
+}
+
+.team-balancer-meta > div,
+.team-balancer-empty,
+.team-balancer-diff-row {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.team-balancer-meta > div {
+  min-width: 0;
+  padding: 12px;
+  border-radius: 16px;
+}
+
+.team-balancer-meta span,
+.team-balancer-diff-main span {
+  display: block;
+  color: rgba(255, 255, 255, 0.52);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.team-balancer-meta strong {
+  display: block;
+  margin-top: 8px;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}
+
+.team-balancer-modes {
+  width: min(360px, 100%);
+}
+
+.team-balancer-diff-list {
+  display: grid;
+  gap: 10px;
+}
+
+.team-balancer-diff-row {
+  align-items: center;
+  padding: 12px;
+  border-radius: 16px;
+}
+
+.team-balancer-diff-row.tone-conflict {
+  border-color: rgba(255, 140, 140, 0.24);
+  background: rgba(255, 140, 140, 0.07);
+}
+
+.team-balancer-diff-row.tone-success {
+  border-color: rgba(118, 242, 184, 0.22);
+  background: rgba(118, 242, 184, 0.07);
+}
+
+.team-balancer-diff-main {
+  min-width: 0;
+}
+
+.team-balancer-diff-main strong {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.team-balancer-diff-main span {
+  margin-top: 5px;
+}
+
+.team-balancer-diff-route {
+  color: var(--muted-strong);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.86rem;
+  white-space: nowrap;
+}
+
+.team-balancer-diff-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--muted-strong);
+  font-size: 0.78rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.team-balancer-diff-row.tone-conflict .team-balancer-diff-status {
+  background: rgba(255, 140, 140, 0.12);
+  color: var(--danger);
+}
+
+.team-balancer-diff-row.tone-success .team-balancer-diff-status {
+  background: rgba(118, 242, 184, 0.12);
+  color: var(--lime);
+}
+
+.team-balancer-empty {
+  display: grid;
+  min-height: 72px;
+  place-items: center;
+  padding: 14px;
+  border-radius: 16px;
+  color: var(--muted);
+  text-align: center;
+}
+
 .teams-grid {
   position: relative;
   z-index: 1;
@@ -1915,7 +2092,8 @@ input {
 .hero-glance-card,
 .overview-card,
 .server-switcher-card,
-.team-panel {
+.team-panel,
+.team-balancer-panel {
   animation: reveal-up 620ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -1979,7 +2157,8 @@ input {
   .server-board,
   .overview-card,
   .server-switcher-card,
-  .team-panel {
+  .team-panel,
+  .team-balancer-panel {
     padding: 18px;
     border-radius: 24px;
   }
@@ -1991,6 +2170,8 @@ input {
   .server-title-row,
   .server-title-main,
   .team-panel-head,
+  .team-balancer-head,
+  .team-balancer-diff-row,
   .summary-row,
   .details-summary {
     flex-direction: column;
@@ -2109,6 +2290,16 @@ input {
   .overview-card,
   .signal-card {
     min-height: auto;
+  }
+
+  .team-balancer-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .team-balancer-diff-route,
+  .team-balancer-diff-status,
+  .team-balancer-status {
+    white-space: normal;
   }
 
   .roster-row {

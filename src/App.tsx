@@ -20,6 +20,7 @@ import {
   SNAPSHOT_POLL_INTERVAL_MS,
   subscribeCombinedSnapshot
 } from './lib/snapshot';
+import { buildTeamBalancerDiffView } from './lib/team-balancer-diff';
 import {
   loadStoredState,
   saveActiveRedirectServerKey,
@@ -41,8 +42,10 @@ import type {
   ExporterRaffleSnapshot,
   ExporterServerSnapshot,
   ExporterSquadSnapshot,
+  ExporterTeamBalancerSnapshot,
   ExporterTeamSnapshot,
-  SelectionState
+  SelectionState,
+  TeamBalancerProposalMode
 } from './types';
 import projectLogo from '../image.png';
 
@@ -66,6 +69,10 @@ type SnapshotUpdateSource = 'manual' | 'stream';
 type TeamPanelProps = {
   team: ExporterTeamSnapshot;
   opponent: ExporterTeamSnapshot | null;
+};
+
+type TeamBalancerPanelProps = {
+  snapshot: ExporterTeamBalancerSnapshot | null;
 };
 
 type TeamRosterGroup = {
@@ -1220,6 +1227,92 @@ function TeamPanel({ team, opponent }: TeamPanelProps) {
           <div className="roster-empty">Список игроков пока пуст.</div>
         )}
       </div>
+    </section>
+  );
+}
+
+function TeamBalancerPanel({ snapshot }: TeamBalancerPanelProps) {
+  const [proposalMode, setProposalMode] = useState<TeamBalancerProposalMode>('squad');
+  const view = useMemo(
+    () => buildTeamBalancerDiffView(snapshot, proposalMode),
+    [proposalMode, snapshot]
+  );
+  const showModeSwitch = Boolean(snapshot && view.modes.length > 1);
+
+  return (
+    <section
+      className={classNames('team-balancer-panel', `tone-${view.tone}`)}
+      data-testid="team-balancer-panel"
+      aria-label="Баланс команд"
+    >
+      <div className="team-balancer-head">
+        <div>
+          <span className="section-eyebrow">Баланс</span>
+          <h3>Баланс команд</h3>
+        </div>
+        <span
+          className={classNames('team-balancer-status', `team-balancer-status-${view.tone}`)}
+          data-testid="team-balancer-state"
+        >
+          {view.message}
+        </span>
+      </div>
+
+      <div className="team-balancer-meta">
+        <div>
+          <span>Причина</span>
+          <strong>{view.triggerLabel}</strong>
+        </div>
+        <div>
+          <span>Размер сторон</span>
+          <strong>{view.teamSizeSummary}</strong>
+        </div>
+        <div>
+          <span>Обновлено</span>
+          <strong>{view.updatedAtLabel}</strong>
+        </div>
+      </div>
+
+      {showModeSwitch ? (
+        <div
+          className="segmented-control team-balancer-modes"
+          role="group"
+          aria-label="Режим предложений баланса"
+        >
+          {view.modes.map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              className={classNames('segment', view.mode === mode && 'segment-active')}
+              onClick={() => setProposalMode(mode)}
+              data-testid={`team-balancer-mode-${mode}`}
+            >
+              {mode === 'squad' ? 'Сквады' : 'Игроки'}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {view.rows.length ? (
+        <div className="team-balancer-diff-list">
+          {view.rows.map((row) => (
+            <article
+              key={row.id}
+              className={classNames('team-balancer-diff-row', `tone-${row.tone}`)}
+              data-testid="team-balancer-diff-row"
+            >
+              <div className="team-balancer-diff-main">
+                <strong>{row.title}</strong>
+                <span>{row.subtitle}</span>
+              </div>
+              <div className="team-balancer-diff-route">{row.route}</div>
+              <span className="team-balancer-diff-status">{row.statusLabel}</span>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <div className="team-balancer-empty">{view.message}</div>
+      )}
     </section>
   );
 }
@@ -2730,6 +2823,8 @@ export default function App({ config }: AppProps) {
               </div>
 
               {server.error ? <p className="error-text">{server.error}</p> : null}
+
+              <TeamBalancerPanel snapshot={server.teamBalancer} />
 
               <div className="teams-grid">
                 {teamOne ? <TeamPanel team={teamOne} opponent={teamTwo || null} /> : null}
