@@ -1478,6 +1478,56 @@ input {
   line-height: 1.35;
 }
 
+.team-balancer-safety-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.team-balancer-safety-card {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+  min-height: 104px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.team-balancer-safety-card.tone-conflict {
+  border-color: rgba(255, 140, 140, 0.24);
+  background: rgba(255, 140, 140, 0.07);
+}
+
+.team-balancer-safety-card.tone-success {
+  border-color: rgba(118, 242, 184, 0.22);
+  background: rgba(118, 242, 184, 0.07);
+}
+
+.team-balancer-safety-card span {
+  color: rgba(255, 255, 255, 0.52);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.team-balancer-safety-card strong {
+  overflow-wrap: anywhere;
+  font-size: 1.04rem;
+  line-height: 1.25;
+}
+
+.team-balancer-safety-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.83rem;
+  line-height: 1.38;
+  overflow-wrap: anywhere;
+}
+
 .team-balancer-modes {
   width: min(360px, 100%);
 }
@@ -2504,6 +2554,10 @@ input {
   }
 
   .team-balancer-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .team-balancer-safety-grid {
     grid-template-columns: 1fr;
   }
 
