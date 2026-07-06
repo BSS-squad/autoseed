@@ -1484,6 +1484,56 @@ input {
   gap: 10px;
 }
 
+.team-balancer-round-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.team-balancer-round-card {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+  min-height: 98px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.team-balancer-round-card.tone-conflict {
+  border-color: rgba(255, 140, 140, 0.24);
+  background: rgba(255, 140, 140, 0.07);
+}
+
+.team-balancer-round-card.tone-success {
+  border-color: rgba(118, 242, 184, 0.22);
+  background: rgba(118, 242, 184, 0.07);
+}
+
+.team-balancer-round-card span {
+  color: rgba(255, 255, 255, 0.52);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.team-balancer-round-card strong {
+  overflow-wrap: anywhere;
+  font-size: 1.04rem;
+  line-height: 1.25;
+}
+
+.team-balancer-round-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.83rem;
+  line-height: 1.38;
+  overflow-wrap: anywhere;
+}
+
 .team-balancer-safety-card {
   display: grid;
   align-content: start;
@@ -2557,6 +2607,7 @@ input {
     grid-template-columns: 1fr;
   }
 
+  .team-balancer-round-grid,
   .team-balancer-safety-grid {
     grid-template-columns: 1fr;
   }

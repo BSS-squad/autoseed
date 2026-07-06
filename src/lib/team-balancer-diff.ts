@@ -31,6 +31,14 @@ export type TeamBalancerSafetyCard = {
   detail: string | null;
 };
 
+export type TeamBalancerRoundSignalCard = {
+  id: 'severity' | 'ticketDiff' | 'winStreak';
+  tone: TeamBalancerDiffTone;
+  label: string;
+  value: string;
+  detail: string | null;
+};
+
 export type TeamBalancerDiffView = {
   state: TeamBalancerDiffViewState;
   tone: TeamBalancerDiffTone;
@@ -43,6 +51,7 @@ export type TeamBalancerDiffView = {
   updatedAtLabel: string;
   ageMs: number;
   safetyCards: TeamBalancerSafetyCard[];
+  roundSignals: TeamBalancerRoundSignalCard[];
   rows: never[];
 };
 
@@ -84,6 +93,11 @@ function formatPercent(value: number | null | undefined): string {
 function joinDetailParts(parts: Array<string | null | undefined>): string | null {
   const filtered = parts.map((part) => String(part || '').trim()).filter(Boolean);
   return filtered.length ? filtered.join(' · ') : null;
+}
+
+function formatSignedValue(value: number): string {
+  const formatted = formatImpactValue(value);
+  return value > 0 ? `+${formatted}` : formatted;
 }
 
 function resolveImpactValue(value: {
@@ -297,6 +311,97 @@ function buildTeamBalancerSafetyCards(
   ].filter((card): card is TeamBalancerSafetyCard => Boolean(card));
 }
 
+function getRoundSeverityValue(level: string): string {
+  const normalized = level.trim().toLowerCase();
+  const labels: Record<string, string> = {
+    severe: 'Сильный перекос',
+    high: 'Заметный перекос'
+  };
+  return labels[normalized] || level;
+}
+
+function getRoundSeverityTone(level: string): TeamBalancerDiffTone {
+  return level.trim().toLowerCase() === 'severe' ? 'conflict' : 'neutral';
+}
+
+function formatRoundSeverityReason(reason: string): string | null {
+  const labels: Record<string, string> = {
+    ticket_diff: 'ticket diff',
+    win_streak: 'серия побед'
+  };
+  return labels[reason] || reason || null;
+}
+
+function buildRoundSeveritySignalCard(
+  snapshot: ExporterTeamBalancerSnapshot
+): TeamBalancerRoundSignalCard | null {
+  const severity = snapshot.signals.recentRoundSeverity;
+  if (!severity) return null;
+
+  const detail =
+    joinDetailParts([
+      typeof severity.ticketDiff === 'number'
+        ? `ticket diff ${formatImpactValue(severity.ticketDiff)}`
+        : null,
+      typeof severity.winStreak === 'number' && severity.winStreak > 0
+        ? `серия ${formatImpactValue(severity.winStreak)}`
+        : null
+    ]) ||
+    joinDetailParts(severity.reasons.map(formatRoundSeverityReason));
+
+  return {
+    id: 'severity',
+    tone: getRoundSeverityTone(severity.level),
+    label: 'Последние раунды',
+    value: getRoundSeverityValue(severity.level),
+    detail
+  };
+}
+
+function buildTicketDiffSignalCard(
+  snapshot: ExporterTeamBalancerSnapshot
+): TeamBalancerRoundSignalCard | null {
+  const ticketDiff = snapshot.signals.ticketDiff;
+  if (!ticketDiff) return null;
+
+  return {
+    id: 'ticketDiff',
+    tone: 'neutral',
+    label: 'Последний счет',
+    value: `${formatTeamId(ticketDiff.winnerTeamID)} ${formatSignedValue(ticketDiff.diff)}`,
+    detail: `${formatImpactValue(ticketDiff.winnerTickets)}:${formatImpactValue(
+      ticketDiff.loserTickets
+    )} против ${formatTeamId(ticketDiff.loserTeamID)}`
+  };
+}
+
+function buildWinStreakSignalCard(
+  snapshot: ExporterTeamBalancerSnapshot
+): TeamBalancerRoundSignalCard | null {
+  const winStreak = snapshot.signals.winStreak;
+  if (!winStreak) return null;
+
+  return {
+    id: 'winStreak',
+    tone: 'neutral',
+    label: 'Серия побед',
+    value: `${formatTeamId(winStreak.teamID)} x${formatImpactValue(winStreak.count)}`,
+    detail: `порог ${formatImpactValue(winStreak.threshold)}`
+  };
+}
+
+function buildTeamBalancerRoundSignals(
+  snapshot: ExporterTeamBalancerSnapshot | null
+): TeamBalancerRoundSignalCard[] {
+  if (!snapshot) return [];
+
+  return [
+    buildRoundSeveritySignalCard(snapshot),
+    buildTicketDiffSignalCard(snapshot),
+    buildWinStreakSignalCard(snapshot)
+  ].filter((card): card is TeamBalancerRoundSignalCard => Boolean(card));
+}
+
 function getStatusTone(status: TeamBalancerProposalStatus): TeamBalancerDiffTone {
   if (status === 'accepted' || status === 'moved') return 'success';
   if (status === 'recommended') return 'conflict';
@@ -486,6 +591,7 @@ export function buildTeamBalancerDiffView(
       updatedAtLabel: '—',
       ageMs: Number.POSITIVE_INFINITY,
       safetyCards: [],
+      roundSignals: [],
       rows: []
     };
   }
@@ -510,11 +616,13 @@ export function buildTeamBalancerDiffView(
       updatedAtLabel,
       ageMs,
       safetyCards: [],
+      roundSignals: [],
       rows: []
     };
   }
 
   const safetyCards = buildTeamBalancerSafetyCards(snapshot);
+  const roundSignals = buildTeamBalancerRoundSignals(snapshot);
   const hasProposal = snapshot.action === 'recommend' && getModeEntries(snapshot, mode).length > 0;
 
   if (!hasProposal) {
@@ -530,6 +638,7 @@ export function buildTeamBalancerDiffView(
       updatedAtLabel,
       ageMs,
       safetyCards,
+      roundSignals,
       rows: []
     };
   }
@@ -546,6 +655,7 @@ export function buildTeamBalancerDiffView(
     updatedAtLabel,
     ageMs,
     safetyCards,
+    roundSignals,
     rows: []
   };
 }

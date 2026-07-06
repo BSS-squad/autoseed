@@ -113,6 +113,7 @@ test('returns a degraded state when no Team Balancer report is available', () =>
 
   assert.equal(view.state, 'missing');
   assert.equal(view.tone, 'neutral');
+  assert.equal(view.roundSignals.length, 0);
   assert.equal(view.rows.length, 0);
   assert.match(view.message, /dry-run балансу/i);
 });
@@ -208,6 +209,78 @@ test('summarizes Team Balancer safety gates without leaking private identifiers'
       label: 'Исполнение',
       value: 'Заблокировано',
       detail: 'игроки 0/2 · попытки 0 · лимит 2'
+    }
+  ]);
+  assert.doesNotMatch(serialized, /eosID|steamID|discordID|playerIds|7656119|->/);
+});
+
+test('summarizes Team Balancer round-history signals without raw identifiers', () => {
+  const view = buildTeamBalancerDiffView(
+    buildProposalSnapshot({
+      signals: {
+        triggerReason: 'impact_diff',
+        teamSize: {
+          before: { 1: 6, 2: 2 },
+          after: { 1: 4, 2: 4 },
+          diffBefore: 4,
+          diffAfter: 0
+        },
+        impact: {
+          available: true,
+          metric: 'autobalancerScore',
+          unit: 'score',
+          before: { 1: 1800, 2: 900 },
+          after: { 1: 1440, 2: 1260 },
+          diffBefore: 900,
+          diffAfter: 180,
+          moved: 360
+        },
+        ticketDiff: {
+          winnerTeamID: '1',
+          loserTeamID: '2',
+          winnerTickets: 260,
+          loserTickets: 20,
+          diff: 240
+        },
+        winStreak: {
+          teamID: '1',
+          count: 2,
+          threshold: 2
+        },
+        recentRoundSeverity: {
+          level: 'severe',
+          reasons: ['ticket_diff', 'win_streak'],
+          ticketDiff: 240,
+          winStreak: 2
+        }
+      }
+    }),
+    'squad',
+    { nowMs: NOW_MS }
+  );
+  const serialized = JSON.stringify(view.roundSignals);
+
+  assert.deepEqual(view.roundSignals, [
+    {
+      id: 'severity',
+      tone: 'conflict',
+      label: 'Последние раунды',
+      value: 'Сильный перекос',
+      detail: 'ticket diff 240 · серия 2'
+    },
+    {
+      id: 'ticketDiff',
+      tone: 'neutral',
+      label: 'Последний счет',
+      value: 'Сторона 1 +240',
+      detail: '260:20 против Сторона 2'
+    },
+    {
+      id: 'winStreak',
+      tone: 'neutral',
+      label: 'Серия побед',
+      value: 'Сторона 1 x2',
+      detail: 'порог 2'
     }
   ]);
   assert.doesNotMatch(serialized, /eosID|steamID|discordID|playerIds|7656119|->/);

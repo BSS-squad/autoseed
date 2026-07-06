@@ -165,6 +165,27 @@ export type TeamBalancerProposalStatus =
   | 'noop'
   | string;
 
+export type ExporterTeamBalancerTicketDiffSignal = {
+  winnerTeamID: string;
+  loserTeamID: string;
+  winnerTickets: number;
+  loserTickets: number;
+  diff: number;
+};
+
+export type ExporterTeamBalancerWinStreakSignal = {
+  teamID: string;
+  count: number;
+  threshold: number;
+};
+
+export type ExporterTeamBalancerRecentRoundSeveritySignal = {
+  level: string;
+  reasons: string[];
+  ticketDiff: number | null;
+  winStreak: number | null;
+};
+
 export type ExporterTeamBalancerSignalsSnapshot = {
   triggerReason: string | null;
   teamSize: {
@@ -183,9 +204,9 @@ export type ExporterTeamBalancerSignalsSnapshot = {
     diffAfter: number;
     moved: number;
   } | null;
-  winStreak: unknown | null;
-  ticketDiff: unknown | null;
-  recentRoundSeverity: unknown | null;
+  winStreak: ExporterTeamBalancerWinStreakSignal | null;
+  ticketDiff: ExporterTeamBalancerTicketDiffSignal | null;
+  recentRoundSeverity: ExporterTeamBalancerRecentRoundSeveritySignal | null;
 };
 
 export type ExporterTeamBalancerCohortSnapshot = {
