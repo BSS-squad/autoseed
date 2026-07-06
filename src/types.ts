@@ -2,6 +2,7 @@ export type AppConfig = {
   app: {
     title: string;
     debugLogLimit?: number;
+    vipShopUrl?: string;
     testMode?: TestModeConfig;
   };
   policy?: Partial<SeedPolicy>;

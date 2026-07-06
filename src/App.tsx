@@ -109,6 +109,7 @@ type InlineHelpProps = {
 
 type AppNavProps = {
   currentRoute: AppRoute;
+  vipShopUrl?: string | null;
 };
 
 type RaffleServerSnapshot = {
@@ -141,6 +142,7 @@ type WinnersPageProps = {
   snapshot: CombinedSnapshot;
   now: number;
   route: AppRoute;
+  vipShopUrl: string | null;
 };
 
 const EMPTY_SNAPSHOT: CombinedSnapshot = {
@@ -271,6 +273,20 @@ function formatPrimeWindow(campaign: ExporterRaffleCampaignSnapshot | null): str
 
 function classNames(...values: Array<string | false | null | undefined>): string {
   return values.filter(Boolean).join(' ');
+}
+
+function getSafeHttpUrl(value?: string | null): string | null {
+  if (!value) return null;
+
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? trimmed : null;
+  } catch {
+    return null;
+  }
 }
 
 function getRouteFromHash(): AppRoute {
@@ -788,7 +804,7 @@ function InlineHelp({ label, title, description, testId }: InlineHelpProps) {
   );
 }
 
-function AppNav({ currentRoute }: AppNavProps) {
+function AppNav({ currentRoute, vipShopUrl }: AppNavProps) {
   return (
     <nav className="app-nav" aria-label="Навигация Автосида">
       <a
@@ -808,6 +824,17 @@ function AppNav({ currentRoute }: AppNavProps) {
       >
         Победители
       </a>
+      {vipShopUrl ? (
+        <a
+          className="app-nav-link"
+          href={vipShopUrl}
+          target="_blank"
+          rel="noreferrer noopener"
+          data-testid="vip-shop-nav-link"
+        >
+          VIP
+        </a>
+      ) : null}
     </nav>
   );
 }
@@ -895,7 +922,7 @@ function getPrimaryRaffleServer(raffleServers: RaffleServerSnapshot[]): RaffleSe
   );
 }
 
-function WinnersPage({ snapshot, now, route }: WinnersPageProps) {
+function WinnersPage({ snapshot, now, route, vipShopUrl }: WinnersPageProps) {
   const raffleServers = getRaffleServers(snapshot);
   const activeRaffles = getActiveRaffles(raffleServers);
   const history = getRaffleHistory(raffleServers);
@@ -920,7 +947,7 @@ function WinnersPage({ snapshot, now, route }: WinnersPageProps) {
             </div>
           </div>
 
-          <AppNav currentRoute={route} />
+          <AppNav currentRoute={route} vipShopUrl={vipShopUrl} />
         </div>
 
         <div className="winners-hero-main">
@@ -1200,6 +1227,7 @@ function TeamPanel({ team, opponent }: TeamPanelProps) {
 export default function App({ config }: AppProps) {
   const storedState = useMemo(() => loadStoredState(), []);
   const hasConfiguredTestMode = Boolean(config.app.testMode?.sequenceServerIds?.length);
+  const vipShopUrl = getSafeHttpUrl(config.app.vipShopUrl);
   const [snapshot, setSnapshot] = useState<CombinedSnapshot>(EMPTY_SNAPSHOT);
   const [permissions, setPermissions] = useState<BrowserPermissions | null>(storedState.permissions);
   const [enabled, setEnabled] = useState<boolean>(storedState.enabled);
@@ -2108,7 +2136,7 @@ export default function App({ config }: AppProps) {
   }, [displayTargetServer, orderedServers]);
 
   if (route === 'winners') {
-    return <WinnersPage snapshot={snapshot} now={now} route={route} />;
+    return <WinnersPage snapshot={snapshot} now={now} route={route} vipShopUrl={vipShopUrl} />;
   }
 
   return (
@@ -2126,7 +2154,7 @@ export default function App({ config }: AppProps) {
               </div>
             </div>
 
-            <AppNav currentRoute={route} />
+            <AppNav currentRoute={route} vipShopUrl={vipShopUrl} />
 
             <InlineHelp
               label="Справка по главному экрану"
