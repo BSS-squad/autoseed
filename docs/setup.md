@@ -62,6 +62,8 @@
 
 Если сайт публикуется не из корня домена, добавьте repository variable `VITE_BASE_PATH`, например `/autoseed/`.
 
+Опционально можно добавить `app.vipShopUrl` с абсолютным `http`/`https` URL внешнего VIP-сервиса. Тогда в навигации появится ссылка `VIP`; если значение пустое или не `http`/`https`, ссылка не показывается. В этот URL нельзя класть секреты или пользовательские токены, потому что runtime-config публичен.
+
 Опционально можно добавить `app.testMode`:
 
 ```json
@@ -124,6 +126,7 @@
 - `policy.maxSeedPlayers`
 - `policy.switchDelta`
 - `policy.cooldownMs`
+- `app.vipShopUrl` для публичной ссылки на внешний VIP purchase flow
 
 ### Меняется на каждом сервере SquadJS
 

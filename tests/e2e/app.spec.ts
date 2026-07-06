@@ -43,6 +43,14 @@ const testModeRuntimeConfig = {
   }
 };
 
+const vipShopRuntimeConfig = {
+  ...runtimeConfig,
+  app: {
+    ...runtimeConfig.app,
+    vipShopUrl: 'https://vip.example.test/shop'
+  }
+};
+
 const productionSwitchRuntimeConfig = {
   ...runtimeConfig,
   policy: {
@@ -280,8 +288,12 @@ async function expectPlayerFriendlyLanguage(page: Page) {
   );
 }
 
-async function mockAutoseedApi(page: Page, counters?: { joinLinkRequests: number }) {
-  await page.route('**/runtime-config.json', (route) => fulfillJson(route, runtimeConfig));
+async function mockAutoseedApi(
+  page: Page,
+  counters?: { joinLinkRequests: number },
+  config = runtimeConfig
+) {
+  await page.route('**/runtime-config.json', (route) => fulfillJson(route, config));
   await page.route('**/mock/**/events', (route) =>
     route.fulfill({
       status: 503,
@@ -789,6 +801,28 @@ test('renders the localized control room from exporter snapshots', async ({ page
   await expect(page.getByTestId('active-server-board')).toContainText('вход по запросу');
   await expect(page.getByText('Как запустить')).toBeVisible();
   await expect(page.getByText('Выбор сервера')).toBeVisible();
+});
+
+test('hides the VIP purchase link when the runtime config does not provide a URL', async ({
+  page
+}) => {
+  await mockAutoseedApi(page);
+
+  await page.goto('/');
+
+  await expect(page.getByTestId('vip-shop-nav-link')).toHaveCount(0);
+});
+
+test('renders the VIP purchase link from runtime config', async ({ page }) => {
+  await mockAutoseedApi(page, undefined, vipShopRuntimeConfig);
+
+  await page.goto('/');
+
+  const vipLink = page.getByRole('link', { name: 'VIP' });
+  await expect(vipLink).toBeVisible();
+  await expect(vipLink).toHaveAttribute('href', 'https://vip.example.test/shop');
+  await expect(vipLink).toHaveAttribute('target', '_blank');
+  await expect(vipLink).toHaveAttribute('rel', /noreferrer/);
 });
 
 test('normalizes exporter v3 fixtures and follows Mix Spec Ops Invasion day priority', async ({

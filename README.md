@@ -23,6 +23,7 @@
 - хранение `enabled`, `lastProcessedTimestamp`, `cooldown` и permissions в `localStorage`;
 - локальный preflight-check на странице: popup, `steam://`, и явная подсказка оставить Squad в главном меню;
 - redirect через служебное popup-окно для автосценариев, чтобы страница не теряла состояние и могла выполнить follow-up redirect; ручное прямое подключение открывает `steam://` в текущей вкладке, как SquadBrowser;
+- опциональная публичная ссылка на внешний VIP purchase flow через `app.vipShopUrl`;
 - документация по настройке frontend, exporter-а и `Squadbrowser` join-link lookup.
 
 ## Локальный запуск
@@ -73,6 +74,19 @@ npm run dev
 ```
 
 `exporters[].name` здесь только служебная метка endpoint-а для ошибок. Отображаемое название сервера frontend берёт из `snapshot.servers[].name`, а exporter заполняет его из `ShowServerInfo`.
+
+Опционально можно добавить `app.vipShopUrl` с абсолютным `http`/`https` URL внешнего VIP-сервиса:
+
+```json
+{
+  "app": {
+    "title": "BSS AutoConnect",
+    "vipShopUrl": "https://vip.example.com"
+  }
+}
+```
+
+Если URL не задан или не является `http`/`https`, ссылка в навигации не показывается. Покупка, Steam auth, wallet ledger и purchase state остаются во внешнем VIP-сервисе; `autoseed` только ведет игрока на этот публичный entrypoint.
 
 При необходимости можно добавить отдельный `app.testMode`:
 
