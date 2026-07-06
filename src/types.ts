@@ -2,9 +2,11 @@ export type AppConfig = {
   app: {
     title: string;
     debugLogLimit?: number;
+    vipShopUrl?: string;
     testMode?: TestModeConfig;
   };
   policy?: Partial<SeedPolicy>;
+  leaderboards?: LeaderboardsEndpointConfig;
   exporters: ExporterEndpointConfig[];
 };
 
@@ -29,6 +31,28 @@ export type SeedPolicy = {
 export type ExporterEndpointConfig = {
   name: string;
   baseUrl: string;
+};
+
+export type LeaderboardsEndpointConfig = {
+  url?: string;
+};
+
+export type LeaderboardPeriod = 'overall' | 'week' | 'month';
+
+export type LeaderboardEntry = {
+  rank: number;
+  name: string;
+  score: number | null;
+  kills: number | null;
+  deaths: number | null;
+  kd: number | null;
+  playtimeHours: number | null;
+};
+
+export type LeaderboardResponse = {
+  period: LeaderboardPeriod;
+  generatedAt: string | null;
+  entries: LeaderboardEntry[];
 };
 
 export type ExporterPlayerSnapshot = {
@@ -131,6 +155,70 @@ export type ExporterRaffleSnapshot = {
   campaigns: ExporterRaffleCampaignSnapshot[];
 };
 
+export type TeamBalancerProposalMode = 'squad' | 'player';
+
+export type TeamBalancerProposalStatus =
+  | 'recommended'
+  | 'accepted'
+  | 'moved'
+  | 'already_target'
+  | 'noop'
+  | string;
+
+export type ExporterTeamBalancerSignalsSnapshot = {
+  triggerReason: string | null;
+  teamSize: {
+    before: Record<string, number>;
+    after: Record<string, number>;
+    diffBefore: number;
+    diffAfter: number;
+  };
+  winStreak: unknown | null;
+  ticketDiff: unknown | null;
+  recentRoundSeverity: unknown | null;
+};
+
+export type ExporterTeamBalancerCohortSnapshot = {
+  type: 'squad' | 'player' | string;
+  cohortKey: string;
+  fromTeamID: string | null;
+  toTeamID: string | null;
+  squadID: string | number | null;
+  playerCount: number;
+  status: TeamBalancerProposalStatus;
+  confidence: number | null;
+  score: number | null;
+};
+
+export type ExporterTeamBalancerPlayerSnapshot = {
+  name: string;
+  fromTeamID: string | null;
+  toTeamID: string | null;
+  squadID: string | number | null;
+  status: TeamBalancerProposalStatus;
+  confidence: number | null;
+  score: number | null;
+};
+
+export type ExporterTeamBalancerSnapshot = {
+  version: number;
+  generatedAt: string | null;
+  decisionId: string | null;
+  serverId: string | number | null;
+  mode: string;
+  action: string;
+  result: string | null;
+  trigger: string | null;
+  snapshotTimestamp: string | null;
+  availableProposalModes: TeamBalancerProposalMode[];
+  defaultProposalMode: TeamBalancerProposalMode;
+  reasonCodes: string[];
+  signals: ExporterTeamBalancerSignalsSnapshot;
+  summary: string | null;
+  cohorts: ExporterTeamBalancerCohortSnapshot[];
+  players: ExporterTeamBalancerPlayerSnapshot[];
+};
+
 export type ExporterServerSnapshot = {
   id: number;
   code: string;
@@ -145,6 +233,7 @@ export type ExporterServerSnapshot = {
   teams: ExporterTeamSnapshot[];
   players: ExporterPlayerSnapshot[];
   raffles: ExporterRaffleSnapshot | null;
+  teamBalancer: ExporterTeamBalancerSnapshot | null;
   updatedAt: number;
   sourceUrl: string;
   joinLinkUrl: string;

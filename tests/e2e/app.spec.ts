@@ -43,13 +43,48 @@ const testModeRuntimeConfig = {
   }
 };
 
+const vipShopRuntimeConfig = {
+  ...runtimeConfig,
+  app: {
+    ...runtimeConfig.app,
+    vipShopUrl: 'https://vip.example.test/shop'
+  }
+};
+
+const leaderboardsRuntimeConfig = {
+  ...runtimeConfig,
+  leaderboards: {
+    url: 'http://127.0.0.1:4173/mock/leaderboards'
+  }
+};
+
 const productionSwitchRuntimeConfig = {
   ...runtimeConfig,
   policy: {
     ...runtimeConfig.policy,
+    nightWindowStart: '00:00',
+    nightWindowEnd: '00:00',
     cooldownMs: 50,
     periodicReconnectMs: 0
   }
+};
+
+const priorityRuntimeConfig = {
+  ...runtimeConfig,
+  exporters: [
+    {
+      name: 'mix',
+      baseUrl: 'http://127.0.0.1:4173/mock/mix'
+    },
+    {
+      name: 'specops',
+      baseUrl: 'http://127.0.0.1:4173/mock/specops'
+    },
+    {
+      name: 'invasion',
+      baseUrl: 'http://127.0.0.1:4173/mock/invasion'
+    }
+  ]
 };
 
 const SQUADJS2_SELECTION_KEY = 'http://127.0.0.1:4173/mock/squadjs2/snapshot::2::squadjs2';
@@ -135,7 +170,8 @@ function buildSnapshot({
   queueLength,
   online,
   timestamp = BASE_TIME,
-  raffles = null
+  raffles = null,
+  teamBalancer = null
 }: {
   id: number;
   code: string;
@@ -146,6 +182,7 @@ function buildSnapshot({
   online: boolean;
   timestamp?: number;
   raffles?: unknown;
+  teamBalancer?: unknown;
 }) {
   return {
     success: true,
@@ -167,9 +204,74 @@ function buildSnapshot({
         teams: [buildTeam(1, 'Vanguard', 342.6), buildTeam(2, 'Nomad', 287.4)],
         players: [],
         raffles,
+        teamBalancer,
         updatedAt: BASE_TIME
       }
     ]
+  };
+}
+
+function buildTeamBalancerProposalSnapshot(overrides: Record<string, unknown> = {}) {
+  return {
+    version: 1,
+    generatedAt: '2026-07-06T12:00:00.000Z',
+    decisionId: 'decision-1',
+    serverId: 'squadjs2',
+    mode: 'dry-run',
+    action: 'recommend',
+    result: 'proposal',
+    trigger: 'UPDATED_PLAYER_INFORMATION',
+    snapshotTimestamp: '2026-07-06T11:59:55.000Z',
+    availableProposalModes: ['squad', 'player'],
+    defaultProposalMode: 'squad',
+    reasonCodes: [],
+    signals: {
+      triggerReason: 'team_size_diff',
+      teamSize: {
+        before: { 1: 6, 2: 2 },
+        after: { 1: 4, 2: 4 },
+        diffBefore: 4,
+        diffAfter: 0
+      },
+      winStreak: null,
+      ticketDiff: null,
+      recentRoundSeverity: null
+    },
+    summary: 'Recommended 2 player move from Team 1 to Team 2.',
+    cohorts: [
+      {
+        type: 'squad',
+        cohortKey: 'squad:1:alpha',
+        fromTeamID: '1',
+        toTeamID: '2',
+        squadID: 'alpha',
+        playerCount: 2,
+        status: 'recommended',
+        confidence: null,
+        score: null
+      }
+    ],
+    players: [
+      {
+        name: 'Player alpha-1',
+        fromTeamID: '1',
+        toTeamID: '2',
+        squadID: 'alpha',
+        status: 'recommended',
+        confidence: null,
+        score: null
+      },
+      {
+        name: 'Player alpha-2',
+        fromTeamID: '1',
+        toTeamID: '2',
+        squadID: 'alpha',
+        status: 'recommended',
+        confidence: null,
+        score: null
+      }
+    ],
+    ...overrides
   };
 }
 
@@ -267,8 +369,13 @@ async function expectPlayerFriendlyLanguage(page: Page) {
   );
 }
 
-async function mockAutoseedApi(page: Page, counters?: { joinLinkRequests: number }) {
-  await page.route('**/runtime-config.json', (route) => fulfillJson(route, runtimeConfig));
+async function mockAutoseedApi(
+  page: Page,
+  counters?: { joinLinkRequests: number },
+  config = runtimeConfig,
+  options: { squadjs2TeamBalancer?: unknown } = {}
+) {
+  await page.route('**/runtime-config.json', (route) => fulfillJson(route, config));
   await page.route('**/mock/**/events', (route) =>
     route.fulfill({
       status: 503,
@@ -300,7 +407,8 @@ async function mockAutoseedApi(page: Page, counters?: { joinLinkRequests: number
         playerCount: 56,
         maxPlayers: 100,
         queueLength: 2,
-        online: true
+        online: true,
+        teamBalancer: options.squadjs2TeamBalancer ?? null
       })
     )
   );
@@ -332,6 +440,63 @@ async function mockAutoseedApi(page: Page, counters?: { joinLinkRequests: number
       body: '<!doctype html><html><body><main data-testid="redirect-target">Точка перехода</main></body></html>'
     })
   );
+}
+
+async function mockLeaderboardApi(page: Page) {
+  await mockAutoseedApi(page, undefined, leaderboardsRuntimeConfig);
+  await page.route('**/mock/leaderboards**', (route) => {
+    const requestUrl = new URL(route.request().url());
+    const period = requestUrl.searchParams.get('period') || 'overall';
+    const entriesByPeriod = {
+      overall: [
+        {
+          rank: 1,
+          name: 'Top Fragger',
+          score: 4200,
+          kills: 320,
+          deaths: 140,
+          kd: 2.29,
+          playtimeHours: 186.5
+        },
+        {
+          rank: 2,
+          name: 'Helpful Medic',
+          score: 3950,
+          kills: 120,
+          deaths: 80,
+          kd: 1.5,
+          playtimeHours: 142
+        }
+      ],
+      week: [
+        {
+          rank: 1,
+          name: 'Weekly Hero',
+          score: 680,
+          kills: 62,
+          deaths: 28,
+          kd: 2.21,
+          playtimeHours: 22.4
+        }
+      ],
+      month: [
+        {
+          rank: 1,
+          name: 'Monthly Leader',
+          score: 2100,
+          kills: 180,
+          deaths: 72,
+          kd: 2.5,
+          playtimeHours: 74.8
+        }
+      ]
+    } as const;
+
+    return fulfillJson(route, {
+      generatedAt: new Date(BASE_TIME).toISOString(),
+      entries: entriesByPeriod[period as keyof typeof entriesByPeriod] || []
+    });
+  });
 }
 
 async function mockRaffleAutoseedApi(
@@ -496,7 +661,7 @@ async function mockProductionSwitchAutoseedApi(
   counters: { serverOneJoinLinkRequests: number; serverTwoJoinLinkRequests: number },
   snapshotState: { serverOnePlayers: number; serverTwoPlayers: number }
 ) {
-  let currentTimestamp = BASE_TIME;
+  let currentTimestamp = Date.now();
   const nextTimestamp = () => {
     currentTimestamp += 1000;
     return currentTimestamp;
@@ -569,6 +734,78 @@ async function mockProductionSwitchAutoseedApi(
       status: 200,
       contentType: 'text/html; charset=utf-8',
       body: '<!doctype html><html><body><main data-testid="redirect-target">Точка перехода</main></body></html>'
+    })
+  );
+}
+
+async function mockPriorityAutoseedApi(
+  page: Page,
+  snapshotState: { mixPlayers: number; specOpsPlayers: number; invasionPlayers: number }
+) {
+  let currentTimestamp = Date.now();
+  const nextTimestamp = () => {
+    currentTimestamp += 1000;
+    return currentTimestamp;
+  };
+
+  await page.route('**/runtime-config.json', (route) => fulfillJson(route, priorityRuntimeConfig));
+  await page.route('**/mock/**/events', (route) =>
+    route.fulfill({
+      status: 503,
+      contentType: 'text/plain; charset=utf-8',
+      body: 'sse unavailable in test'
+    })
+  );
+  await page.route('**/mock/mix/snapshot', (route) =>
+    fulfillJson(
+      route,
+      buildSnapshot({
+        id: 1,
+        code: 'mix',
+        name: '[RU] BSS Mix',
+        playerCount: snapshotState.mixPlayers,
+        maxPlayers: 100,
+        queueLength: 0,
+        online: true,
+        timestamp: nextTimestamp()
+      })
+    )
+  );
+  await page.route('**/mock/specops/snapshot', (route) =>
+    fulfillJson(
+      route,
+      buildSnapshot({
+        id: 2,
+        code: 'specops',
+        name: '[RU] BSS Spec Ops',
+        playerCount: snapshotState.specOpsPlayers,
+        maxPlayers: 100,
+        queueLength: 0,
+        online: true,
+        timestamp: nextTimestamp()
+      })
+    )
+  );
+  await page.route('**/mock/invasion/snapshot', (route) =>
+    fulfillJson(
+      route,
+      buildSnapshot({
+        id: 3,
+        code: 'invasion',
+        name: '[RU] BSS Invasion',
+        playerCount: snapshotState.invasionPlayers,
+        maxPlayers: 100,
+        queueLength: 0,
+        online: true,
+        timestamp: nextTimestamp()
+      })
+    )
+  );
+  await page.route('**/mock/**/join-link', (route) =>
+    fulfillJson(route, {
+      ok: true,
+      timestamp: Date.now(),
+      joinLink: REDIRECT_TARGET_URL
     })
   );
 }
@@ -718,6 +955,167 @@ test('renders the localized control room from exporter snapshots', async ({ page
   await expect(page.getByText('Выбор сервера')).toBeVisible();
 });
 
+test('hides the VIP purchase link when the runtime config does not provide a URL', async ({
+  page
+}) => {
+  await mockAutoseedApi(page);
+
+  await page.goto('/');
+
+  await expect(page.getByTestId('vip-shop-nav-link')).toHaveCount(0);
+});
+
+test('renders the VIP purchase link from runtime config', async ({ page }) => {
+  await mockAutoseedApi(page, undefined, vipShopRuntimeConfig);
+
+  await page.goto('/');
+
+  const vipLink = page.getByRole('link', { name: 'VIP' });
+  await expect(vipLink).toBeVisible();
+  await expect(vipLink).toHaveAttribute('href', 'https://vip.example.test/shop');
+  await expect(vipLink).toHaveAttribute('target', '_blank');
+  await expect(vipLink).toHaveAttribute('rel', /noreferrer/);
+});
+
+test('normalizes exporter v3 fixtures and follows Mix Spec Ops Invasion day priority', async ({
+  page
+}) => {
+  await page.clock.setFixedTime('2026-07-15T12:00:00.000Z');
+  await mockPriorityAutoseedApi(page, {
+    mixPlayers: 40,
+    specOpsPlayers: 45,
+    invasionPlayers: 49
+  });
+
+  await page.goto('/');
+
+  await expect(page.getByTestId('overview-target')).toContainText('[RU] BSS Mix');
+  await expect(page.getByTestId('server-card-1')).toContainText('[RU] BSS Mix');
+  await expect(page.getByTestId('server-card-2')).toContainText('[RU] BSS Spec Ops');
+  await expect(page.getByTestId('server-card-3')).toContainText('[RU] BSS Invasion');
+});
+
+test('switches to a stronger server only when switchDelta is exceeded', async ({ page }) => {
+  await page.clock.setFixedTime('2026-07-15T12:00:00.000Z');
+  const snapshotState = {
+    mixPlayers: 60,
+    specOpsPlayers: 70,
+    invasionPlayers: 20
+  };
+  await mockPriorityAutoseedApi(page, snapshotState);
+
+  await page.goto('/');
+  await expect(page.getByTestId('overview-target')).toContainText('[RU] BSS Mix');
+
+  snapshotState.specOpsPlayers = 71;
+  await page.getByTestId('refresh-snapshot-button').click();
+
+  await expect(page.getByTestId('overview-target')).toContainText('[RU] BSS Spec Ops');
+});
+
+test('skips a priority server that has reached the seed limit', async ({ page }) => {
+  await page.clock.setFixedTime('2026-07-15T12:00:00.000Z');
+  await mockPriorityAutoseedApi(page, {
+    mixPlayers: 80,
+    specOpsPlayers: 25,
+    invasionPlayers: 10
+  });
+
+  await page.goto('/');
+
+  await expect(page.getByTestId('overview-target')).toContainText('[RU] BSS Spec Ops');
+});
+
+test('uses configured night preferred server over day priority order', async ({ page }) => {
+  await page.clock.setFixedTime('2026-07-14T22:30:00.000Z');
+  await mockPriorityAutoseedApi(page, {
+    mixPlayers: 20,
+    specOpsPlayers: 10,
+    invasionPlayers: 5
+  });
+
+  await page.goto('/');
+
+  await expect(page.getByTestId('overview-target')).toContainText('[RU] BSS Spec Ops');
+});
+
+test('renders an empty Team Balancer state when no fresh report exists', async ({ page }) => {
+  await page.clock.setFixedTime('2026-07-06T12:01:00.000Z');
+  await mockAutoseedApi(page);
+
+  await page.goto('/');
+
+  const panel = page.getByTestId('team-balancer-panel');
+  await expect(panel).toBeVisible();
+  await expect(panel).toContainText('Баланс команд');
+  await expect(panel).toContainText('Отчета балансировки пока нет');
+  await expect(panel).not.toContainText('snapshot');
+  await expect(panel).not.toContainText('7656119');
+});
+
+test('renders healthy Team Balancer state without proposal rows', async ({ page }) => {
+  await page.clock.setFixedTime('2026-07-06T12:01:00.000Z');
+  await mockAutoseedApi(page, undefined, runtimeConfig, {
+    squadjs2TeamBalancer: buildTeamBalancerProposalSnapshot({
+      action: 'noop',
+      result: 'balanced',
+      reasonCodes: ['team_size_within_tolerance'],
+      signals: {
+        triggerReason: 'team_size_within_tolerance',
+        teamSize: {
+          before: { 1: 40, 2: 39 },
+          after: { 1: 40, 2: 39 },
+          diffBefore: 1,
+          diffAfter: 1
+        },
+        winStreak: null,
+        ticketDiff: null,
+        recentRoundSeverity: null
+      },
+      cohorts: [],
+      players: []
+    })
+  });
+
+  await page.goto('/');
+  await page.getByTestId('server-card-2').locator('button').first().click();
+
+  const panel = page.getByTestId('team-balancer-panel');
+  await expect(panel).toContainText('Баланс в допуске');
+  await expect(panel).toContainText('40:39 -> 40:39');
+  await expect(page.getByTestId('team-balancer-diff-row')).toHaveCount(0);
+});
+
+test('renders Team Balancer proposals and switches squad/player modes', async ({ page }) => {
+  await page.clock.setFixedTime('2026-07-06T12:01:00.000Z');
+  await mockAutoseedApi(page, undefined, runtimeConfig, {
+    squadjs2TeamBalancer: buildTeamBalancerProposalSnapshot()
+  });
+
+  await page.goto('/');
+  await page.getByTestId('server-card-2').locator('button').first().click();
+
+  const panel = page.getByTestId('team-balancer-panel');
+  await expect(panel).toContainText('Нужно действие');
+  await expect(panel).toContainText('Разница по размеру сторон');
+  await expect(panel).toContainText('6:2 -> 4:4');
+  await expect(page.getByTestId('team-balancer-diff-row')).toHaveCount(1);
+  await expect(page.getByTestId('team-balancer-diff-row').first()).toContainText('Сквад alpha');
+  await expect(page.getByTestId('team-balancer-diff-row').first()).toContainText(
+    'Рекомендуется перевести'
+  );
+  await expect(page.getByTestId('team-balancer-diff-row').first()).toHaveClass(/tone-conflict/);
+
+  await page.getByTestId('team-balancer-mode-player').click();
+
+  await expect(page.getByTestId('team-balancer-diff-row')).toHaveCount(2);
+  await expect(page.getByTestId('team-balancer-diff-row').first()).toContainText(
+    'Player alpha-1'
+  );
+  await expect(panel).not.toContainText('steamID');
+  await expect(panel).not.toContainText('playerIds');
+});
+
 test('uses player-friendly language on the home page', async ({ page }) => {
   await mockAutoseedApi(page);
 
@@ -751,6 +1149,37 @@ test('uses player-friendly language for the empty winners state', async ({ page 
   await expect(page.getByTestId('winners-empty')).toContainText('Розыгрыши');
   await expect(page.getByTestId('winners-empty')).toContainText(
     'Данные о розыгрышах пока не поступили. Загляните позже.'
+  );
+  await expectPlayerFriendlyLanguage(page);
+});
+
+test('renders public leaderboards and switches periods', async ({ page }) => {
+  await mockLeaderboardApi(page);
+
+  await page.goto('/#leaderboards');
+
+  await expect(page.getByTestId('leaderboards-page')).toBeVisible();
+  await expect(page.getByTestId('leaderboards-title')).toHaveText('Топ игроков BSS');
+  await expect(page.getByTestId('leaderboards-table')).toContainText('Top Fragger');
+  await expect(page.getByTestId('leaderboards-row-1')).toContainText('4 200');
+  await expect(page.getByTestId('leaderboards-row-1')).toContainText('2,29');
+
+  await page.getByTestId('leaderboard-period-week').click();
+
+  await expect(page.getByTestId('leaderboards-row-1')).toContainText('Weekly Hero');
+  await expect(page.getByTestId('leaderboards-row-1')).toContainText('680');
+  await expect(page.getByTestId('leaderboards-table')).not.toContainText('Top Fragger');
+  await expectPlayerFriendlyLanguage(page);
+});
+
+test('uses player-friendly language for unavailable leaderboards', async ({ page }) => {
+  await mockAutoseedApi(page);
+
+  await page.goto('/#leaderboards');
+
+  await expect(page.getByTestId('leaderboards-empty')).toContainText('Лидерборды пока недоступны');
+  await expect(page.getByTestId('leaderboards-empty')).toContainText(
+    'Источник статистики ещё не подключён.'
   );
   await expectPlayerFriendlyLanguage(page);
 });
