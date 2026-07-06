@@ -138,8 +138,8 @@ test('marks recommended squad impact proposals inside the current roster', () =>
   assert.deepEqual(mark, {
     tone: 'conflict',
     label: 'В плане баланса',
-    detail: 'Финальная сторона: Сторона 2',
-    impactLabel: 'impact 360'
+    detail: 'Ожидаемая сторона: Сторона 2',
+    impactLabel: 'score 360'
   });
   assert.doesNotMatch(serialized, /->|\d+\s*ч|Рекомендуется перенести|Уже на нужной стороне/);
 });
@@ -299,10 +299,146 @@ test('marks player-level proposals without exposing private identifiers', () => 
   assert.deepEqual(mark, {
     tone: 'conflict',
     label: 'В плане баланса',
-    detail: 'Финальная сторона: Сторона 2',
-    impactLabel: 'impact 200'
+    detail: 'Ожидаемая сторона: Сторона 2',
+    impactLabel: 'score 200'
   });
   assert.doesNotMatch(serialized, /eosID|steamID|discordID|playerIds|7656119/);
+});
+
+test('marks scramble-v2 roster rows by backend current and expected side', () => {
+  const snapshot = buildProposalSnapshot({
+    version: 1,
+    schemaVersion: 2,
+    algorithm: 'mikebjoyce-squad-preserving-scramble',
+    signals: {
+      triggerReason: 'scramble_elo',
+      teamSize: {
+        before: { 1: 4, 2: 4 },
+        after: { 1: 4, 2: 4 },
+        diffBefore: 0,
+        diffAfter: 0
+      },
+      skill: {
+        available: true,
+        metric: 'eloMu',
+        unit: 'rating',
+        before: { 1: 148, 2: 64 },
+        after: { 1: 93, 2: 119 },
+        diffBefore: 84,
+        diffAfter: 26,
+        moved: 109
+      },
+      impact: {
+        available: true,
+        metric: 'eloMu',
+        unit: 'rating',
+        before: { 1: 148, 2: 64 },
+        after: { 1: 93, 2: 119 },
+        diffBefore: 84,
+        diffAfter: 26,
+        moved: 109
+      },
+      winStreak: null,
+      ticketDiff: null,
+      recentRoundSeverity: null
+    },
+    cohorts: [],
+    players: [
+      {
+        name: 'Player alpha-1',
+        fromTeamID: '1',
+        toTeamID: '2',
+        currentTeamID: '1',
+        expectedTeamID: '2',
+        squadID: 'alpha',
+        squadName: 'Alpha',
+        status: 'move_pending',
+        confidence: 1,
+        score: 42,
+        reward: {
+          type: 'balance_acceptance',
+          acceptanceMultiplier: 1.5,
+          reason: 'high_skill_weak_side'
+        }
+      },
+      {
+        name: 'Player bravo-1',
+        fromTeamID: '1',
+        toTeamID: '1',
+        currentTeamID: '1',
+        expectedTeamID: '1',
+        squadID: 'bravo',
+        squadName: 'Bravo',
+        status: 'already_target',
+        confidence: 1,
+        score: 34,
+        reward: null
+      },
+      {
+        name: 'Player opfor-1',
+        fromTeamID: '1',
+        toTeamID: '2',
+        currentTeamID: '2',
+        expectedTeamID: '2',
+        squadID: 'opfor',
+        squadName: 'Opfor',
+        status: 'moved',
+        confidence: 1,
+        score: 19,
+        reward: null
+      }
+    ]
+  });
+  const view = buildTeamBalancerDiffView(snapshot, 'squad', { nowMs: NOW_MS });
+  const conflictMark = buildTeamBalancerRosterMark(snapshot, 'squad', 1, buildRosterPlayer(), {
+    nowMs: NOW_MS
+  });
+  const neutralMark = buildTeamBalancerRosterMark(
+    snapshot,
+    'squad',
+    1,
+    buildRosterPlayer({
+      name: 'Player bravo-1',
+      squadId: 11,
+      squadName: 'Bravo'
+    }),
+    { nowMs: NOW_MS }
+  );
+  const successMark = buildTeamBalancerRosterMark(
+    snapshot,
+    'squad',
+    2,
+    buildRosterPlayer({
+      name: 'Player opfor-1',
+      teamId: 2,
+      squadId: 12,
+      squadName: 'Opfor'
+    }),
+    { nowMs: NOW_MS }
+  );
+  const serialized = JSON.stringify({ view, conflictMark, neutralMark, successMark });
+
+  assert.equal(view.triggerLabel, 'Scramble по ELO');
+  assert.equal(view.impactSummary, 'сейчас 148:64 · dry-run 93:119');
+  assert.deepEqual(conflictMark, {
+    tone: 'conflict',
+    label: 'Нужна смена',
+    detail: 'Ожидаемая сторона: Сторона 2',
+    impactLabel: 'score 42'
+  });
+  assert.deepEqual(neutralMark, {
+    tone: 'neutral',
+    label: 'На месте',
+    detail: 'Ожидаемая сторона: Сторона 1',
+    impactLabel: 'score 34'
+  });
+  assert.deepEqual(successMark, {
+    tone: 'success',
+    label: 'Смена учтена',
+    detail: 'Ожидаемая сторона: Сторона 2',
+    impactLabel: 'score 19'
+  });
+  assert.doesNotMatch(serialized, /->|steamID|eosID|discordID|playerIds|7656119/);
 });
 
 test('uses neutral roster tone when the player is already aligned with the report', () => {
@@ -333,9 +469,9 @@ test('uses neutral roster tone when the player is already aligned with the repor
 
   assert.deepEqual(mark, {
     tone: 'neutral',
-    label: 'План совпал',
-    detail: 'Финальная сторона: Сторона 2',
-    impactLabel: 'impact 360'
+    label: 'На месте',
+    detail: 'Ожидаемая сторона: Сторона 2',
+    impactLabel: 'score 360'
   });
 });
 
@@ -366,9 +502,9 @@ test('uses success roster tone for moves confirmed by the balancer window', () =
 
   assert.deepEqual(mark, {
     tone: 'success',
-    label: 'Свежий перенос',
-    detail: 'Финальная сторона: Сторона 2',
-    impactLabel: 'impact 200'
+    label: 'Смена учтена',
+    detail: 'Ожидаемая сторона: Сторона 2',
+    impactLabel: 'score 200'
   });
 });
 

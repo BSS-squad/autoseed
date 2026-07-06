@@ -1512,12 +1512,12 @@ function TeamBalancerPanel({
     <section
       className={classNames('team-balancer-panel', `tone-${view.tone}`)}
       data-testid="team-balancer-panel"
-      aria-label="Dry-run баланс"
+      aria-label="Dry-run баланс сторон"
     >
       <div className="team-balancer-head">
         <div>
           <span className="section-eyebrow">Dry-run</span>
-          <h3>Баланс impact</h3>
+          <h3>Баланс сторон</h3>
         </div>
         <span
           className={classNames('team-balancer-status', `team-balancer-status-${view.tone}`)}
@@ -1533,7 +1533,7 @@ function TeamBalancerPanel({
           <strong>{view.triggerLabel}</strong>
         </div>
         <div>
-          <span>Импакт сторон</span>
+          <span>Сила сторон</span>
           <strong>{view.impactSummary}</strong>
         </div>
         <div>

@@ -1057,7 +1057,7 @@ test('renders an empty Team Balancer state when no fresh report exists', async (
 
   const panel = page.getByTestId('team-balancer-panel');
   await expect(panel).toBeVisible();
-  await expect(panel).toContainText('Баланс impact');
+  await expect(panel).toContainText('Баланс сторон');
   await expect(panel).toContainText('Отчета по dry-run балансу пока нет');
   await expect(panel).not.toContainText('snapshot');
   await expect(panel).not.toContainText('7656119');
@@ -1232,8 +1232,8 @@ test('renders Team Balancer marks inside the current roster and switches squad/p
   await expect(markedRosterRow).toHaveCount(1);
   await expect(markedRosterRow.first()).toContainText('Vanguard Commander');
   await expect(markedRosterRow.first()).toContainText('В плане баланса');
-  await expect(markedRosterRow.first()).toContainText('Финальная сторона: Сторона 2');
-  await expect(markedRosterRow.first()).toContainText('impact 360');
+  await expect(markedRosterRow.first()).toContainText('Ожидаемая сторона: Сторона 2');
+  await expect(markedRosterRow.first()).toContainText('score 360');
   await expect(markedRosterRow.first()).toHaveAttribute('data-team-balancer-tone', 'conflict');
 
   await page.getByTestId('team-balancer-mode-player').click();
@@ -1241,7 +1241,7 @@ test('renders Team Balancer marks inside the current roster and switches squad/p
   await expect(page.getByTestId('team-balancer-diff-row')).toHaveCount(0);
   await expect(markedRosterRow).toHaveCount(1);
   await expect(markedRosterRow.first()).toContainText('Vanguard Commander');
-  await expect(markedRosterRow.first()).toContainText('impact 200');
+  await expect(markedRosterRow.first()).toContainText('score 200');
   await expect(panel).not.toContainText('steamID');
   await expect(panel).not.toContainText('discordID');
   await expect(panel).not.toContainText('playerIds');

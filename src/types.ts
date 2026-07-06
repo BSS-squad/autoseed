@@ -159,6 +159,7 @@ export type TeamBalancerProposalMode = 'squad' | 'player';
 
 export type TeamBalancerProposalStatus =
   | 'recommended'
+  | 'move_pending'
   | 'accepted'
   | 'moved'
   | 'already_target'
@@ -186,6 +187,17 @@ export type ExporterTeamBalancerRecentRoundSeveritySignal = {
   winStreak: number | null;
 };
 
+export type ExporterTeamBalancerMetricSnapshot = {
+  available: boolean;
+  metric: string;
+  unit: string;
+  before: Record<string, number>;
+  after: Record<string, number>;
+  diffBefore: number;
+  diffAfter: number;
+  moved: number;
+};
+
 export type ExporterTeamBalancerSignalsSnapshot = {
   triggerReason: string | null;
   teamSize: {
@@ -194,16 +206,8 @@ export type ExporterTeamBalancerSignalsSnapshot = {
     diffBefore: number;
     diffAfter: number;
   };
-  impact: {
-    available: boolean;
-    metric: string;
-    unit: string;
-    before: Record<string, number>;
-    after: Record<string, number>;
-    diffBefore: number;
-    diffAfter: number;
-    moved: number;
-  } | null;
+  skill: ExporterTeamBalancerMetricSnapshot | null;
+  impact: ExporterTeamBalancerMetricSnapshot | null;
   winStreak: ExporterTeamBalancerWinStreakSignal | null;
   ticketDiff: ExporterTeamBalancerTicketDiffSignal | null;
   recentRoundSeverity: ExporterTeamBalancerRecentRoundSeveritySignal | null;
@@ -214,7 +218,10 @@ export type ExporterTeamBalancerCohortSnapshot = {
   cohortKey: string;
   fromTeamID: string | null;
   toTeamID: string | null;
+  currentTeamID?: string | null;
+  expectedTeamID?: string | null;
   squadID: string | number | null;
+  squadName?: string | null;
   playerCount: number;
   status: TeamBalancerProposalStatus;
   confidence: number | null;
@@ -227,10 +234,18 @@ export type ExporterTeamBalancerPlayerSnapshot = {
   name: string;
   fromTeamID: string | null;
   toTeamID: string | null;
+  currentTeamID?: string | null;
+  expectedTeamID?: string | null;
   squadID: string | number | null;
+  squadName?: string | null;
   status: TeamBalancerProposalStatus;
   confidence: number | null;
   score: number | null;
+  reward?: {
+    type: string | null;
+    acceptanceMultiplier: number;
+    reason: string | null;
+  } | null;
   impactSeconds?: number | null;
   impactHours?: number | null;
 };
@@ -271,10 +286,17 @@ export type ExporterTeamBalancerExecutionSnapshot = {
   totalRconAttempts: number;
   maxAttemptsPerPlayer: number;
   completedAt: string | null;
+  swapLock?: {
+    enabled: boolean;
+    durationMs: number;
+    expiresAt: string | null;
+  } | null;
 };
 
 export type ExporterTeamBalancerSnapshot = {
   version: number;
+  schemaVersion?: number;
+  algorithm?: string | null;
   generatedAt: string | null;
   decisionId: string | null;
   serverId: string | number | null;

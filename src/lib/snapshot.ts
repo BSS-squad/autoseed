@@ -19,6 +19,7 @@ import type {
   ExporterSquadSnapshot,
   ExporterTeamBalancerCohortSnapshot,
   ExporterTeamBalancerExecutionSnapshot,
+  ExporterTeamBalancerMetricSnapshot,
   ExporterTeamBalancerModeratorDecisionSnapshot,
   ExporterTeamBalancerPlayerSnapshot,
   ExporterTeamBalancerSignalsSnapshot,
@@ -355,10 +356,25 @@ function mapTeamBalancerRecentRoundSeverity(
   };
 }
 
+function mapTeamBalancerMetric(value: unknown): ExporterTeamBalancerMetricSnapshot | null {
+  const metric = getRecord(value);
+  if (!metric) return null;
+
+  return {
+    available: Boolean(metric.available),
+    metric: toStringOrNull(metric.metric) || 'playtimeSeconds',
+    unit: toStringOrNull(metric.unit) || 'seconds',
+    before: mapTeamBalancerCounts(metric.before),
+    after: mapTeamBalancerCounts(metric.after),
+    diffBefore: Math.max(0, Math.round(toNumber(metric.diffBefore))),
+    diffAfter: Math.max(0, Math.round(toNumber(metric.diffAfter))),
+    moved: Math.max(0, Math.round(toNumber(metric.moved)))
+  };
+}
+
 function mapTeamBalancerSignals(value: unknown): ExporterTeamBalancerSignalsSnapshot {
   const signals = getRecord(value) || {};
   const teamSize = getRecord(signals.teamSize) || {};
-  const impact = getRecord(signals.impact);
 
   return {
     triggerReason: toStringOrNull(signals.triggerReason),
@@ -368,18 +384,8 @@ function mapTeamBalancerSignals(value: unknown): ExporterTeamBalancerSignalsSnap
       diffBefore: Math.max(0, Math.round(toNumber(teamSize.diffBefore))),
       diffAfter: Math.max(0, Math.round(toNumber(teamSize.diffAfter)))
     },
-    impact: impact
-      ? {
-          available: Boolean(impact.available),
-          metric: toStringOrNull(impact.metric) || 'playtimeSeconds',
-          unit: toStringOrNull(impact.unit) || 'seconds',
-          before: mapTeamBalancerCounts(impact.before),
-          after: mapTeamBalancerCounts(impact.after),
-          diffBefore: Math.max(0, Math.round(toNumber(impact.diffBefore))),
-          diffAfter: Math.max(0, Math.round(toNumber(impact.diffAfter))),
-          moved: Math.max(0, Math.round(toNumber(impact.moved)))
-        }
-      : null,
+    skill: mapTeamBalancerMetric(signals.skill),
+    impact: mapTeamBalancerMetric(signals.impact),
     winStreak: mapTeamBalancerWinStreak(signals.winStreak),
     ticketDiff: mapTeamBalancerTicketDiff(signals.ticketDiff),
     recentRoundSeverity: mapTeamBalancerRecentRoundSeverity(signals.recentRoundSeverity)
@@ -395,10 +401,13 @@ function mapTeamBalancerCohort(value: unknown): ExporterTeamBalancerCohortSnapsh
     cohortKey: toStringOrNull(cohort.cohortKey) || '',
     fromTeamID: toStringOrNull(cohort.fromTeamID),
     toTeamID: toStringOrNull(cohort.toTeamID),
+    currentTeamID: toStringOrNull(cohort.currentTeamID),
+    expectedTeamID: toStringOrNull(cohort.expectedTeamID),
     squadID:
       typeof cohort.squadID === 'number' || typeof cohort.squadID === 'string'
         ? cohort.squadID
         : null,
+    squadName: toStringOrNull(cohort.squadName),
     playerCount: Math.max(0, Math.round(toNumber(cohort.playerCount))),
     status: toStringOrNull(cohort.status) || 'noop',
     confidence: toFiniteNumberOrNull(cohort.confidence),
@@ -411,18 +420,29 @@ function mapTeamBalancerCohort(value: unknown): ExporterTeamBalancerCohortSnapsh
 function mapTeamBalancerPlayer(value: unknown): ExporterTeamBalancerPlayerSnapshot | null {
   const player = getRecord(value);
   if (!player) return null;
+  const reward = getRecord(player.reward);
 
   return {
     name: toStringOrNull(player.name) || 'Игрок',
     fromTeamID: toStringOrNull(player.fromTeamID),
     toTeamID: toStringOrNull(player.toTeamID),
+    currentTeamID: toStringOrNull(player.currentTeamID),
+    expectedTeamID: toStringOrNull(player.expectedTeamID),
     squadID:
       typeof player.squadID === 'number' || typeof player.squadID === 'string'
         ? player.squadID
         : null,
+    squadName: toStringOrNull(player.squadName),
     status: toStringOrNull(player.status) || 'noop',
     confidence: toFiniteNumberOrNull(player.confidence),
     score: toFiniteNumberOrNull(player.score),
+    reward: reward
+      ? {
+          type: toStringOrNull(reward.type),
+          acceptanceMultiplier: Math.max(0, toNumber(reward.acceptanceMultiplier)),
+          reason: toStringOrNull(reward.reason)
+        }
+      : null,
     impactSeconds: toFiniteNumberOrNull(player.impactSeconds),
     impactHours: toFiniteNumberOrNull(player.impactHours)
   };
@@ -468,6 +488,7 @@ function mapTeamBalancerModeratorDecision(
 function mapTeamBalancerExecution(value: unknown): ExporterTeamBalancerExecutionSnapshot | null {
   const execution = getRecord(value);
   if (!execution) return null;
+  const swapLock = getRecord(execution.swapLock);
 
   return {
     enabled: Boolean(execution.enabled),
@@ -479,7 +500,14 @@ function mapTeamBalancerExecution(value: unknown): ExporterTeamBalancerExecution
     failedPlayers: Math.max(0, Math.round(toNumber(execution.failedPlayers))),
     totalRconAttempts: Math.max(0, Math.round(toNumber(execution.totalRconAttempts))),
     maxAttemptsPerPlayer: Math.max(0, Math.round(toNumber(execution.maxAttemptsPerPlayer))),
-    completedAt: toIsoStringOrNull(execution.completedAt)
+    completedAt: toIsoStringOrNull(execution.completedAt),
+    swapLock: swapLock
+      ? {
+          enabled: Boolean(swapLock.enabled),
+          durationMs: Math.max(0, Math.round(toNumber(swapLock.durationMs))),
+          expiresAt: toIsoStringOrNull(swapLock.expiresAt)
+        }
+      : null
   };
 }
 
@@ -503,6 +531,8 @@ function mapTeamBalancerSnapshot(value: unknown): ExporterTeamBalancerSnapshot |
 
   return {
     version: Math.max(1, Math.round(toNumber(snapshot.version, 1))),
+    schemaVersion: Math.max(1, Math.round(toNumber(snapshot.schemaVersion, 1))),
+    algorithm: toStringOrNull(snapshot.algorithm),
     generatedAt: toIsoStringOrNull(snapshot.generatedAt),
     decisionId: toStringOrNull(snapshot.decisionId),
     serverId:
