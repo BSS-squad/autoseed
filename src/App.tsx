@@ -1473,12 +1473,12 @@ function TeamBalancerPanel({ snapshot }: TeamBalancerPanelProps) {
     <section
       className={classNames('team-balancer-panel', `tone-${view.tone}`)}
       data-testid="team-balancer-panel"
-      aria-label="Размер команд"
+      aria-label="Dry-run баланс"
     >
       <div className="team-balancer-head">
         <div>
           <span className="section-eyebrow">Dry-run</span>
-          <h3>Размер команд</h3>
+          <h3>Баланс impact</h3>
         </div>
         <span
           className={classNames('team-balancer-status', `team-balancer-status-${view.tone}`)}
@@ -1494,6 +1494,10 @@ function TeamBalancerPanel({ snapshot }: TeamBalancerPanelProps) {
           <strong>{view.triggerLabel}</strong>
         </div>
         <div>
+          <span>Импакт сторон</span>
+          <strong>{view.impactSummary}</strong>
+        </div>
+        <div>
           <span>Размер сторон</span>
           <strong>{view.teamSizeSummary}</strong>
         </div>
@@ -1507,7 +1511,7 @@ function TeamBalancerPanel({ snapshot }: TeamBalancerPanelProps) {
         <div
           className="segmented-control team-balancer-modes"
           role="group"
-          aria-label="Режим предложений по размеру команд"
+          aria-label="Режим dry-run предложений баланса"
         >
           {view.modes.map((mode) => (
             <button

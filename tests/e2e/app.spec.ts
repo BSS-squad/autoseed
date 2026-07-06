@@ -226,12 +226,22 @@ function buildTeamBalancerProposalSnapshot(overrides: Record<string, unknown> = 
     defaultProposalMode: 'squad',
     reasonCodes: [],
     signals: {
-      triggerReason: 'team_size_diff',
+      triggerReason: 'impact_diff',
       teamSize: {
         before: { 1: 6, 2: 2 },
         after: { 1: 4, 2: 4 },
         diffBefore: 4,
         diffAfter: 0
+      },
+      impact: {
+        available: true,
+        metric: 'playtimeSeconds',
+        unit: 'seconds',
+        before: { 1: 1800 * 60 * 60, 2: 900 * 60 * 60 },
+        after: { 1: 1440 * 60 * 60, 2: 1260 * 60 * 60 },
+        diffBefore: 900 * 60 * 60,
+        diffAfter: 180 * 60 * 60,
+        moved: 360 * 60 * 60
       },
       winStreak: null,
       ticketDiff: null,
@@ -248,7 +258,9 @@ function buildTeamBalancerProposalSnapshot(overrides: Record<string, unknown> = 
         playerCount: 2,
         status: 'recommended',
         confidence: null,
-        score: null
+        score: 360 * 60 * 60,
+        impactSeconds: 360 * 60 * 60,
+        impactHours: 360
       }
     ],
     players: [
@@ -259,7 +271,9 @@ function buildTeamBalancerProposalSnapshot(overrides: Record<string, unknown> = 
         squadID: 'alpha',
         status: 'recommended',
         confidence: null,
-        score: null
+        score: 200 * 60 * 60,
+        impactSeconds: 200 * 60 * 60,
+        impactHours: 200
       },
       {
         name: 'Player alpha-2',
@@ -268,7 +282,9 @@ function buildTeamBalancerProposalSnapshot(overrides: Record<string, unknown> = 
         squadID: 'alpha',
         status: 'recommended',
         confidence: null,
-        score: null
+        score: 160 * 60 * 60,
+        impactSeconds: 160 * 60 * 60,
+        impactHours: 160
       }
     ],
     ...overrides
@@ -1047,8 +1063,8 @@ test('renders an empty Team Balancer state when no fresh report exists', async (
 
   const panel = page.getByTestId('team-balancer-panel');
   await expect(panel).toBeVisible();
-  await expect(panel).toContainText('Размер команд');
-  await expect(panel).toContainText('Отчета по размеру команд пока нет');
+  await expect(panel).toContainText('Баланс impact');
+  await expect(panel).toContainText('Отчета по dry-run балансу пока нет');
   await expect(panel).not.toContainText('snapshot');
   await expect(panel).not.toContainText('7656119');
 });
@@ -1059,14 +1075,24 @@ test('renders healthy Team Balancer state without proposal rows', async ({ page 
     squadjs2TeamBalancer: buildTeamBalancerProposalSnapshot({
       action: 'noop',
       result: 'balanced',
-      reasonCodes: ['team_size_within_tolerance'],
+      reasonCodes: ['team_impact_within_tolerance'],
       signals: {
-        triggerReason: 'team_size_within_tolerance',
+        triggerReason: 'team_impact_within_tolerance',
         teamSize: {
           before: { 1: 40, 2: 39 },
           after: { 1: 40, 2: 39 },
           diffBefore: 1,
           diffAfter: 1
+        },
+        impact: {
+          available: true,
+          metric: 'playtimeSeconds',
+          unit: 'seconds',
+          before: { 1: 1200 * 60 * 60, 2: 1180 * 60 * 60 },
+          after: { 1: 1200 * 60 * 60, 2: 1180 * 60 * 60 },
+          diffBefore: 20 * 60 * 60,
+          diffAfter: 20 * 60 * 60,
+          moved: 0
         },
         winStreak: null,
         ticketDiff: null,
@@ -1081,7 +1107,8 @@ test('renders healthy Team Balancer state without proposal rows', async ({ page 
   await page.getByTestId('server-card-2').locator('button').first().click();
 
   const panel = page.getByTestId('team-balancer-panel');
-  await expect(panel).toContainText('Размер команд в допуске');
+  await expect(panel).toContainText('Импакт в допуске');
+  await expect(panel).toContainText('1200ч:1180ч -> 1200ч:1180ч');
   await expect(panel).toContainText('40:39 -> 40:39');
   await expect(page.getByTestId('team-balancer-diff-row')).toHaveCount(0);
 });
@@ -1097,13 +1124,15 @@ test('renders Team Balancer proposals and switches squad/player modes', async ({
 
   const panel = page.getByTestId('team-balancer-panel');
   await expect(panel).toContainText('Нужно действие');
-  await expect(panel).toContainText('Разница размера сторон');
+  await expect(panel).toContainText('Перекос импакта');
+  await expect(panel).toContainText('1800ч:900ч -> 1440ч:1260ч');
   await expect(panel).toContainText('6:2 -> 4:4');
   await expect(page.getByTestId('team-balancer-diff-row')).toHaveCount(1);
   await expect(page.getByTestId('team-balancer-diff-row').first()).toContainText('Сквад alpha');
   await expect(page.getByTestId('team-balancer-diff-row').first()).toContainText(
-    'Рекомендуется перевести'
+    'Рекомендуется перенести impact'
   );
+  await expect(page.getByTestId('team-balancer-diff-row').first()).toContainText('impact 360ч');
   await expect(page.getByTestId('team-balancer-diff-row').first()).toHaveClass(/tone-conflict/);
 
   await page.getByTestId('team-balancer-mode-player').click();
@@ -1112,6 +1141,7 @@ test('renders Team Balancer proposals and switches squad/player modes', async ({
   await expect(page.getByTestId('team-balancer-diff-row').first()).toContainText(
     'Player alpha-1'
   );
+  await expect(page.getByTestId('team-balancer-diff-row').first()).toContainText('impact 200ч');
   await expect(panel).not.toContainText('steamID');
   await expect(panel).not.toContainText('playerIds');
 });

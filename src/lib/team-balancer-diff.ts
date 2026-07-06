@@ -28,6 +28,7 @@ export type TeamBalancerDiffView = {
   modes: TeamBalancerProposalMode[];
   message: string;
   triggerLabel: string;
+  impactSummary: string;
   teamSizeSummary: string;
   updatedAtLabel: string;
   ageMs: number;
@@ -42,6 +43,8 @@ type TeamBalancerDiffOptions = {
 const DEFAULT_MODES: TeamBalancerProposalMode[] = ['squad', 'player'];
 
 const TRIGGER_LABELS: Record<string, string> = {
+  impact_diff: 'Перекос импакта',
+  team_impact_within_tolerance: 'Импакт в допуске',
   team_size_diff: 'Разница размера сторон',
   team_size_within_tolerance: 'Размер команд в допуске',
   invalid_snapshot: 'Недостаточно данных',
@@ -68,6 +71,27 @@ function formatPlayerCount(value: number): string {
         ? 'игрока'
         : 'игроков';
   return `${count} ${suffix}`;
+}
+
+function formatImpactHoursFromSeconds(value: number | null | undefined): string {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '—';
+  const hours = Math.round(value / 3600);
+  return `${hours}ч`;
+}
+
+function resolveImpactSeconds(value: {
+  impactSeconds?: number | null;
+  impactHours?: number | null;
+  score?: number | null;
+}): number | null {
+  if (typeof value.impactSeconds === 'number' && Number.isFinite(value.impactSeconds)) {
+    return value.impactSeconds;
+  }
+  if (typeof value.impactHours === 'number' && Number.isFinite(value.impactHours)) {
+    return value.impactHours * 3600;
+  }
+  if (typeof value.score === 'number' && Number.isFinite(value.score)) return value.score;
+  return null;
 }
 
 function normalizeModes(snapshot: ExporterTeamBalancerSnapshot | null): TeamBalancerProposalMode[] {
@@ -115,9 +139,22 @@ function buildTeamSizeSummary(snapshot: ExporterTeamBalancerSnapshot | null): st
   return `${formatTeamCounts(teamSize.before)} -> ${formatTeamCounts(teamSize.after)}`;
 }
 
+function formatImpactCounts(counts: Record<string, number>): string {
+  const values = Object.entries(counts)
+    .sort(([left], [right]) => left.localeCompare(right, 'ru', { numeric: true }))
+    .map(([, count]) => formatImpactHoursFromSeconds(count));
+  return values.length ? values.join(':') : '—';
+}
+
+function buildImpactSummary(snapshot: ExporterTeamBalancerSnapshot | null): string {
+  const impact = snapshot?.signals?.impact;
+  if (!impact?.available) return '—';
+  return `${formatImpactCounts(impact.before)} -> ${formatImpactCounts(impact.after)}`;
+}
+
 function buildTriggerLabel(snapshot: ExporterTeamBalancerSnapshot | null): string {
   const reason = snapshot?.signals?.triggerReason || snapshot?.reasonCodes?.[0] || '';
-  return TRIGGER_LABELS[reason] || 'Плановая проверка размера команд';
+  return TRIGGER_LABELS[reason] || 'Плановая проверка impact';
 }
 
 function getStatusTone(status: TeamBalancerProposalStatus): TeamBalancerDiffTone {
@@ -129,7 +166,7 @@ function getStatusTone(status: TeamBalancerProposalStatus): TeamBalancerDiffTone
 function getStatusLabel(status: TeamBalancerProposalStatus): string {
   if (status === 'accepted' || status === 'moved') return 'Перевод подтвержден';
   if (status === 'already_target') return 'Уже на нужной стороне';
-  if (status === 'recommended') return 'Рекомендуется перевести';
+  if (status === 'recommended') return 'Рекомендуется перенести impact';
   return 'Без перестановки';
 }
 
@@ -142,28 +179,45 @@ function buildCohortTitle(cohort: ExporterTeamBalancerCohortSnapshot): string {
 }
 
 function buildSquadRows(cohorts: ExporterTeamBalancerCohortSnapshot[]): TeamBalancerDiffRow[] {
-  return cohorts.map((cohort) => ({
-    id: cohort.cohortKey || `${cohort.fromTeamID || 'from'}-${cohort.toTeamID || 'to'}`,
-    title: buildCohortTitle(cohort),
-    subtitle: formatPlayerCount(cohort.playerCount),
-    route: formatRoute(cohort.fromTeamID, cohort.toTeamID),
-    tone: getStatusTone(cohort.status),
-    statusLabel: getStatusLabel(cohort.status)
-  }));
+  return cohorts.map((cohort) => {
+    const impactSeconds = resolveImpactSeconds(cohort);
+    const subtitleParts = [formatPlayerCount(cohort.playerCount)];
+    if (impactSeconds !== null) {
+      subtitleParts.push(`impact ${formatImpactHoursFromSeconds(impactSeconds)}`);
+    }
+
+    return {
+      id: cohort.cohortKey || `${cohort.fromTeamID || 'from'}-${cohort.toTeamID || 'to'}`,
+      title: buildCohortTitle(cohort),
+      subtitle: subtitleParts.join(' · '),
+      route: formatRoute(cohort.fromTeamID, cohort.toTeamID),
+      tone: getStatusTone(cohort.status),
+      statusLabel: getStatusLabel(cohort.status)
+    };
+  });
 }
 
 function buildPlayerRows(players: ExporterTeamBalancerPlayerSnapshot[]): TeamBalancerDiffRow[] {
-  return players.map((player, index) => ({
-    id: `${player.name}-${player.fromTeamID || 'from'}-${player.toTeamID || 'to'}-${index}`,
-    title: player.name || 'Игрок',
-    subtitle:
+  return players.map((player, index) => {
+    const impactSeconds = resolveImpactSeconds(player);
+    const subtitleParts = [
       player.squadID !== null && player.squadID !== undefined
         ? `Сквад ${player.squadID}`
-        : 'Без сквада',
-    route: formatRoute(player.fromTeamID, player.toTeamID),
-    tone: getStatusTone(player.status),
-    statusLabel: getStatusLabel(player.status)
-  }));
+        : 'Без сквада'
+    ];
+    if (impactSeconds !== null) {
+      subtitleParts.push(`impact ${formatImpactHoursFromSeconds(impactSeconds)}`);
+    }
+
+    return {
+      id: `${player.name}-${player.fromTeamID || 'from'}-${player.toTeamID || 'to'}-${index}`,
+      title: player.name || 'Игрок',
+      subtitle: subtitleParts.join(' · '),
+      route: formatRoute(player.fromTeamID, player.toTeamID),
+      tone: getStatusTone(player.status),
+      statusLabel: getStatusLabel(player.status)
+    };
+  });
 }
 
 function buildRows(
@@ -189,8 +243,9 @@ export function buildTeamBalancerDiffView(
       tone: 'neutral',
       mode,
       modes,
-      message: 'Отчета по размеру команд пока нет',
-      triggerLabel: 'Плановая проверка размера команд',
+      message: 'Отчета по dry-run балансу пока нет',
+      triggerLabel: 'Плановая проверка impact',
+      impactSummary: '—',
       teamSizeSummary: '—',
       updatedAtLabel: '—',
       ageMs: Number.POSITIVE_INFINITY,
@@ -201,6 +256,7 @@ export function buildTeamBalancerDiffView(
   const reportTimestampMs = getReportTimestamp(snapshot);
   const ageMs = reportTimestampMs ? Math.max(0, nowMs - reportTimestampMs) : Number.POSITIVE_INFINITY;
   const triggerLabel = buildTriggerLabel(snapshot);
+  const impactSummary = buildImpactSummary(snapshot);
   const teamSizeSummary = buildTeamSizeSummary(snapshot);
   const updatedAtLabel = formatUpdatedAt(reportTimestampMs);
 
@@ -210,8 +266,9 @@ export function buildTeamBalancerDiffView(
       tone: 'neutral',
       mode,
       modes,
-      message: 'Отчет по размеру команд устарел',
+      message: 'Отчет по dry-run балансу устарел',
       triggerLabel,
+      impactSummary,
       teamSizeSummary,
       updatedAtLabel,
       ageMs,
@@ -228,8 +285,9 @@ export function buildTeamBalancerDiffView(
       tone: 'neutral',
       mode,
       modes,
-      message: 'Размер команд в допуске',
+      message: snapshot.signals?.impact?.available ? 'Импакт в допуске' : 'Размер команд в допуске',
       triggerLabel,
+      impactSummary,
       teamSizeSummary,
       updatedAtLabel,
       ageMs,
@@ -244,6 +302,7 @@ export function buildTeamBalancerDiffView(
     modes,
     message: 'Нужно действие',
     triggerLabel,
+    impactSummary,
     teamSizeSummary,
     updatedAtLabel,
     ageMs,
