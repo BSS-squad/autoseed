@@ -1546,6 +1546,22 @@ function TeamBalancerPanel({
         </div>
       </div>
 
+      {view.roundSignals.length ? (
+        <div className="team-balancer-round-grid" data-testid="team-balancer-round-signals">
+          {view.roundSignals.map((signal) => (
+            <div
+              key={signal.id}
+              className={classNames('team-balancer-round-card', `tone-${signal.tone}`)}
+              data-testid={`team-balancer-round-signal-${signal.id}`}
+            >
+              <span>{signal.label}</span>
+              <strong>{signal.value}</strong>
+              {signal.detail ? <p>{signal.detail}</p> : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+
       {view.safetyCards.length ? (
         <div className="team-balancer-safety-grid" data-testid="team-balancer-safety">
           {view.safetyCards.map((card) => (

@@ -10,6 +10,7 @@ import type {
   ExporterRaffleParticipantSnapshot,
   ExporterRaffleSnapshot,
   ExporterServerSnapshot,
+  ExporterTeamBalancerRecentRoundSeveritySignal,
   ExporterSnapshotPlayerResponse,
   ExporterSnapshotResponse,
   ExporterSnapshotServerResponse,
@@ -22,7 +23,9 @@ import type {
   ExporterTeamBalancerPlayerSnapshot,
   ExporterTeamBalancerSignalsSnapshot,
   ExporterTeamBalancerSnapshot,
+  ExporterTeamBalancerTicketDiffSignal,
   ExporterTeamBalancerVoteGateSnapshot,
+  ExporterTeamBalancerWinStreakSignal,
   ExporterTeamSnapshot
 } from '../types';
 
@@ -61,6 +64,11 @@ function toStringOrNull(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
+function toStringIdOrNull(value: unknown): string | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  return toStringOrNull(value);
+}
+
 function toNumber(value: unknown, fallback = 0): number {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
@@ -69,6 +77,12 @@ function toNumber(value: unknown, fallback = 0): number {
 function toFiniteNumberOrNull(value: unknown): number | null {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function toNonNegativeIntegerOrNull(value: unknown): number | null {
+  const parsed = toFiniteNumberOrNull(value);
+  if (parsed === null || parsed < 0) return null;
+  return Math.round(parsed);
 }
 
 function toIsoStringOrNull(value: unknown): string | null {
@@ -268,6 +282,79 @@ function mapTeamBalancerCounts(value: unknown): Record<string, number> {
   );
 }
 
+function mapTeamBalancerTicketDiff(
+  value: unknown
+): ExporterTeamBalancerTicketDiffSignal | null {
+  const signal = getRecord(value);
+  if (!signal) return null;
+
+  const winnerTeamID = toStringIdOrNull(signal.winnerTeamID);
+  const loserTeamID = toStringIdOrNull(signal.loserTeamID);
+  const winnerTickets = toNonNegativeIntegerOrNull(signal.winnerTickets);
+  const loserTickets = toNonNegativeIntegerOrNull(signal.loserTickets);
+  const diff = toNonNegativeIntegerOrNull(signal.diff);
+
+  if (
+    !winnerTeamID ||
+    !loserTeamID ||
+    winnerTickets === null ||
+    loserTickets === null ||
+    diff === null
+  ) {
+    return null;
+  }
+
+  return {
+    winnerTeamID,
+    loserTeamID,
+    winnerTickets,
+    loserTickets,
+    diff
+  };
+}
+
+function mapTeamBalancerWinStreak(
+  value: unknown
+): ExporterTeamBalancerWinStreakSignal | null {
+  const signal = getRecord(value);
+  if (!signal) return null;
+
+  const teamID = toStringIdOrNull(signal.teamID);
+  const count = toNonNegativeIntegerOrNull(signal.count);
+  const threshold = toNonNegativeIntegerOrNull(signal.threshold);
+
+  if (!teamID || count === null || count <= 0 || threshold === null || threshold <= 0) {
+    return null;
+  }
+
+  return {
+    teamID,
+    count,
+    threshold
+  };
+}
+
+function mapTeamBalancerRecentRoundSeverity(
+  value: unknown
+): ExporterTeamBalancerRecentRoundSeveritySignal | null {
+  const signal = getRecord(value);
+  if (!signal) return null;
+
+  const level = toStringOrNull(signal.level);
+  if (!level) return null;
+
+  return {
+    level,
+    reasons: Array.isArray(signal.reasons)
+      ? signal.reasons
+          .map((entry) => toStringOrNull(entry))
+          .filter((entry): entry is string => Boolean(entry))
+      : [],
+    ticketDiff: toNonNegativeIntegerOrNull(signal.ticketDiff),
+    winStreak: toNonNegativeIntegerOrNull(signal.winStreak)
+  };
+}
+
 function mapTeamBalancerSignals(value: unknown): ExporterTeamBalancerSignalsSnapshot {
   const signals = getRecord(value) || {};
   const teamSize = getRecord(signals.teamSize) || {};
@@ -293,9 +380,9 @@ function mapTeamBalancerSignals(value: unknown): ExporterTeamBalancerSignalsSnap
           moved: Math.max(0, Math.round(toNumber(impact.moved)))
         }
       : null,
-    winStreak: signals.winStreak ?? null,
-    ticketDiff: signals.ticketDiff ?? null,
-    recentRoundSeverity: signals.recentRoundSeverity ?? null
+    winStreak: mapTeamBalancerWinStreak(signals.winStreak),
+    ticketDiff: mapTeamBalancerTicketDiff(signals.ticketDiff),
+    recentRoundSeverity: mapTeamBalancerRecentRoundSeverity(signals.recentRoundSeverity)
   };
 }
 

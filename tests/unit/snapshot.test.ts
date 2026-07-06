@@ -58,6 +58,27 @@ test('keeps Team Balancer safety gate fields from exporter snapshots', async () 
                   diffBefore: 900,
                   diffAfter: 180,
                   moved: 360
+                },
+                ticketDiff: {
+                  winnerTeamID: '1',
+                  loserTeamID: '2',
+                  winnerTickets: 260,
+                  loserTickets: 20,
+                  diff: 240,
+                  steamID: '76561190000000000'
+                },
+                winStreak: {
+                  teamID: '1',
+                  count: 2,
+                  threshold: 2,
+                  discordID: '111111111111111111'
+                },
+                recentRoundSeverity: {
+                  level: 'severe',
+                  reasons: ['ticket_diff', 'win_streak', ''],
+                  ticketDiff: 240,
+                  winStreak: 2,
+                  playerIds: ['alpha-1', 'alpha-2']
                 }
               },
               cohorts: [],
@@ -118,4 +139,26 @@ test('keeps Team Balancer safety gate fields from exporter snapshots', async () 
   assert.equal(teamBalancer?.moderatorDecision?.reason, 'technical');
   assert.equal(teamBalancer?.execution?.status, 'blocked');
   assert.equal(teamBalancer?.execution?.plannedPlayers, 2);
+  assert.deepEqual(teamBalancer?.signals.ticketDiff, {
+    winnerTeamID: '1',
+    loserTeamID: '2',
+    winnerTickets: 260,
+    loserTickets: 20,
+    diff: 240
+  });
+  assert.deepEqual(teamBalancer?.signals.winStreak, {
+    teamID: '1',
+    count: 2,
+    threshold: 2
+  });
+  assert.deepEqual(teamBalancer?.signals.recentRoundSeverity, {
+    level: 'severe',
+    reasons: ['ticket_diff', 'win_streak'],
+    ticketDiff: 240,
+    winStreak: 2
+  });
+  assert.doesNotMatch(
+    JSON.stringify(teamBalancer?.signals),
+    /steamID|discordID|playerIds|7656119|alpha-1|alpha-2/
+  );
 });

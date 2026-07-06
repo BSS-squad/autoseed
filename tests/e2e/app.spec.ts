@@ -1061,6 +1061,7 @@ test('renders an empty Team Balancer state when no fresh report exists', async (
   await expect(panel).toContainText('Отчета по dry-run балансу пока нет');
   await expect(panel).not.toContainText('snapshot');
   await expect(panel).not.toContainText('7656119');
+  await expect(page.getByTestId('team-balancer-round-signals')).toHaveCount(0);
 });
 
 test('renders healthy Team Balancer state without proposal rows', async ({ page }) => {
@@ -1104,6 +1105,7 @@ test('renders healthy Team Balancer state without proposal rows', async ({ page 
   await expect(panel).toContainText('Импакт в допуске');
   await expect(panel).toContainText('сейчас 1 200:1 180 · dry-run 1 200:1 180');
   await expect(panel).toContainText('сейчас 40:39 · dry-run 40:39');
+  await expect(page.getByTestId('team-balancer-round-signals')).toHaveCount(0);
   await expect(page.getByTestId('team-balancer-diff-row')).toHaveCount(0);
 });
 
@@ -1111,6 +1113,46 @@ test('renders Team Balancer marks inside the current roster and switches squad/p
   await page.clock.setFixedTime('2026-07-06T12:01:00.000Z');
   await mockAutoseedApi(page, undefined, runtimeConfig, {
     squadjs2TeamBalancer: buildTeamBalancerProposalSnapshot({
+      signals: {
+        triggerReason: 'impact_diff',
+        teamSize: {
+          before: { 1: 6, 2: 2 },
+          after: { 1: 4, 2: 4 },
+          diffBefore: 4,
+          diffAfter: 0
+        },
+        impact: {
+          available: true,
+          metric: 'autobalancerScore',
+          unit: 'score',
+          before: { 1: 1800, 2: 900 },
+          after: { 1: 1440, 2: 1260 },
+          diffBefore: 900,
+          diffAfter: 180,
+          moved: 360
+        },
+        ticketDiff: {
+          winnerTeamID: '1',
+          loserTeamID: '2',
+          winnerTickets: 260,
+          loserTickets: 20,
+          diff: 240,
+          steamID: '76561190000000000'
+        },
+        winStreak: {
+          teamID: '1',
+          count: 2,
+          threshold: 2,
+          discordID: '111111111111111111'
+        },
+        recentRoundSeverity: {
+          level: 'severe',
+          reasons: ['ticket_diff', 'win_streak'],
+          ticketDiff: 240,
+          winStreak: 2,
+          playerIds: ['alpha-1', 'alpha-2']
+        }
+      },
       voteGate: {
         enabled: true,
         quorumPercent: 25,
@@ -1157,6 +1199,25 @@ test('renders Team Balancer marks inside the current roster and switches squad/p
   await expect(panel).toContainText('Перекос импакта');
   await expect(panel).toContainText('сейчас 1 800:900 · dry-run 1 440:1 260');
   await expect(panel).toContainText('сейчас 6:2 · dry-run 4:4');
+  await expect(page.getByTestId('team-balancer-round-signal-severity')).toContainText(
+    'Последние раунды'
+  );
+  await expect(page.getByTestId('team-balancer-round-signal-severity')).toContainText(
+    'Сильный перекос'
+  );
+  await expect(page.getByTestId('team-balancer-round-signal-severity')).toContainText(
+    'ticket diff 240 · серия 2'
+  );
+  await expect(page.getByTestId('team-balancer-round-signal-ticketDiff')).toContainText(
+    'Сторона 1 +240'
+  );
+  await expect(page.getByTestId('team-balancer-round-signal-ticketDiff')).toContainText(
+    '260:20 против Сторона 2'
+  );
+  await expect(page.getByTestId('team-balancer-round-signal-winStreak')).toContainText(
+    'Сторона 1 x2'
+  );
+  await expect(page.getByTestId('team-balancer-round-signal-winStreak')).toContainText('порог 2');
   await expect(page.getByTestId('team-balancer-safety-vote')).toContainText('Голосование');
   await expect(page.getByTestId('team-balancer-safety-vote')).toContainText('2/3');
   await expect(page.getByTestId('team-balancer-safety-vote')).toContainText('за 2 · против 1');
@@ -1182,7 +1243,9 @@ test('renders Team Balancer marks inside the current roster and switches squad/p
   await expect(markedRosterRow.first()).toContainText('Vanguard Commander');
   await expect(markedRosterRow.first()).toContainText('impact 200');
   await expect(panel).not.toContainText('steamID');
+  await expect(panel).not.toContainText('discordID');
   await expect(panel).not.toContainText('playerIds');
+  await expect(panel).not.toContainText('7656119');
 });
 
 test('uses player-friendly language on the home page', async ({ page }) => {
