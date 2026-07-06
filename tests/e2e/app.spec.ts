@@ -47,9 +47,29 @@ const productionSwitchRuntimeConfig = {
   ...runtimeConfig,
   policy: {
     ...runtimeConfig.policy,
+    nightWindowStart: '00:00',
+    nightWindowEnd: '00:00',
     cooldownMs: 50,
     periodicReconnectMs: 0
   }
+};
+
+const priorityRuntimeConfig = {
+  ...runtimeConfig,
+  exporters: [
+    {
+      name: 'mix',
+      baseUrl: 'http://127.0.0.1:4173/mock/mix'
+    },
+    {
+      name: 'specops',
+      baseUrl: 'http://127.0.0.1:4173/mock/specops'
+    },
+    {
+      name: 'invasion',
+      baseUrl: 'http://127.0.0.1:4173/mock/invasion'
+    }
+  ]
 };
 
 const SQUADJS2_SELECTION_KEY = 'http://127.0.0.1:4173/mock/squadjs2/snapshot::2::squadjs2';
@@ -477,7 +497,7 @@ async function mockProductionSwitchAutoseedApi(
   counters: { serverOneJoinLinkRequests: number; serverTwoJoinLinkRequests: number },
   snapshotState: { serverOnePlayers: number; serverTwoPlayers: number }
 ) {
-  let currentTimestamp = BASE_TIME;
+  let currentTimestamp = Date.now();
   const nextTimestamp = () => {
     currentTimestamp += 1000;
     return currentTimestamp;
@@ -550,6 +570,78 @@ async function mockProductionSwitchAutoseedApi(
       status: 200,
       contentType: 'text/html; charset=utf-8',
       body: '<!doctype html><html><body><main data-testid="redirect-target">Точка перехода</main></body></html>'
+    })
+  );
+}
+
+async function mockPriorityAutoseedApi(
+  page: Page,
+  snapshotState: { mixPlayers: number; specOpsPlayers: number; invasionPlayers: number }
+) {
+  let currentTimestamp = Date.now();
+  const nextTimestamp = () => {
+    currentTimestamp += 1000;
+    return currentTimestamp;
+  };
+
+  await page.route('**/runtime-config.json', (route) => fulfillJson(route, priorityRuntimeConfig));
+  await page.route('**/mock/**/events', (route) =>
+    route.fulfill({
+      status: 503,
+      contentType: 'text/plain; charset=utf-8',
+      body: 'sse unavailable in test'
+    })
+  );
+  await page.route('**/mock/mix/snapshot', (route) =>
+    fulfillJson(
+      route,
+      buildSnapshot({
+        id: 1,
+        code: 'mix',
+        name: '[RU] BSS Mix',
+        playerCount: snapshotState.mixPlayers,
+        maxPlayers: 100,
+        queueLength: 0,
+        online: true,
+        timestamp: nextTimestamp()
+      })
+    )
+  );
+  await page.route('**/mock/specops/snapshot', (route) =>
+    fulfillJson(
+      route,
+      buildSnapshot({
+        id: 2,
+        code: 'specops',
+        name: '[RU] BSS Spec Ops',
+        playerCount: snapshotState.specOpsPlayers,
+        maxPlayers: 100,
+        queueLength: 0,
+        online: true,
+        timestamp: nextTimestamp()
+      })
+    )
+  );
+  await page.route('**/mock/invasion/snapshot', (route) =>
+    fulfillJson(
+      route,
+      buildSnapshot({
+        id: 3,
+        code: 'invasion',
+        name: '[RU] BSS Invasion',
+        playerCount: snapshotState.invasionPlayers,
+        maxPlayers: 100,
+        queueLength: 0,
+        online: true,
+        timestamp: nextTimestamp()
+      })
+    )
+  );
+  await page.route('**/mock/**/join-link', (route) =>
+    fulfillJson(route, {
+      ok: true,
+      timestamp: Date.now(),
+      joinLink: REDIRECT_TARGET_URL
     })
   );
 }
@@ -697,6 +789,68 @@ test('renders the localized control room from exporter snapshots', async ({ page
   await expect(page.getByTestId('active-server-board')).toContainText('вход по запросу');
   await expect(page.getByText('Как запустить')).toBeVisible();
   await expect(page.getByText('Выбор сервера')).toBeVisible();
+});
+
+test('normalizes exporter v3 fixtures and follows Mix Spec Ops Invasion day priority', async ({
+  page
+}) => {
+  await page.clock.setFixedTime('2026-07-15T12:00:00.000Z');
+  await mockPriorityAutoseedApi(page, {
+    mixPlayers: 40,
+    specOpsPlayers: 45,
+    invasionPlayers: 49
+  });
+
+  await page.goto('/');
+
+  await expect(page.getByTestId('overview-target')).toContainText('[RU] BSS Mix');
+  await expect(page.getByTestId('server-card-1')).toContainText('[RU] BSS Mix');
+  await expect(page.getByTestId('server-card-2')).toContainText('[RU] BSS Spec Ops');
+  await expect(page.getByTestId('server-card-3')).toContainText('[RU] BSS Invasion');
+});
+
+test('switches to a stronger server only when switchDelta is exceeded', async ({ page }) => {
+  await page.clock.setFixedTime('2026-07-15T12:00:00.000Z');
+  const snapshotState = {
+    mixPlayers: 60,
+    specOpsPlayers: 70,
+    invasionPlayers: 20
+  };
+  await mockPriorityAutoseedApi(page, snapshotState);
+
+  await page.goto('/');
+  await expect(page.getByTestId('overview-target')).toContainText('[RU] BSS Mix');
+
+  snapshotState.specOpsPlayers = 71;
+  await page.getByTestId('refresh-snapshot-button').click();
+
+  await expect(page.getByTestId('overview-target')).toContainText('[RU] BSS Spec Ops');
+});
+
+test('skips a priority server that has reached the seed limit', async ({ page }) => {
+  await page.clock.setFixedTime('2026-07-15T12:00:00.000Z');
+  await mockPriorityAutoseedApi(page, {
+    mixPlayers: 80,
+    specOpsPlayers: 25,
+    invasionPlayers: 10
+  });
+
+  await page.goto('/');
+
+  await expect(page.getByTestId('overview-target')).toContainText('[RU] BSS Spec Ops');
+});
+
+test('uses configured night preferred server over day priority order', async ({ page }) => {
+  await page.clock.setFixedTime('2026-07-14T22:30:00.000Z');
+  await mockPriorityAutoseedApi(page, {
+    mixPlayers: 20,
+    specOpsPlayers: 10,
+    invasionPlayers: 5
+  });
+
+  await page.goto('/');
+
+  await expect(page.getByTestId('overview-target')).toContainText('[RU] BSS Spec Ops');
 });
 
 test('uses player-friendly language on the home page', async ({ page }) => {
