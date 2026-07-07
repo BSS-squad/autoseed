@@ -223,6 +223,7 @@ export type ExporterTeamBalancerCohortSnapshot = {
   expectedTeamID?: string | null;
   squadID: string | number | null;
   squadName?: string | null;
+  compositionKey?: string | null;
   playerCount: number;
   status: TeamBalancerProposalStatus;
   confidence: number | null;

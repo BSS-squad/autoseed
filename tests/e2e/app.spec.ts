@@ -1,7 +1,13 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
+import { buildTeamBalancerCompositionKey } from '../../src/lib/team-balancer-diff';
 
 const BASE_TIME = Date.parse('2026-04-04T12:00:00.000Z');
 const REDIRECT_TARGET_URL = 'http://127.0.0.1:4173/redirect-target';
+const VANGUARD_ALPHA_PLAYERS = [
+  { matchKey: 'steam:vanguard-cmd' },
+  { matchKey: 'steam:vanguard-alpha-2' }
+];
+const VANGUARD_ALPHA_COMPOSITION_KEY = buildTeamBalancerCompositionKey(VANGUARD_ALPHA_PLAYERS);
 
 const runtimeConfig = {
   app: {
@@ -145,6 +151,7 @@ function buildTeam(id: number, name: string, totalPlaytimeHours: number) {
       {
         eosId: `${name.toLowerCase()}-cmd`,
         steamId: `${id}001`,
+        matchKey: `steam:${name.toLowerCase()}-cmd`,
         name: `${name} Commander`,
         teamId: id,
         teamName: name,
@@ -155,6 +162,22 @@ function buildTeam(id: number, name: string, totalPlaytimeHours: number) {
         isCommander: true,
         playtimeSeconds: 10800,
         playtimeHours: 3,
+        playtimeSource: 'test'
+      },
+      {
+        eosId: `${name.toLowerCase()}-alpha-2`,
+        steamId: `${id}002`,
+        matchKey: `steam:${name.toLowerCase()}-alpha-2`,
+        name: `${name} Rifleman`,
+        teamId: id,
+        teamName: name,
+        squadId: id * 10,
+        squadName: `${name} Alpha`,
+        role: 'Rifleman',
+        isLeader: false,
+        isCommander: false,
+        playtimeSeconds: 3600,
+        playtimeHours: 1,
         playtimeSource: 'test'
       }
     ]
@@ -248,6 +271,7 @@ function buildTeamBalancerProposalSnapshot(overrides: Record<string, unknown> = 
         expectedTeamID: '2',
         squadID: 'alpha',
         squadName: 'Vanguard Alpha',
+        compositionKey: VANGUARD_ALPHA_COMPOSITION_KEY,
         playerCount: 2,
         status: 'move_pending',
         confidence: null,
@@ -257,6 +281,7 @@ function buildTeamBalancerProposalSnapshot(overrides: Record<string, unknown> = 
     players: [
       {
         name: 'Vanguard Commander',
+        matchKey: 'steam:vanguard-cmd',
         fromTeamID: '1',
         toTeamID: '2',
         currentTeamID: '1',
@@ -268,7 +293,8 @@ function buildTeamBalancerProposalSnapshot(overrides: Record<string, unknown> = 
         score: null
       },
       {
-        name: 'Player alpha-2',
+        name: 'Vanguard Rifleman',
+        matchKey: 'steam:vanguard-alpha-2',
         fromTeamID: '1',
         toTeamID: '2',
         currentTeamID: '1',
@@ -1191,6 +1217,7 @@ test('renders Team Balancer diff on squad headers and switches to player rows', 
               expectedTeamID: '2',
               squadID: 'alpha',
               squadName: 'Vanguard Alpha',
+              compositionKey: VANGUARD_ALPHA_COMPOSITION_KEY,
               playerCount: 2,
               status: 'move_pending',
               confidence: null,
@@ -1225,6 +1252,7 @@ test('renders Team Balancer diff on squad headers and switches to player rows', 
           players: [
             {
               name: 'Vanguard Commander',
+              matchKey: 'steam:vanguard-cmd',
               fromTeamID: '1',
               toTeamID: '2',
               currentTeamID: '1',

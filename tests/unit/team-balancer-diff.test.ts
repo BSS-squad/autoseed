@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  buildTeamBalancerCompositionKey,
   buildTeamBalancerDiffView,
   buildTeamBalancerRosterMark,
   buildTeamBalancerSquadMark,
@@ -10,6 +11,8 @@ import {
 import type { ExporterPlayerSnapshot, ExporterTeamBalancerSnapshot } from '../../src/types.ts';
 
 const NOW_MS = Date.parse('2026-07-06T12:01:00.000Z');
+const ALPHA_SQUAD_PLAYERS = [{ matchKey: 'steam:alpha-1' }, { matchKey: 'steam:alpha-2' }];
+const ALPHA_COMPOSITION_KEY = buildTeamBalancerCompositionKey(ALPHA_SQUAD_PLAYERS);
 
 function buildProposalSnapshot(
   overrides: Partial<ExporterTeamBalancerSnapshot> = {}
@@ -52,6 +55,7 @@ function buildProposalSnapshot(
         expectedTeamID: '2',
         squadID: 'alpha',
         squadName: 'Alpha',
+        compositionKey: ALPHA_COMPOSITION_KEY,
         playerCount: 2,
         status: 'move_pending',
         confidence: null,
@@ -146,7 +150,7 @@ test('summarizes dry-run assignments without score or impact wording', () => {
     snapshot,
     'squad',
     1,
-    { squadId: 'alpha', squadName: 'Alpha' },
+    { squadId: 'alpha', squadName: 'Alpha', players: ALPHA_SQUAD_PLAYERS },
     { nowMs: NOW_MS }
   );
   const playerMarkInSquadMode = buildTeamBalancerRosterMark(
@@ -506,7 +510,7 @@ test('computes squad color from live team versus dry-run expected team', () => {
     snapshot,
     'squad',
     2,
-    { squadId: 'alpha', squadName: 'Alpha' },
+    { squadId: 'alpha', squadName: 'Alpha', players: ALPHA_SQUAD_PLAYERS },
     { nowMs: NOW_MS }
   );
 
@@ -515,4 +519,48 @@ test('computes squad color from live team versus dry-run expected team', () => {
     label: 'Смена учтена',
     detail: 'Сторона по dry-run: Сторона 2'
   });
+});
+
+test('does not reuse a squad-level dry-run mark when the squad composition changed', () => {
+  const snapshot = buildProposalSnapshot({
+    cohorts: [
+      {
+        type: 'squad',
+        cohortKey: 'squad:1:alpha',
+        fromTeamID: '1',
+        toTeamID: '2',
+        currentTeamID: '1',
+        expectedTeamID: '2',
+        squadID: 'alpha',
+        squadName: 'Alpha',
+        playerCount: 2,
+        status: 'move_pending',
+        confidence: null,
+        score: null,
+        compositionKey: 'players:2:original'
+      }
+    ]
+  });
+
+  const staleSquadMark = buildTeamBalancerSquadMark(
+    snapshot,
+    'squad',
+    1,
+    {
+      squadId: 'alpha',
+      squadName: 'Alpha',
+      players: [
+        buildRosterPlayer({ matchKey: 'steam:new-alpha-1' }),
+        buildRosterPlayer({
+          eosId: 'eos-new-alpha-2',
+          steamId: 'steam-new-alpha-2',
+          matchKey: 'steam:new-alpha-2',
+          name: 'Player new-alpha-2'
+        })
+      ]
+    },
+    { nowMs: NOW_MS }
+  );
+
+  assert.equal(staleSquadMark, null);
 });

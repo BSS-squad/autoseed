@@ -1446,7 +1446,8 @@ function TeamPanel({ team, opponent, teamBalancerSnapshot, teamBalancerMode }: T
               {
                 squadId: group.squadId,
                 squadName: group.squadName,
-                name: group.name
+                name: group.name,
+                players: group.players
               }
             );
 
