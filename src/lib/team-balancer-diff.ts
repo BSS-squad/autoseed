@@ -2,6 +2,7 @@ import type {
   ExporterPlayerSnapshot,
   ExporterTeamBalancerCohortSnapshot,
   ExporterTeamBalancerExecutionSnapshot,
+  ExporterTeamBalancerModeSnapshot,
   ExporterTeamBalancerModeratorDecisionSnapshot,
   ExporterTeamBalancerPlayerSnapshot,
   ExporterTeamBalancerSnapshot,
@@ -104,7 +105,16 @@ function formatSignedValue(value: number): string {
 }
 
 function normalizeModes(snapshot: ExporterTeamBalancerSnapshot | null): TeamBalancerProposalMode[] {
-  const modes = snapshot?.availableProposalModes?.filter((mode) => DEFAULT_MODES.includes(mode)) || [];
+  const explicitModes =
+    snapshot?.proposalModes && Object.keys(snapshot.proposalModes).length
+      ? (Object.keys(snapshot.proposalModes).filter((mode) =>
+          DEFAULT_MODES.includes(mode as TeamBalancerProposalMode)
+        ) as TeamBalancerProposalMode[])
+      : [];
+  const modes =
+    explicitModes.length > 0
+      ? explicitModes
+      : snapshot?.availableProposalModes?.filter((mode) => DEFAULT_MODES.includes(mode)) || [];
   return modes.length ? modes : DEFAULT_MODES;
 }
 
@@ -155,14 +165,25 @@ function buildBeforeAfterSummary(
   return `сейчас ${formatter(before)} · dry-run ${formatter(after)}`;
 }
 
-function buildTeamSizeSummary(snapshot: ExporterTeamBalancerSnapshot | null): string {
-  const teamSize = snapshot?.signals?.teamSize;
+function getModeSnapshot(
+  snapshot: ExporterTeamBalancerSnapshot,
+  mode: TeamBalancerProposalMode
+): ExporterTeamBalancerSnapshot | ExporterTeamBalancerModeSnapshot {
+  return snapshot.proposalModes?.[mode] || snapshot;
+}
+
+function buildModeTeamSizeSummary(
+  modeSnapshot: ExporterTeamBalancerSnapshot | ExporterTeamBalancerModeSnapshot
+): string {
+  const teamSize = modeSnapshot.signals?.teamSize;
   if (!teamSize) return '—';
   return buildBeforeAfterSummary(teamSize.before, teamSize.after, formatTeamCounts);
 }
 
-function buildTriggerLabel(snapshot: ExporterTeamBalancerSnapshot | null): string {
-  const reason = snapshot?.signals?.triggerReason || snapshot?.reasonCodes?.[0] || '';
+function buildModeTriggerLabel(
+  modeSnapshot: ExporterTeamBalancerSnapshot | ExporterTeamBalancerModeSnapshot
+): string {
+  const reason = modeSnapshot.signals?.triggerReason || modeSnapshot.reasonCodes?.[0] || '';
   return TRIGGER_LABELS[reason] || 'Плановая проверка состава';
 }
 
@@ -337,7 +358,7 @@ function formatRoundSeverityReason(reason: string): string | null {
 }
 
 function buildRoundSeveritySignalCard(
-  snapshot: ExporterTeamBalancerSnapshot
+  snapshot: ExporterTeamBalancerSnapshot | ExporterTeamBalancerModeSnapshot
 ): TeamBalancerRoundSignalCard | null {
   const severity = snapshot.signals.recentRoundSeverity;
   if (!severity) return null;
@@ -363,7 +384,7 @@ function buildRoundSeveritySignalCard(
 }
 
 function buildTicketDiffSignalCard(
-  snapshot: ExporterTeamBalancerSnapshot
+  snapshot: ExporterTeamBalancerSnapshot | ExporterTeamBalancerModeSnapshot
 ): TeamBalancerRoundSignalCard | null {
   const ticketDiff = snapshot.signals.ticketDiff;
   if (!ticketDiff) return null;
@@ -380,7 +401,7 @@ function buildTicketDiffSignalCard(
 }
 
 function buildWinStreakSignalCard(
-  snapshot: ExporterTeamBalancerSnapshot
+  snapshot: ExporterTeamBalancerSnapshot | ExporterTeamBalancerModeSnapshot
 ): TeamBalancerRoundSignalCard | null {
   const winStreak = snapshot.signals.winStreak;
   if (!winStreak) return null;
@@ -395,7 +416,7 @@ function buildWinStreakSignalCard(
 }
 
 function buildTeamBalancerRoundSignals(
-  snapshot: ExporterTeamBalancerSnapshot | null
+  snapshot: ExporterTeamBalancerSnapshot | ExporterTeamBalancerModeSnapshot | null
 ): TeamBalancerRoundSignalCard[] {
   if (!snapshot) return [];
 
@@ -445,14 +466,14 @@ function resolveLiveStatus(
 }
 
 function getModeEntries(
-  snapshot: ExporterTeamBalancerSnapshot,
+  snapshot: ExporterTeamBalancerSnapshot | ExporterTeamBalancerModeSnapshot,
   mode: TeamBalancerProposalMode
 ): Array<ExporterTeamBalancerPlayerSnapshot | ExporterTeamBalancerCohortSnapshot> {
   return mode === 'player' ? snapshot.players : snapshot.cohorts;
 }
 
 function getModeStatuses(
-  snapshot: ExporterTeamBalancerSnapshot,
+  snapshot: ExporterTeamBalancerSnapshot | ExporterTeamBalancerModeSnapshot,
   mode: TeamBalancerProposalMode
 ): TeamBalancerProposalStatus[] {
   const entries = getModeEntries(snapshot, mode);
@@ -460,7 +481,7 @@ function getModeStatuses(
 }
 
 function getProposalTone(
-  snapshot: ExporterTeamBalancerSnapshot,
+  snapshot: ExporterTeamBalancerSnapshot | ExporterTeamBalancerModeSnapshot,
   mode: TeamBalancerProposalMode
 ): TeamBalancerDiffTone {
   const statuses = getModeStatuses(snapshot, mode);
@@ -594,6 +615,7 @@ export function buildTeamBalancerRosterMark(
 
   const mode = resolveMode(snapshot, requestedMode);
   if (mode !== 'player') return null;
+  const modeSnapshot = getModeSnapshot(snapshot, mode);
 
   const nowMs = options.nowMs ?? Date.now();
   const freshnessMs = options.freshnessMs ?? TEAM_BALANCER_FRESHNESS_MS;
@@ -601,7 +623,7 @@ export function buildTeamBalancerRosterMark(
   if (ageMs > freshnessMs) return null;
 
   const currentTeamID = teamID ?? player.teamId ?? null;
-  const proposal = [...snapshot.players]
+  const proposal = [...modeSnapshot.players]
     .filter(
       (entry) =>
         matchesRosterPlayer(entry, player)
@@ -622,6 +644,7 @@ export function buildTeamBalancerSquadMark(
 
   const mode = resolveMode(snapshot, requestedMode);
   if (mode !== 'squad') return null;
+  const modeSnapshot = getModeSnapshot(snapshot, mode);
 
   const nowMs = options.nowMs ?? Date.now();
   const freshnessMs = options.freshnessMs ?? TEAM_BALANCER_FRESHNESS_MS;
@@ -629,7 +652,7 @@ export function buildTeamBalancerSquadMark(
   if (ageMs > freshnessMs) return null;
 
   const currentTeamID = teamID ?? null;
-  const cohort = [...snapshot.cohorts]
+  const cohort = [...modeSnapshot.cohorts]
     .filter(
       (entry) =>
         matchesSquadIdentity(entry, squad)
@@ -668,9 +691,10 @@ export function buildTeamBalancerDiffView(
 
   const reportTimestampMs = getReportTimestamp(snapshot);
   const ageMs = getReportAgeMs(snapshot, nowMs);
-  const triggerLabel = buildTriggerLabel(snapshot);
-  const teamSizeSummary = buildTeamSizeSummary(snapshot);
-  const modeEntries = getModeEntries(snapshot, mode);
+  const modeSnapshot = getModeSnapshot(snapshot, mode);
+  const triggerLabel = buildModeTriggerLabel(modeSnapshot);
+  const teamSizeSummary = buildModeTeamSizeSummary(modeSnapshot);
+  const modeEntries = getModeEntries(modeSnapshot, mode);
   const assignmentSummary = formatAssignmentSummary(modeEntries);
   const updatedAtLabel = formatUpdatedAt(reportTimestampMs);
 
@@ -693,8 +717,8 @@ export function buildTeamBalancerDiffView(
   }
 
   const safetyCards = buildTeamBalancerSafetyCards(snapshot);
-  const roundSignals = buildTeamBalancerRoundSignals(snapshot);
-  const hasProposal = snapshot.action === 'recommend' && modeEntries.length > 0;
+  const roundSignals = buildTeamBalancerRoundSignals(modeSnapshot);
+  const hasProposal = modeSnapshot.action === 'recommend' && modeEntries.length > 0;
 
   if (!hasProposal) {
     return {
@@ -716,7 +740,7 @@ export function buildTeamBalancerDiffView(
 
   return {
     state: 'proposal',
-    tone: getProposalTone(snapshot, mode),
+    tone: getProposalTone(modeSnapshot, mode),
     mode,
     modes,
     message: 'Есть diff',

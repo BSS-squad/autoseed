@@ -1131,36 +1131,111 @@ test('keeps all Team Balancer meta cards in one desktop row', async ({ page }) =
 
 test('renders Team Balancer diff on squad headers and switches to player rows', async ({ page }) => {
   await page.clock.setFixedTime('2026-07-06T12:01:00.000Z');
+  const squadSignals = {
+    triggerReason: 'scramble_dry_run',
+    teamSize: {
+      before: { 1: 6, 2: 2 },
+      after: { 1: 4, 2: 4 },
+      diffBefore: 4,
+      diffAfter: 0
+    },
+    ticketDiff: {
+      winnerTeamID: '1',
+      loserTeamID: '2',
+      winnerTickets: 260,
+      loserTickets: 20,
+      diff: 240,
+      steamID: '76561190000000000'
+    },
+    winStreak: {
+      teamID: '1',
+      count: 2,
+      threshold: 2,
+      discordID: '111111111111111111'
+    },
+    recentRoundSeverity: {
+      level: 'severe',
+      reasons: ['ticket_diff', 'win_streak'],
+      ticketDiff: 240,
+      winStreak: 2,
+      playerIds: ['alpha-1', 'alpha-2']
+    }
+  };
+  const playerSignals = {
+    ...squadSignals,
+    teamSize: {
+      before: { 1: 6, 2: 2 },
+      after: { 1: 5, 2: 3 },
+      diffBefore: 4,
+      diffAfter: 2
+    }
+  };
   await mockAutoseedApi(page, undefined, runtimeConfig, {
     squadjs2TeamBalancer: buildTeamBalancerProposalSnapshot({
-      signals: {
-        triggerReason: 'scramble_dry_run',
-        teamSize: {
-          before: { 1: 6, 2: 2 },
-          after: { 1: 4, 2: 4 },
-          diffBefore: 4,
-          diffAfter: 0
+      signals: squadSignals,
+      proposalModes: {
+        squad: {
+          proposalMode: 'squad',
+          action: 'recommend',
+          result: 'proposal',
+          reasonCodes: [],
+          signals: squadSignals,
+          summary: 'Squad dry-run proposal.',
+          cohorts: [
+            {
+              type: 'squad',
+              cohortKey: 'squad:1:alpha',
+              fromTeamID: '1',
+              toTeamID: '2',
+              currentTeamID: '1',
+              expectedTeamID: '2',
+              squadID: 'alpha',
+              squadName: 'Vanguard Alpha',
+              playerCount: 2,
+              status: 'move_pending',
+              confidence: null,
+              score: null
+            }
+          ],
+          players: []
         },
-        ticketDiff: {
-          winnerTeamID: '1',
-          loserTeamID: '2',
-          winnerTickets: 260,
-          loserTickets: 20,
-          diff: 240,
-          steamID: '76561190000000000'
-        },
-        winStreak: {
-          teamID: '1',
-          count: 2,
-          threshold: 2,
-          discordID: '111111111111111111'
-        },
-        recentRoundSeverity: {
-          level: 'severe',
-          reasons: ['ticket_diff', 'win_streak'],
-          ticketDiff: 240,
-          winStreak: 2,
-          playerIds: ['alpha-1', 'alpha-2']
+        player: {
+          proposalMode: 'player',
+          action: 'recommend',
+          result: 'proposal',
+          reasonCodes: [],
+          signals: playerSignals,
+          summary: 'Player dry-run proposal.',
+          cohorts: [
+            {
+              type: 'player',
+              cohortKey: 'player:1:vanguard-cmd',
+              fromTeamID: '1',
+              toTeamID: '2',
+              currentTeamID: '1',
+              expectedTeamID: '2',
+              squadID: 'alpha',
+              squadName: 'Vanguard Alpha',
+              playerCount: 1,
+              status: 'move_pending',
+              confidence: null,
+              score: null
+            }
+          ],
+          players: [
+            {
+              name: 'Vanguard Commander',
+              fromTeamID: '1',
+              toTeamID: '2',
+              currentTeamID: '1',
+              expectedTeamID: '2',
+              squadID: 'alpha',
+              squadName: 'Vanguard Alpha',
+              status: 'move_pending',
+              confidence: null,
+              score: null
+            }
+          ]
         }
       },
       voteGate: {
@@ -1257,6 +1332,7 @@ test('renders Team Balancer diff on squad headers and switches to player rows', 
   await expect(markedRosterRow.first()).toContainText('Vanguard Commander');
   await expect(markedRosterRow.first()).toContainText('Нужна смена');
   await expect(markedRosterRow.first()).toContainText('Сторона по dry-run: Сторона 2');
+  await expect(panel).toContainText('сейчас 6:2 · dry-run 5:3');
   await expect(markedRosterRow.first()).not.toContainText(/impact|skill|score/i);
   await expect(panel).not.toContainText('steamID');
   await expect(panel).not.toContainText('discordID');

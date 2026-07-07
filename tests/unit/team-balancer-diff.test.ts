@@ -225,6 +225,131 @@ test('marks player-level dry-run rows only in player mode', () => {
   assert.doesNotMatch(serialized, /impact|skill|score|steamID|eosID|discordID|playerIds/i);
 });
 
+test('uses mode-specific dry-run slices when proposalModes are present', () => {
+  const snapshot = buildProposalSnapshot({
+    proposalModes: {
+      squad: {
+        proposalMode: 'squad',
+        action: 'recommend',
+        result: 'proposal',
+        reasonCodes: [],
+        summary: 'Squad dry-run.',
+        signals: {
+          triggerReason: 'scramble_dry_run',
+          teamSize: {
+            before: { 1: 6, 2: 2 },
+            after: { 1: 4, 2: 4 },
+            diffBefore: 4,
+            diffAfter: 0
+          },
+          winStreak: null,
+          ticketDiff: null,
+          recentRoundSeverity: null
+        },
+        cohorts: [
+          {
+            type: 'squad',
+            cohortKey: 'squad:1:alpha',
+            fromTeamID: '1',
+            toTeamID: '2',
+            currentTeamID: '1',
+            expectedTeamID: '2',
+            squadID: 'alpha',
+            squadName: 'Alpha',
+            playerCount: 2,
+            status: 'move_pending',
+            confidence: null,
+            score: null
+          }
+        ],
+        players: []
+      },
+      player: {
+        proposalMode: 'player',
+        action: 'recommend',
+        result: 'proposal',
+        reasonCodes: [],
+        summary: 'Player dry-run.',
+        signals: {
+          triggerReason: 'scramble_dry_run',
+          teamSize: {
+            before: { 1: 6, 2: 2 },
+            after: { 1: 5, 2: 3 },
+            diffBefore: 4,
+            diffAfter: 2
+          },
+          winStreak: null,
+          ticketDiff: null,
+          recentRoundSeverity: null
+        },
+        cohorts: [
+          {
+            type: 'player',
+            cohortKey: 'player:1:bravo-1',
+            fromTeamID: '1',
+            toTeamID: '2',
+            currentTeamID: '1',
+            expectedTeamID: '2',
+            squadID: 'bravo',
+            squadName: 'Bravo',
+            playerCount: 1,
+            status: 'move_pending',
+            confidence: null,
+            score: null
+          }
+        ],
+        players: [
+          {
+            name: 'Player alpha-1',
+            matchKey: 'steam:alpha-1',
+            fromTeamID: '1',
+            toTeamID: '1',
+            currentTeamID: '1',
+            expectedTeamID: '1',
+            squadID: 'alpha',
+            squadName: 'Alpha',
+            status: 'already_target',
+            confidence: null,
+            score: null,
+            reward: null
+          },
+          {
+            name: 'Player bravo-1',
+            matchKey: 'steam:bravo-1',
+            fromTeamID: '1',
+            toTeamID: '2',
+            currentTeamID: '1',
+            expectedTeamID: '2',
+            squadID: 'bravo',
+            squadName: 'Bravo',
+            status: 'move_pending',
+            confidence: null,
+            score: null,
+            reward: null
+          }
+        ]
+      }
+    }
+  });
+
+  const playerView = buildTeamBalancerDiffView(snapshot, 'player', { nowMs: NOW_MS });
+  const alphaPlayerMark = buildTeamBalancerRosterMark(
+    snapshot,
+    'player',
+    1,
+    buildRosterPlayer(),
+    { nowMs: NOW_MS }
+  );
+
+  assert.equal(playerView.assignmentSummary, '1 к смене');
+  assert.equal(playerView.teamSizeSummary, 'сейчас 6:2 · dry-run 5:3');
+  assert.deepEqual(alphaPlayerMark, {
+    tone: 'neutral',
+    label: 'На месте',
+    detail: 'Сторона по dry-run: Сторона 1'
+  });
+});
+
 test('keeps safety and recent-round cards separate from dry-run assignment diff', () => {
   const view = buildTeamBalancerDiffView(
     buildProposalSnapshot({
