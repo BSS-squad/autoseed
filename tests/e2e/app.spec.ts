@@ -1109,6 +1109,36 @@ test('renders healthy Team Balancer state without proposal rows', async ({ page 
   await expect(page.getByTestId('team-balancer-diff-row')).toHaveCount(0);
 });
 
+test('keeps all Team Balancer meta cards in one desktop row', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.clock.setFixedTime('2026-07-06T12:01:00.000Z');
+  await mockAutoseedApi(page, undefined, runtimeConfig, {
+    squadjs2TeamBalancer: buildTeamBalancerProposalSnapshot()
+  });
+
+  await page.goto('/');
+  await page.getByTestId('server-card-2').locator('button').first().click();
+
+  const metaCards = page.locator('.team-balancer-meta > div');
+  await expect(metaCards).toHaveCount(4);
+
+  const cardBoxes = await metaCards.evaluateAll((nodes) =>
+    nodes.map((node) => {
+      const rect = node.getBoundingClientRect();
+      return {
+        left: Math.round(rect.left),
+        top: Math.round(rect.top)
+      };
+    })
+  );
+  const firstTop = cardBoxes[0]?.top ?? 0;
+
+  expect(cardBoxes.every((box) => Math.abs(box.top - firstTop) <= 1)).toBe(true);
+  expect(cardBoxes.map((box) => box.left)).toEqual(
+    [...cardBoxes].map((box) => box.left).sort((leftA, leftB) => leftA - leftB)
+  );
+});
+
 test('renders Team Balancer marks inside the current roster and switches squad/player modes', async ({ page }) => {
   await page.clock.setFixedTime('2026-07-06T12:01:00.000Z');
   await mockAutoseedApi(page, undefined, runtimeConfig, {
