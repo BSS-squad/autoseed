@@ -1408,6 +1408,50 @@ test('uses player-friendly language for unavailable leaderboards', async ({ page
   await expectPlayerFriendlyLanguage(page);
 });
 
+test('keeps the public page selector and content width stable while switching sections', async ({
+  page
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await mockLeaderboardApi(page);
+
+  await page.goto('/');
+
+  const nav = page.locator('nav.app-nav');
+  const shell = page.locator('.shell').first();
+  await expect(page.getByTestId('app-shell')).toBeVisible();
+
+  const homeNavBox = await nav.boundingBox();
+  const homeShellBox = await shell.boundingBox();
+  expect(homeNavBox).not.toBeNull();
+  expect(homeShellBox).not.toBeNull();
+
+  await page.getByTestId('winners-nav-link').click();
+  await expect(page.getByTestId('winners-page')).toBeVisible();
+
+  const winnersNavBox = await nav.boundingBox();
+  const winnersShellBox = await shell.boundingBox();
+  expect(winnersNavBox).not.toBeNull();
+  expect(winnersShellBox).not.toBeNull();
+
+  await page.getByTestId('leaderboards-nav-link').click();
+  await expect(page.getByTestId('leaderboards-page')).toBeVisible();
+
+  const leaderboardsNavBox = await nav.boundingBox();
+  const leaderboardsShellBox = await shell.boundingBox();
+  expect(leaderboardsNavBox).not.toBeNull();
+  expect(leaderboardsShellBox).not.toBeNull();
+
+  for (const currentBox of [winnersNavBox, leaderboardsNavBox]) {
+    expect(Math.abs(currentBox!.x - homeNavBox!.x)).toBeLessThanOrEqual(1);
+    expect(Math.abs(currentBox!.width - homeNavBox!.width)).toBeLessThanOrEqual(1);
+  }
+
+  for (const currentBox of [winnersShellBox, leaderboardsShellBox]) {
+    expect(Math.abs(currentBox!.x - homeShellBox!.x)).toBeLessThanOrEqual(1);
+    expect(Math.abs(currentBox!.width - homeShellBox!.width)).toBeLessThanOrEqual(1);
+  }
+});
+
 test('uses player-friendly language in the autoconnect window', async ({ page }) => {
   await captureConnectorWindowMarkup(page);
   await seedStoredAutoconnectState(page, { enabled: false });
