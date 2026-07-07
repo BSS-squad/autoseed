@@ -21,7 +21,11 @@ import {
   SNAPSHOT_POLL_INTERVAL_MS,
   subscribeCombinedSnapshot
 } from './lib/snapshot';
-import { buildTeamBalancerDiffView, buildTeamBalancerRosterMark } from './lib/team-balancer-diff';
+import {
+  buildTeamBalancerDiffView,
+  buildTeamBalancerRosterMark,
+  buildTeamBalancerSquadMark
+} from './lib/team-balancer-diff';
 import {
   loadStoredState,
   saveActiveRedirectServerKey,
@@ -85,6 +89,8 @@ type TeamBalancerPanelProps = {
 type TeamRosterGroup = {
   key: string;
   name: string;
+  squadId: number | string | null;
+  squadName: string | null;
   playerCount: number;
   totalPlaytimeHours: number | null;
   players: ExporterTeamSnapshot['players'];
@@ -481,6 +487,8 @@ function buildTeamRosterGroups(team: ExporterTeamSnapshot): TeamRosterGroup[] {
       return {
         key,
         name: value.name,
+        squadId: value.squad?.id ?? value.players[0]?.squadId ?? null,
+        squadName: value.squad?.name ?? value.players[0]?.squadName ?? value.name,
         playerCount: value.players.length || value.squad?.playerCount || 0,
         totalPlaytimeHours:
           typeof value.squad?.totalPlaytimeHours === 'number'
@@ -1424,15 +1432,52 @@ function TeamPanel({ team, opponent, teamBalancerSnapshot, teamBalancerMode }: T
 
       <div className="roster-list">
         {rosterGroups.length ? (
-          rosterGroups.map((group) => (
-            <section key={`${team.id || 0}-${group.key}`} className="squad-group">
-              <header className="squad-group-head">
-                <div>
-                  <strong>{group.name}</strong>
-                  <p>{group.playerCount} игроков</p>
-                </div>
-                <span className="squad-chip">{formatHours(group.totalPlaytimeHours)}</span>
-              </header>
+          rosterGroups.map((group) => {
+            const squadBalancerMark = buildTeamBalancerSquadMark(
+              teamBalancerSnapshot,
+              teamBalancerMode,
+              team.id ?? null,
+              {
+                squadId: group.squadId,
+                squadName: group.squadName,
+                name: group.name
+              }
+            );
+
+            return (
+              <section
+                key={`${team.id || 0}-${group.key}`}
+                className={classNames(
+                  'squad-group',
+                  squadBalancerMark && `squad-group-balancer-${squadBalancerMark.tone}`
+                )}
+                data-testid={squadBalancerMark ? 'team-balancer-squad-mark' : undefined}
+                data-team-balancer-tone={squadBalancerMark?.tone}
+              >
+                <header className="squad-group-head">
+                  <div className="squad-group-title">
+                    <div className="squad-group-name-row">
+                      <strong>{group.name}</strong>
+                      {squadBalancerMark ? (
+                        <span
+                          className={classNames(
+                            'roster-balance-badge',
+                            `roster-balance-badge-${squadBalancerMark.tone}`
+                          )}
+                        >
+                          {squadBalancerMark.label}
+                        </span>
+                      ) : null}
+                    </div>
+                    <p>{group.playerCount} игроков</p>
+                    {squadBalancerMark ? (
+                      <div className="roster-balance-detail squad-balance-detail">
+                        <span>{squadBalancerMark.detail}</span>
+                      </div>
+                    ) : null}
+                  </div>
+                  <span className="squad-chip">{formatHours(group.totalPlaytimeHours)}</span>
+                </header>
 
               <div className="squad-group-body">
                 {group.players.map((player) => {
@@ -1476,9 +1521,6 @@ function TeamPanel({ team, opponent, teamBalancerSnapshot, teamBalancerMode }: T
                         {teamBalancerMark ? (
                           <div className="roster-balance-detail">
                             <span>{teamBalancerMark.detail}</span>
-                            {teamBalancerMark.impactLabel ? (
-                              <span>{teamBalancerMark.impactLabel}</span>
-                            ) : null}
                           </div>
                         ) : null}
                       </div>
@@ -1488,7 +1530,8 @@ function TeamPanel({ team, opponent, teamBalancerSnapshot, teamBalancerMode }: T
                 })}
               </div>
             </section>
-          ))
+            );
+          })
         ) : (
           <div className="roster-empty">Список игроков пока пуст.</div>
         )}
@@ -1533,8 +1576,8 @@ function TeamBalancerPanel({
           <strong>{view.triggerLabel}</strong>
         </div>
         <div>
-          <span>Сила сторон</span>
-          <strong>{view.impactSummary}</strong>
+          <span>Diff состава</span>
+          <strong>{view.assignmentSummary}</strong>
         </div>
         <div>
           <span>Размер сторон</span>

@@ -58,6 +58,7 @@ export type LeaderboardResponse = {
 export type ExporterPlayerSnapshot = {
   eosId?: string | null;
   steamId?: string | null;
+  matchKey?: string | null;
   name: string;
   teamId?: number | null;
   teamName?: string | null;
@@ -206,8 +207,8 @@ export type ExporterTeamBalancerSignalsSnapshot = {
     diffBefore: number;
     diffAfter: number;
   };
-  skill: ExporterTeamBalancerMetricSnapshot | null;
-  impact: ExporterTeamBalancerMetricSnapshot | null;
+  skill?: ExporterTeamBalancerMetricSnapshot | null;
+  impact?: ExporterTeamBalancerMetricSnapshot | null;
   winStreak: ExporterTeamBalancerWinStreakSignal | null;
   ticketDiff: ExporterTeamBalancerTicketDiffSignal | null;
   recentRoundSeverity: ExporterTeamBalancerRecentRoundSeveritySignal | null;
@@ -232,6 +233,7 @@ export type ExporterTeamBalancerCohortSnapshot = {
 
 export type ExporterTeamBalancerPlayerSnapshot = {
   name: string;
+  matchKey?: string | null;
   fromTeamID: string | null;
   toTeamID: string | null;
   currentTeamID?: string | null;
