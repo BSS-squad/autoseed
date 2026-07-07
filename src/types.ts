@@ -252,6 +252,17 @@ export type ExporterTeamBalancerPlayerSnapshot = {
   impactHours?: number | null;
 };
 
+export type ExporterTeamBalancerModeSnapshot = {
+  proposalMode: TeamBalancerProposalMode;
+  action: string;
+  result: string | null;
+  reasonCodes: string[];
+  signals: ExporterTeamBalancerSignalsSnapshot;
+  summary: string | null;
+  cohorts: ExporterTeamBalancerCohortSnapshot[];
+  players: ExporterTeamBalancerPlayerSnapshot[];
+};
+
 export type ExporterTeamBalancerVoteGateSnapshot = {
   enabled: boolean;
   quorumPercent: number;
@@ -314,6 +325,7 @@ export type ExporterTeamBalancerSnapshot = {
   summary: string | null;
   cohorts: ExporterTeamBalancerCohortSnapshot[];
   players: ExporterTeamBalancerPlayerSnapshot[];
+  proposalModes?: Partial<Record<TeamBalancerProposalMode, ExporterTeamBalancerModeSnapshot>>;
   voteGate: ExporterTeamBalancerVoteGateSnapshot | null;
   moderatorDecision: ExporterTeamBalancerModeratorDecisionSnapshot | null;
   execution: ExporterTeamBalancerExecutionSnapshot | null;

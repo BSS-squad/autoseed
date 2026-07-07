@@ -20,6 +20,7 @@ import type {
   ExporterTeamBalancerCohortSnapshot,
   ExporterTeamBalancerExecutionSnapshot,
   ExporterTeamBalancerMetricSnapshot,
+  ExporterTeamBalancerModeSnapshot,
   ExporterTeamBalancerModeratorDecisionSnapshot,
   ExporterTeamBalancerPlayerSnapshot,
   ExporterTeamBalancerSignalsSnapshot,
@@ -27,7 +28,8 @@ import type {
   ExporterTeamBalancerTicketDiffSignal,
   ExporterTeamBalancerVoteGateSnapshot,
   ExporterTeamBalancerWinStreakSignal,
-  ExporterTeamSnapshot
+  ExporterTeamSnapshot,
+  TeamBalancerProposalMode
 } from '../types';
 
 type ExporterSnapshotState = {
@@ -450,6 +452,55 @@ function mapTeamBalancerPlayer(value: unknown): ExporterTeamBalancerPlayerSnapsh
   };
 }
 
+function mapTeamBalancerModeSnapshot(
+  value: unknown,
+  fallbackMode: TeamBalancerProposalMode
+): ExporterTeamBalancerModeSnapshot | null {
+  const modeSnapshot = getRecord(value);
+  if (!modeSnapshot) return null;
+
+  const cohorts = Array.isArray(modeSnapshot.cohorts)
+    ? modeSnapshot.cohorts
+        .map(mapTeamBalancerCohort)
+        .filter((entry): entry is ExporterTeamBalancerCohortSnapshot => Boolean(entry))
+    : [];
+  const players = Array.isArray(modeSnapshot.players)
+    ? modeSnapshot.players
+        .map(mapTeamBalancerPlayer)
+        .filter((entry): entry is ExporterTeamBalancerPlayerSnapshot => Boolean(entry))
+    : [];
+
+  return {
+    proposalMode: mapTeamBalancerMode(modeSnapshot.proposalMode) || fallbackMode,
+    action: toStringOrNull(modeSnapshot.action) || 'noop',
+    result: toStringOrNull(modeSnapshot.result),
+    reasonCodes: Array.isArray(modeSnapshot.reasonCodes)
+      ? modeSnapshot.reasonCodes
+          .map((entry) => toStringOrNull(entry))
+          .filter((entry): entry is string => Boolean(entry))
+      : [],
+    signals: mapTeamBalancerSignals(modeSnapshot.signals),
+    summary: toStringOrNull(modeSnapshot.summary),
+    cohorts,
+    players
+  };
+}
+
+function mapTeamBalancerProposalModes(
+  value: unknown
+): Partial<Record<TeamBalancerProposalMode, ExporterTeamBalancerModeSnapshot>> {
+  const modes = getRecord(value);
+  if (!modes) return {};
+
+  return Object.fromEntries(
+    (['squad', 'player'] as TeamBalancerProposalMode[])
+      .map((mode) => [mode, mapTeamBalancerModeSnapshot(modes[mode], mode)] as const)
+      .filter((entry): entry is readonly [TeamBalancerProposalMode, ExporterTeamBalancerModeSnapshot] =>
+        Boolean(entry[1])
+      )
+  );
+}
+
 function mapTeamBalancerVoteGate(value: unknown): ExporterTeamBalancerVoteGateSnapshot | null {
   const voteGate = getRecord(value);
   if (!voteGate) return null;
@@ -530,6 +581,7 @@ function mapTeamBalancerSnapshot(value: unknown): ExporterTeamBalancerSnapshot |
         .map(mapTeamBalancerPlayer)
         .filter((entry): entry is ExporterTeamBalancerPlayerSnapshot => Boolean(entry))
     : [];
+  const proposalModes = mapTeamBalancerProposalModes(snapshot.proposalModes);
 
   return {
     version: Math.max(1, Math.round(toNumber(snapshot.version, 1))),
@@ -557,6 +609,7 @@ function mapTeamBalancerSnapshot(value: unknown): ExporterTeamBalancerSnapshot |
     summary: toStringOrNull(snapshot.summary),
     cohorts,
     players,
+    proposalModes,
     voteGate: mapTeamBalancerVoteGate(snapshot.voteGate),
     moderatorDecision: mapTeamBalancerModeratorDecision(snapshot.moderatorDecision),
     execution: mapTeamBalancerExecution(snapshot.execution)
