@@ -354,7 +354,7 @@ test('uses mode-specific dry-run slices when proposalModes are present', () => {
   });
 });
 
-test('does not report player diff while the squad slice has no visible marks', () => {
+test('keeps squad dry-run diff visible when the live roster has no matching marks', () => {
   const staleSquadCohort = {
     type: 'squad',
     cohortKey: 'squad:1:alpha',
@@ -442,16 +442,88 @@ test('does not report player diff while the squad slice has no visible marks', (
     visibleAssignmentTones: ['conflict']
   });
 
-  assert.equal(squadView.state, 'healthy');
-  assert.equal(squadView.tone, 'neutral');
-  assert.equal(squadView.message, 'Без изменений');
-  assert.equal(squadView.assignmentSummary, 'Без изменений');
+  assert.equal(squadView.state, 'proposal');
+  assert.equal(squadView.tone, 'conflict');
+  assert.equal(squadView.message, 'Есть diff');
+  assert.equal(squadView.assignmentSummary, '1 к смене');
   assert.equal(squadView.teamSizeSummary, 'сейчас 6:2 · dry-run 4:4');
+  assert.equal(squadView.rows.length, 1);
+  assert.equal(squadView.rows[0]?.title, 'Alpha');
+  assert.equal(squadView.rows[0]?.label, 'Нужна смена');
   assert.equal(playerView.state, 'proposal');
   assert.equal(playerView.tone, 'conflict');
   assert.equal(playerView.message, 'Есть diff');
   assert.equal(playerView.assignmentSummary, '1 к смене');
   assert.equal(playerView.teamSizeSummary, 'сейчас 6:2 · dry-run 5:3');
+});
+
+test('lists solo player cohorts in the squad dry-run slice', () => {
+  const soloCohort = {
+    type: 'player',
+    cohortKey: 'player:2:solo-1',
+    fromTeamID: '2',
+    toTeamID: '1',
+    currentTeamID: '2',
+    expectedTeamID: '1',
+    squadID: null,
+    squadName: null,
+    playerCount: 1,
+    status: 'move_pending',
+    confidence: null,
+    score: null,
+    compositionKey: null
+  };
+  const snapshot = buildProposalSnapshot({
+    cohorts: [soloCohort],
+    signals: {
+      triggerReason: 'scramble_dry_run',
+      teamSize: {
+        before: { 1: 47, 2: 48 },
+        after: { 1: 48, 2: 47 },
+        diffBefore: 1,
+        diffAfter: 1
+      },
+      winStreak: null,
+      ticketDiff: null,
+      recentRoundSeverity: null
+    },
+    proposalModes: {
+      squad: {
+        proposalMode: 'squad',
+        action: 'recommend',
+        result: 'proposal',
+        reasonCodes: [],
+        summary: 'Squad dry-run.',
+        signals: {
+          triggerReason: 'scramble_dry_run',
+          teamSize: {
+            before: { 1: 47, 2: 48 },
+            after: { 1: 48, 2: 47 },
+            diffBefore: 1,
+            diffAfter: 1
+          },
+          winStreak: null,
+          ticketDiff: null,
+          recentRoundSeverity: null
+        },
+        cohorts: [soloCohort],
+        players: []
+      }
+    }
+  });
+
+  const view = buildTeamBalancerDiffView(snapshot, 'squad', {
+    nowMs: NOW_MS,
+    visibleAssignmentTones: []
+  });
+
+  assert.equal(view.state, 'proposal');
+  assert.equal(view.message, 'Есть diff');
+  assert.equal(view.assignmentSummary, '1 к смене');
+  assert.equal(view.teamSizeSummary, 'сейчас 47:48 · dry-run 48:47');
+  assert.equal(view.rows.length, 1);
+  assert.equal(view.rows[0]?.title, 'Игрок без сквада');
+  assert.equal(view.rows[0]?.detail, '1 игрок · Сторона 2 в Сторона 1');
 });
 
 test('keeps safety and recent-round cards separate from dry-run assignment diff', () => {
@@ -617,6 +689,42 @@ test('computes squad color from live team versus dry-run expected team', () => {
   assert.deepEqual(movedSquadMark, {
     tone: 'success',
     label: 'Смена учтена',
+    detail: 'Сторона по dry-run: Сторона 2'
+  });
+});
+
+test('matches squad dry-run marks by squad identity when composition key is absent', () => {
+  const snapshot = buildProposalSnapshot({
+    cohorts: [
+      {
+        type: 'squad',
+        cohortKey: 'squad:1:10',
+        fromTeamID: '1',
+        toTeamID: '2',
+        currentTeamID: '1',
+        expectedTeamID: '2',
+        squadID: 10,
+        squadName: 'Alpha',
+        playerCount: 2,
+        status: 'move_pending',
+        confidence: null,
+        score: null,
+        compositionKey: null
+      }
+    ]
+  });
+
+  const squadMark = buildTeamBalancerSquadMark(
+    snapshot,
+    'squad',
+    1,
+    { squadId: 10, squadName: 'Alpha', players: ALPHA_SQUAD_PLAYERS },
+    { nowMs: NOW_MS }
+  );
+
+  assert.deepEqual(squadMark, {
+    tone: 'conflict',
+    label: 'Нужна смена',
     detail: 'Сторона по dry-run: Сторона 2'
   });
 });

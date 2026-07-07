@@ -39,6 +39,14 @@ export type TeamBalancerRoundSignalCard = {
   detail: string | null;
 };
 
+export type TeamBalancerDiffRow = {
+  id: string;
+  tone: TeamBalancerDiffTone;
+  title: string;
+  label: string;
+  detail: string;
+};
+
 export type TeamBalancerDiffView = {
   state: TeamBalancerDiffViewState;
   tone: TeamBalancerDiffTone;
@@ -52,7 +60,7 @@ export type TeamBalancerDiffView = {
   ageMs: number;
   safetyCards: TeamBalancerSafetyCard[];
   roundSignals: TeamBalancerRoundSignalCard[];
-  rows: never[];
+  rows: TeamBalancerDiffRow[];
 };
 
 type TeamBalancerDiffOptions = {
@@ -247,6 +255,71 @@ function formatAssignmentSummary(
   ].filter((part): part is string => Boolean(part));
 
   return parts.length ? parts.join(' · ') : 'Без изменений';
+}
+
+function formatPlayerCount(value: number | null | undefined): string {
+  const count = Math.max(0, Math.round(Number(value) || 0));
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 === 1 && mod100 !== 11) return `${count} игрок`;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${count} игрока`;
+  return `${count} игроков`;
+}
+
+function formatSideMove(entry: {
+  fromTeamID: string | null;
+  toTeamID: string | null;
+  expectedTeamID?: string | null;
+}): string {
+  return `${formatTeamId(entry.fromTeamID)} в ${formatTeamId(entry.expectedTeamID || entry.toTeamID)}`;
+}
+
+function getCohortTitle(entry: ExporterTeamBalancerCohortSnapshot): string {
+  const squadName = String(entry.squadName || '').trim();
+  if (entry.type === 'squad') return squadName || 'Сквад';
+  return squadName ? `${squadName} · игрок` : 'Игрок без сквада';
+}
+
+function getPlayerTitle(entry: ExporterTeamBalancerPlayerSnapshot): string {
+  return String(entry.name || '').trim() || 'Игрок';
+}
+
+function buildDiffRow(
+  entry: ExporterTeamBalancerPlayerSnapshot | ExporterTeamBalancerCohortSnapshot,
+  index: number,
+  mode: TeamBalancerProposalMode
+): TeamBalancerDiffRow | null {
+  const tone = getStatusTone(entry.status);
+  if (tone === 'neutral') return null;
+
+  const isPlayerMode = mode === 'player';
+  const playerCount =
+    'playerCount' in entry ? formatPlayerCount(entry.playerCount) : null;
+  const squadName = String(entry.squadName || '').trim();
+  const detail = isPlayerMode
+    ? joinDetailParts([squadName || 'Без сквада', formatSideMove(entry)]) || formatSideMove(entry)
+    : joinDetailParts([playerCount, formatSideMove(entry)]) || formatSideMove(entry);
+
+  return {
+    id: `${mode}-${entry.status}-${entry.fromTeamID || 'x'}-${entry.toTeamID || 'x'}-${
+      'cohortKey' in entry ? entry.cohortKey : entry.matchKey || entry.name || index
+    }`,
+    tone,
+    title: isPlayerMode
+      ? getPlayerTitle(entry as ExporterTeamBalancerPlayerSnapshot)
+      : getCohortTitle(entry as ExporterTeamBalancerCohortSnapshot),
+    label: getRosterLabel(entry.status),
+    detail
+  };
+}
+
+function buildTeamBalancerDiffRows(
+  entries: Array<ExporterTeamBalancerPlayerSnapshot | ExporterTeamBalancerCohortSnapshot>,
+  mode: TeamBalancerProposalMode
+): TeamBalancerDiffRow[] {
+  return entries
+    .map((entry, index) => buildDiffRow(entry, index, mode))
+    .filter((row): row is TeamBalancerDiffRow => Boolean(row));
 }
 
 function buildVoteGateSafetyCard(
@@ -619,7 +692,7 @@ function matchesSquadIdentity(
     return proposalCompositionKey === normalizeComparable(buildTeamBalancerCompositionKey(squad.players));
   }
 
-  if (proposal.type === 'squad') return false;
+  if (proposal.type !== 'squad') return false;
 
   const proposalSquadId = normalizeComparable(proposal.squadID);
   const squadId = normalizeComparable(squad.squadId);
@@ -771,10 +844,12 @@ export function buildTeamBalancerDiffView(
   const modeEntries = getModeEntries(modeSnapshot, mode);
   const hasVisibleAssignmentTones = Array.isArray(options.visibleAssignmentTones);
   const visibleAssignmentTones = options.visibleAssignmentTones || [];
-  const assignmentSummary = hasVisibleAssignmentTones
+  const hasVisibleDiffTones = hasVisibleAssignmentTones && hasVisibleDiff(visibleAssignmentTones);
+  const assignmentSummary = hasVisibleDiffTones
     ? formatAssignmentSummaryFromTones(visibleAssignmentTones)
     : formatAssignmentSummary(modeEntries);
   const updatedAtLabel = formatUpdatedAt(reportTimestampMs);
+  const rows = buildTeamBalancerDiffRows(modeEntries, mode);
 
   if (!reportTimestampMs || ageMs > freshnessMs) {
     return {
@@ -790,15 +865,13 @@ export function buildTeamBalancerDiffView(
       ageMs,
       safetyCards: [],
       roundSignals: [],
-      rows: []
+      rows
     };
   }
 
   const safetyCards = buildTeamBalancerSafetyCards(snapshot);
   const roundSignals = buildTeamBalancerRoundSignals(modeSnapshot);
-  const hasProposal =
-    modeSnapshot.action === 'recommend' &&
-    (hasVisibleAssignmentTones ? hasVisibleDiff(visibleAssignmentTones) : modeEntries.length > 0);
+  const hasProposal = modeSnapshot.action === 'recommend' && (rows.length > 0 || hasVisibleDiffTones);
 
   if (!hasProposal) {
     return {
@@ -820,7 +893,7 @@ export function buildTeamBalancerDiffView(
 
   return {
     state: 'proposal',
-    tone: hasVisibleAssignmentTones
+    tone: hasVisibleDiffTones
       ? getVisibleProposalTone(visibleAssignmentTones)
       : getProposalTone(modeSnapshot, mode),
     mode,
@@ -833,6 +906,6 @@ export function buildTeamBalancerDiffView(
     ageMs,
     safetyCards,
     roundSignals,
-    rows: []
+    rows
   };
 }

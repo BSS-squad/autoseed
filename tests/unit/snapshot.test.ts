@@ -117,7 +117,40 @@ test('keeps Team Balancer safety gate fields from exporter snapshots', async () 
                 totalRconAttempts: 0,
                 maxAttemptsPerPlayer: 2,
                 completedAt: null
-              }
+              },
+              history: [
+                {
+                  decisionId: 'decision-1',
+                  createdAt: '2026-07-06T12:00:00.000Z',
+                  mode: 'dry-run',
+                  status: 'evaluated',
+                  trigger: 'UPDATED_PLAYER_INFORMATION',
+                  plannedMoves: 1,
+                  plannedPlayers: 2,
+                  summary: 'Public operation entry',
+                  moves: [
+                    {
+                      type: 'squad',
+                      fromTeamID: '1',
+                      toTeamID: '2',
+                      squadName: 'Vanguard Alpha',
+                      playerCount: 2,
+                      status: 'evaluated',
+                      playerIds: ['alpha-1', 'alpha-2']
+                    }
+                  ],
+                  players: [
+                    {
+                      name: 'Vanguard Commander',
+                      matchKey: 'steam:public',
+                      fromTeamID: '1',
+                      toTeamID: '2',
+                      status: 'move_pending',
+                      steamID: '76561190000000001'
+                    }
+                  ]
+                }
+              ]
             }
           }
         ]
@@ -139,6 +172,9 @@ test('keeps Team Balancer safety gate fields from exporter snapshots', async () 
   assert.equal(teamBalancer?.moderatorDecision?.reason, 'technical');
   assert.equal(teamBalancer?.execution?.status, 'blocked');
   assert.equal(teamBalancer?.execution?.plannedPlayers, 2);
+  assert.equal(teamBalancer?.history[0]?.plannedPlayers, 2);
+  assert.equal(teamBalancer?.history[0]?.moves[0]?.squadName, 'Vanguard Alpha');
+  assert.equal(teamBalancer?.history[0]?.players[0]?.name, 'Vanguard Commander');
   assert.deepEqual(teamBalancer?.signals.ticketDiff, {
     winnerTeamID: '1',
     loserTeamID: '2',
@@ -160,5 +196,154 @@ test('keeps Team Balancer safety gate fields from exporter snapshots', async () 
   assert.doesNotMatch(
     JSON.stringify(teamBalancer?.signals),
     /steamID|discordID|playerIds|7656119|alpha-1|alpha-2/
+  );
+  assert.doesNotMatch(JSON.stringify(teamBalancer?.history), /steamID|playerIds|7656119|alpha-1/);
+});
+
+test('keeps public activity fields and drops private ids from exporter snapshots', async () => {
+  globalThis.fetch = async () =>
+    new Response(
+      JSON.stringify({
+        success: true,
+        timestamp: Date.parse('2026-07-06T12:00:00.000Z'),
+        generatedAt: '2026-07-06T12:00:00.000Z',
+        version: 3,
+        servers: [
+          {
+            id: 2,
+            code: 'squadjs2',
+            name: '[RU] BSS Spec Ops',
+            playerCount: 42,
+            maxPlayers: 100,
+            online: true,
+            teams: [],
+            players: [],
+            updatedAt: Date.parse('2026-07-06T12:00:00.000Z'),
+            activity: {
+              version: 1,
+              teamBalancerHistory: [
+                {
+                  decisionId: 'activity-decision-1',
+                  createdAt: '2026-07-06T12:00:00.000Z',
+                  mode: 'execute',
+                  action: 'execute',
+                  result: 'executed',
+                  status: 'executed',
+                  trigger: 'UPDATED_PLAYER_INFORMATION',
+                  reasonCodes: ['vote_passed'],
+                  plannedMoves: 1,
+                  plannedPlayers: 2,
+                  summary: 'Activity operation entry',
+                  execution: {
+                    enabled: true,
+                    status: 'completed',
+                    plannedMoves: 1,
+                    plannedPlayers: 2,
+                    attemptedPlayers: 2,
+                    succeededPlayers: 2,
+                    failedPlayers: 0,
+                    totalRconAttempts: 2,
+                    maxAttemptsPerPlayer: 2,
+                    completedAt: '2026-07-06T12:00:30.000Z',
+                    playerId: 'private-execution-player'
+                  },
+                  moves: [
+                    {
+                      type: 'squad',
+                      fromTeamID: '1',
+                      toTeamID: '2',
+                      squadName: 'Vanguard Alpha',
+                      playerCount: 2,
+                      status: 'evaluated',
+                      playerIds: ['alpha-1', 'alpha-2']
+                    }
+                  ],
+                  players: [
+                    {
+                      name: 'Vanguard Commander',
+                      matchKey: 'steam:public',
+                      fromTeamID: '1',
+                      toTeamID: '2',
+                      status: 'move_pending',
+                      steamID: '76561190000000001'
+                    }
+                  ]
+                }
+              ],
+              recentRounds: [
+                {
+                  endedAt: '2026-07-06T12:00:00.000Z',
+                  layer: 'Narva RAAS v2',
+                  winner: { team: '1', faction: 'Winner', tickets: 123 },
+                  loser: { team: '2', faction: 'Loser', tickets: 20 },
+                  playerCount: 80,
+                  totals: {
+                    kills: 42,
+                    deaths: 40,
+                    revives: 7,
+                    knockdowns: 61
+                  },
+                  eosID: 'private-round-id'
+                }
+              ],
+              topWindow: {
+                roundLimit: 10,
+                roundCount: 10,
+                requiredParticipation: 3,
+                qualificationPercent: 30,
+                entries: [
+                  {
+                    rank: 1,
+                    name: 'Qualified A',
+                    roundsPlayed: 3,
+                    kills: 15,
+                    deaths: 2,
+                    revives: 4,
+                    knockdowns: 21,
+                    kdRatio: 7.5,
+                    steamID: '76561190000000000'
+                  }
+                ]
+              },
+              killfeed: {
+                version: 1,
+                rounds: [{ endedAt: '2026-07-06T12:00:00.000Z', totals: { kills: 3, knockdowns: 4 } }],
+                events: [
+                  {
+                    type: 'kill',
+                    attackerName: 'Attacker',
+                    victimName: 'Victim',
+                    count: 2,
+                    roundEndedAt: '2026-07-06T12:00:00.000Z',
+                    playerId: 'private-player-id'
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      })
+    );
+
+  const snapshot = await fetchCombinedSnapshot([
+    {
+      name: 'squadjs2',
+      baseUrl: 'https://exporter.example.test'
+    }
+  ]);
+
+  const activity = snapshot.servers[0]?.activity;
+
+  assert.equal(activity?.recentRounds[0]?.layer, 'Narva RAAS v2');
+  assert.equal(activity?.teamBalancerHistory[0]?.plannedPlayers, 2);
+  assert.equal(activity?.teamBalancerHistory[0]?.mode, 'execute');
+  assert.equal(activity?.teamBalancerHistory[0]?.execution?.succeededPlayers, 2);
+  assert.equal(activity?.teamBalancerHistory[0]?.moves[0]?.squadName, 'Vanguard Alpha');
+  assert.equal(activity?.topWindow?.requiredParticipation, 3);
+  assert.equal(activity?.topWindow?.entries[0]?.name, 'Qualified A');
+  assert.equal(activity?.killfeed?.events[0]?.attackerName, 'Attacker');
+  assert.doesNotMatch(
+    JSON.stringify(activity),
+    /eosID|steamID|playerId|playerIds|7656119|alpha-1|private-round-id|private-player-id|private-execution-player/
   );
 });

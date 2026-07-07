@@ -48,6 +48,7 @@ import type {
   ExporterRaffleSnapshot,
   ExporterServerSnapshot,
   ExporterSquadSnapshot,
+  ExporterTeamBalancerHistoryEntrySnapshot,
   ExporterTeamBalancerSnapshot,
   ExporterTeamSnapshot,
   LeaderboardEntry,
@@ -86,6 +87,10 @@ type TeamBalancerPanelProps = {
   proposalMode: TeamBalancerProposalMode;
   visibleAssignmentTones: TeamBalancerDiffTone[];
   onProposalModeChange: (mode: TeamBalancerProposalMode) => void;
+};
+
+type ServerActivityPanelProps = {
+  server: ExporterServerSnapshot;
 };
 
 type TeamRosterGroup = {
@@ -267,6 +272,85 @@ function formatParticipantCount(value: number): string {
         ? 'участника'
         : 'участников';
   return `${count} ${suffix}`;
+}
+
+function formatGameCount(value: number): string {
+  const count = Math.max(0, Math.round(value));
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  const suffix =
+    mod10 === 1 && mod100 !== 11
+      ? 'игра'
+      : mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)
+        ? 'игры'
+        : 'игр';
+  return `${count} ${suffix}`;
+}
+
+function formatPlayerMoveCount(value: number): string {
+  const count = Math.max(0, Math.round(value));
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  const suffix =
+    mod10 === 1 && mod100 !== 11
+      ? 'игрок'
+      : mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)
+        ? 'игрока'
+        : 'игроков';
+  return `${count} ${suffix}`;
+}
+
+function formatSideLabel(value: string | number | null | undefined): string {
+  const text = String(value ?? '').trim();
+  return text ? `Сторона ${text}` : 'Сторона не указана';
+}
+
+function formatSideMoveSummary(move: { fromTeamID?: string | null; toTeamID?: string | null } | null | undefined): string | null {
+  if (!move?.fromTeamID || !move?.toTeamID) return null;
+  return `${formatSideLabel(move.fromTeamID)} в ${formatSideLabel(move.toTeamID)}`;
+}
+
+function formatBalancerModeLabel(value: string | null | undefined): string {
+  return String(value || '').trim().toLowerCase() === 'dry-run' ? 'Dry-run' : 'Боевой';
+}
+
+function formatBalancerStatusLabel(value: string | null | undefined): string {
+  const labels: Record<string, string> = {
+    evaluated: 'рассчитано',
+    proposal: 'предложено',
+    executed: 'выполнено',
+    completed: 'выполнено',
+    success: 'выполнено',
+    failed: 'ошибка',
+    partial_failed: 'частично',
+    blocked: 'заблокировано',
+    noop: 'без изменений'
+  };
+  const status = String(value || '').trim().toLowerCase();
+  return labels[status] || status || 'рассчитано';
+}
+
+function formatBalancerHistoryStatus(entry: ExporterTeamBalancerHistoryEntrySnapshot): string {
+  const modeLabel = formatBalancerModeLabel(entry.mode);
+  if (modeLabel === 'Dry-run') return `${modeLabel} · ${formatBalancerStatusLabel(entry.status)}`;
+
+  if (entry.execution?.enabled) {
+    return `${modeLabel} · ${formatBalancerStatusLabel(entry.execution.status)} ${
+      entry.execution.succeededPlayers
+    }/${entry.execution.plannedPlayers}`;
+  }
+
+  return `${modeLabel} · ${formatBalancerStatusLabel(entry.status)}`;
+}
+
+function formatKillfeedType(value: string): string {
+  const labels: Record<string, string> = {
+    kill: 'Убийство',
+    wound: 'Ранение',
+    teamkill: 'Тимкилл'
+  };
+  const type = value.trim().toLowerCase();
+  return labels[type] || value;
 }
 
 function formatRaffleSource(value: string): string {
@@ -1687,9 +1771,170 @@ function TeamBalancerPanel({
         </div>
       ) : null}
 
+      {view.rows.length ? (
+        <div className="team-balancer-diff-list" data-testid="team-balancer-diff-list">
+          {view.rows.map((row) => (
+            <article
+              key={row.id}
+              className={classNames('team-balancer-diff-row', `tone-${row.tone}`)}
+              data-testid="team-balancer-diff-row"
+              data-team-balancer-tone={row.tone}
+            >
+              <div className="team-balancer-diff-main">
+                <strong>{row.title}</strong>
+                <span>{row.detail}</span>
+              </div>
+              <span className="team-balancer-diff-status">{row.label}</span>
+            </article>
+          ))}
+        </div>
+      ) : null}
+
       {view.state === 'proposal' ? null : (
         <div className="team-balancer-empty">{view.message}</div>
       )}
+    </section>
+  );
+}
+
+function ServerActivityPanel({ server }: ServerActivityPanelProps) {
+  const activity = server.activity;
+  const topWindow = activity?.topWindow || null;
+  const topEntries = topWindow?.entries.slice(0, 10) || [];
+  const recentRounds = activity?.recentRounds.slice(0, 10) || [];
+  const killfeedEvents = activity?.killfeed?.events.slice(0, 10) || [];
+  const balanceHistory = activity?.teamBalancerHistory.slice(-10).reverse() || [];
+  const hasActivity =
+    topEntries.length > 0 ||
+    recentRounds.length > 0 ||
+    killfeedEvents.length > 0 ||
+    balanceHistory.length > 0;
+
+  if (!hasActivity) return null;
+
+  return (
+    <section className="server-activity-panel" data-testid="server-activity-panel">
+      <div className="server-activity-head">
+        <div>
+          <span className="section-eyebrow">История</span>
+          <h3>Журнал сервера</h3>
+        </div>
+      </div>
+
+      <div className="server-activity-meta">
+        <div>
+          <span>Срез топа</span>
+          <strong>{topWindow ? formatGameCount(topWindow.roundCount) : '—'}</strong>
+        </div>
+        <div>
+          <span>Допуск в топ</span>
+          <strong>{topWindow ? formatGameCount(topWindow.requiredParticipation) : '—'}</strong>
+        </div>
+        <div>
+          <span>Игры</span>
+          <strong>{recentRounds.length}</strong>
+        </div>
+        <div>
+          <span>Килфид</span>
+          <strong>{killfeedEvents.length}</strong>
+        </div>
+      </div>
+
+      <div className="server-activity-grid">
+        <div className="server-activity-list">
+          <div className="server-activity-list-head">
+            <span>Балансер</span>
+            <strong>
+              {balanceHistory.length ? formatPlayerMoveCount(balanceHistory[0].plannedPlayers) : '—'}
+            </strong>
+          </div>
+          {balanceHistory.length ? (
+            balanceHistory.map((entry) => {
+              const move = entry.moves[0];
+              const actor = move?.squadName || entry.players[0]?.name || 'Состав';
+              const moveSummary = formatSideMoveSummary(move);
+              return (
+                <div className="server-activity-row" key={entry.decisionId || entry.createdAt}>
+                  <span>{formatCompactTimestamp(entry.createdAt || undefined)}</span>
+                  <strong>{actor}</strong>
+                  <p>
+                    {formatBalancerHistoryStatus(entry)} ·{' '}
+                    {entry.plannedPlayers
+                      ? formatPlayerMoveCount(entry.plannedPlayers)
+                      : 'без перемещений'}
+                    {moveSummary ? ` · ${moveSummary}` : ''}
+                  </p>
+                </div>
+              );
+            })
+          ) : (
+            <div className="server-activity-empty">Нет операций.</div>
+          )}
+        </div>
+
+        <div className="server-activity-list">
+          <div className="server-activity-list-head">
+            <span>Топ 10 игр</span>
+            <strong>{topEntries[0]?.kills ?? '—'}</strong>
+          </div>
+          {topEntries.length ? (
+            topEntries.map((entry) => (
+              <div className="server-activity-row" key={`${entry.rank}:${entry.name}`}>
+                <span>#{entry.rank}</span>
+                <strong>{entry.name}</strong>
+                <p>
+                  {entry.kills} убийств · {formatGameCount(entry.roundsPlayed)}
+                </p>
+              </div>
+            ))
+          ) : (
+            <div className="server-activity-empty">Топ пока пуст.</div>
+          )}
+        </div>
+
+        <div className="server-activity-list">
+          <div className="server-activity-list-head">
+            <span>Последние игры</span>
+            <strong>{recentRounds[0]?.totals.kills ?? '—'}</strong>
+          </div>
+          {recentRounds.length ? (
+            recentRounds.map((round) => (
+              <div className="server-activity-row" key={`${round.endedAt}:${round.layer}`}>
+                <span>{formatCompactTimestamp(round.endedAt || undefined)}</span>
+                <strong>{round.layer || 'Раунд'}</strong>
+                <p>
+                  {round.playerCount} игроков · {round.totals.kills} убийств
+                </p>
+              </div>
+            ))
+          ) : (
+            <div className="server-activity-empty">Истории игр пока нет.</div>
+          )}
+        </div>
+
+        <div className="server-activity-list">
+          <div className="server-activity-list-head">
+            <span>Килфид</span>
+            <strong>{killfeedEvents[0]?.count ?? '—'}</strong>
+          </div>
+          {killfeedEvents.length ? (
+            killfeedEvents.map((event, index) => (
+              <div
+                className="server-activity-row"
+                key={`${event.type}:${event.attackerName}:${event.victimName}:${index}`}
+              >
+                <span>{formatKillfeedType(event.type)}</span>
+                <strong>{event.attackerName}</strong>
+                <p>
+                  {event.victimName} x{event.count}
+                </p>
+              </div>
+            ))
+          ) : (
+            <div className="server-activity-empty">Событий пока нет.</div>
+          )}
+        </div>
+      </div>
     </section>
   );
 }
@@ -3216,6 +3461,8 @@ export default function App({ config }: AppProps) {
                 )}
                 onProposalModeChange={setTeamBalancerProposalMode}
               />
+
+              <ServerActivityPanel server={server} />
 
               <div className="teams-grid">
                 {teamOne ? (
