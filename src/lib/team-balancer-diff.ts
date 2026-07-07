@@ -58,6 +58,7 @@ export type TeamBalancerDiffView = {
 type TeamBalancerDiffOptions = {
   nowMs?: number;
   freshnessMs?: number;
+  visibleAssignmentTones?: TeamBalancerDiffTone[];
 };
 
 type SquadIdentity = {
@@ -204,6 +205,31 @@ function countEntriesByTone(
     },
     { conflict: 0, neutral: 0, success: 0 }
   );
+}
+
+function countTonesByTone(tones: TeamBalancerDiffTone[]): Record<TeamBalancerDiffTone, number> {
+  return tones.reduce(
+    (totals, tone) => {
+      totals[tone] += 1;
+      return totals;
+    },
+    { conflict: 0, neutral: 0, success: 0 }
+  );
+}
+
+function formatAssignmentSummaryFromTones(tones: TeamBalancerDiffTone[]): string {
+  if (!tones.length) return 'Без изменений';
+
+  const totals = countTonesByTone(tones);
+  const parts = [
+    totals.conflict > 0 ? `${totals.conflict} к смене` : null,
+    totals.success > 0 ? `${totals.success} уже сменили` : null,
+    totals.conflict === 0 && totals.success === 0 && totals.neutral > 0
+      ? `${totals.neutral} на месте`
+      : null
+  ].filter((part): part is string => Boolean(part));
+
+  return parts.length ? parts.join(' · ') : 'Без изменений';
 }
 
 function formatAssignmentSummary(
@@ -497,6 +523,16 @@ function getProposalTone(
   return 'neutral';
 }
 
+function getVisibleProposalTone(tones: TeamBalancerDiffTone[]): TeamBalancerDiffTone {
+  if (tones.some((tone) => tone === 'conflict')) return 'conflict';
+  if (tones.some((tone) => tone === 'success')) return 'success';
+  return 'neutral';
+}
+
+function hasVisibleDiff(tones: TeamBalancerDiffTone[]): boolean {
+  return tones.some((tone) => tone === 'conflict' || tone === 'success');
+}
+
 function normalizeComparable(value: string | number | null | undefined): string {
   return String(value ?? '').trim().toLowerCase();
 }
@@ -733,7 +769,11 @@ export function buildTeamBalancerDiffView(
   const triggerLabel = buildModeTriggerLabel(modeSnapshot);
   const teamSizeSummary = buildModeTeamSizeSummary(modeSnapshot);
   const modeEntries = getModeEntries(modeSnapshot, mode);
-  const assignmentSummary = formatAssignmentSummary(modeEntries);
+  const hasVisibleAssignmentTones = Array.isArray(options.visibleAssignmentTones);
+  const visibleAssignmentTones = options.visibleAssignmentTones || [];
+  const assignmentSummary = hasVisibleAssignmentTones
+    ? formatAssignmentSummaryFromTones(visibleAssignmentTones)
+    : formatAssignmentSummary(modeEntries);
   const updatedAtLabel = formatUpdatedAt(reportTimestampMs);
 
   if (!reportTimestampMs || ageMs > freshnessMs) {
@@ -756,7 +796,9 @@ export function buildTeamBalancerDiffView(
 
   const safetyCards = buildTeamBalancerSafetyCards(snapshot);
   const roundSignals = buildTeamBalancerRoundSignals(modeSnapshot);
-  const hasProposal = modeSnapshot.action === 'recommend' && modeEntries.length > 0;
+  const hasProposal =
+    modeSnapshot.action === 'recommend' &&
+    (hasVisibleAssignmentTones ? hasVisibleDiff(visibleAssignmentTones) : modeEntries.length > 0);
 
   if (!hasProposal) {
     return {
@@ -778,7 +820,9 @@ export function buildTeamBalancerDiffView(
 
   return {
     state: 'proposal',
-    tone: getProposalTone(modeSnapshot, mode),
+    tone: hasVisibleAssignmentTones
+      ? getVisibleProposalTone(visibleAssignmentTones)
+      : getProposalTone(modeSnapshot, mode),
     mode,
     modes,
     message: 'Есть diff',

@@ -1368,6 +1368,113 @@ test('renders Team Balancer diff on squad headers and switches to player rows', 
   await expect(panel).not.toContainText('7656119');
 });
 
+test('does not show player diff status while the squad slice has no visible marks', async ({
+  page
+}) => {
+  await page.clock.setFixedTime('2026-07-06T12:01:00.000Z');
+  const squadSignals = {
+    triggerReason: 'scramble_dry_run',
+    teamSize: {
+      before: { 1: 6, 2: 2 },
+      after: { 1: 4, 2: 4 },
+      diffBefore: 4,
+      diffAfter: 0
+    },
+    ticketDiff: null,
+    winStreak: null,
+    recentRoundSeverity: null
+  };
+  const playerSignals = {
+    ...squadSignals,
+    teamSize: {
+      before: { 1: 6, 2: 2 },
+      after: { 1: 5, 2: 3 },
+      diffBefore: 4,
+      diffAfter: 2
+    }
+  };
+
+  await mockAutoseedApi(page, undefined, runtimeConfig, {
+    squadjs2TeamBalancer: buildTeamBalancerProposalSnapshot({
+      signals: squadSignals,
+      proposalModes: {
+        squad: {
+          proposalMode: 'squad',
+          action: 'recommend',
+          result: 'proposal',
+          reasonCodes: [],
+          signals: squadSignals,
+          summary: 'Squad dry-run proposal.',
+          cohorts: [
+            {
+              type: 'squad',
+              cohortKey: 'squad:1:alpha',
+              fromTeamID: '1',
+              toTeamID: '2',
+              currentTeamID: '1',
+              expectedTeamID: '2',
+              squadID: 'alpha',
+              squadName: 'Vanguard Alpha',
+              compositionKey: 'players:2:stale',
+              playerCount: 2,
+              status: 'move_pending',
+              confidence: null,
+              score: null
+            }
+          ],
+          players: []
+        },
+        player: {
+          proposalMode: 'player',
+          action: 'recommend',
+          result: 'proposal',
+          reasonCodes: [],
+          signals: playerSignals,
+          summary: 'Player dry-run proposal.',
+          cohorts: [],
+          players: [
+            {
+              name: 'Vanguard Commander',
+              matchKey: 'steam:vanguard-cmd',
+              fromTeamID: '1',
+              toTeamID: '2',
+              currentTeamID: '1',
+              expectedTeamID: '2',
+              squadID: 'alpha',
+              squadName: 'Vanguard Alpha',
+              status: 'move_pending',
+              confidence: null,
+              score: null
+            }
+          ]
+        }
+      }
+    })
+  });
+
+  await page.goto('/');
+  await page.getByTestId('server-card-2').locator('button').first().click();
+
+  const panel = page.getByTestId('team-balancer-panel');
+  await expect(panel).toContainText('Без изменений');
+  await expect(panel).not.toContainText('Есть diff');
+  await expect(panel).not.toContainText('1 к смене');
+  await expect(panel).toContainText('сейчас 6:2 · dry-run 4:4');
+  await expect(page.getByTestId('team-balancer-squad-mark')).toHaveCount(0);
+  await expect(page.getByTestId('team-balancer-roster-mark')).toHaveCount(0);
+
+  await page.getByTestId('team-balancer-mode-player').click();
+
+  await expect(panel).toContainText('Есть diff');
+  await expect(panel).toContainText('1 к смене');
+  await expect(panel).toContainText('сейчас 6:2 · dry-run 5:3');
+  await expect(page.getByTestId('team-balancer-squad-mark')).toHaveCount(0);
+  const markedRosterRow = page.getByTestId('team-balancer-roster-mark');
+  await expect(markedRosterRow).toHaveCount(1);
+  await expect(markedRosterRow.first()).toContainText('Vanguard Commander');
+  await expect(markedRosterRow.first()).toContainText('Нужна смена');
+});
+
 test('uses player-friendly language on the home page', async ({ page }) => {
   await mockAutoseedApi(page);
 

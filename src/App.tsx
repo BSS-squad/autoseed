@@ -26,6 +26,7 @@ import {
   buildTeamBalancerRosterMark,
   buildTeamBalancerSquadMark
 } from './lib/team-balancer-diff';
+import type { TeamBalancerDiffTone } from './lib/team-balancer-diff';
 import {
   loadStoredState,
   saveActiveRedirectServerKey,
@@ -83,6 +84,7 @@ type TeamPanelProps = {
 type TeamBalancerPanelProps = {
   snapshot: ExporterTeamBalancerSnapshot | null;
   proposalMode: TeamBalancerProposalMode;
+  visibleAssignmentTones: TeamBalancerDiffTone[];
   onProposalModeChange: (mode: TeamBalancerProposalMode) => void;
 };
 
@@ -503,6 +505,42 @@ function buildTeamRosterGroups(team: ExporterTeamSnapshot): TeamRosterGroup[] {
       if (left.isUnassigned !== right.isUnassigned) return left.isUnassigned ? 1 : -1;
       return left.name.localeCompare(right.name, 'ru', { numeric: true, sensitivity: 'base' });
     });
+}
+
+function buildTeamBalancerVisibleTones(
+  server: ExporterServerSnapshot,
+  proposalMode: TeamBalancerProposalMode
+): TeamBalancerDiffTone[] {
+  const snapshot = server.teamBalancer;
+  if (!snapshot) return [];
+
+  return server.teams.flatMap((team) => {
+    if (proposalMode === 'squad') {
+      return buildTeamRosterGroups(team)
+        .map((group) =>
+          buildTeamBalancerSquadMark(snapshot, proposalMode, team.id ?? null, {
+            squadId: group.squadId,
+            squadName: group.squadName,
+            name: group.name,
+            players: group.players
+          })
+        )
+        .filter((mark): mark is NonNullable<typeof mark> => Boolean(mark))
+        .map((mark) => mark.tone);
+    }
+
+    return team.players
+      .map((player) =>
+        buildTeamBalancerRosterMark(
+          snapshot,
+          proposalMode,
+          team.id ?? player.teamId ?? null,
+          player
+        )
+      )
+      .filter((mark): mark is NonNullable<typeof mark> => Boolean(mark))
+      .map((mark) => mark.tone);
+  });
 }
 
 function getWeakerTeam(server: ExporterServerSnapshot | null | undefined): ExporterTeamSnapshot | null {
@@ -1550,11 +1588,12 @@ function TeamPanel({ team, opponent, teamBalancerSnapshot, teamBalancerMode }: T
 function TeamBalancerPanel({
   snapshot,
   proposalMode,
+  visibleAssignmentTones,
   onProposalModeChange
 }: TeamBalancerPanelProps) {
   const view = useMemo(
-    () => buildTeamBalancerDiffView(snapshot, proposalMode),
-    [proposalMode, snapshot]
+    () => buildTeamBalancerDiffView(snapshot, proposalMode, { visibleAssignmentTones }),
+    [proposalMode, snapshot, visibleAssignmentTones]
   );
   const showModeSwitch = Boolean(snapshot && view.modes.length > 1);
 
@@ -3171,6 +3210,10 @@ export default function App({ config }: AppProps) {
               <TeamBalancerPanel
                 snapshot={server.teamBalancer}
                 proposalMode={teamBalancerProposalMode}
+                visibleAssignmentTones={buildTeamBalancerVisibleTones(
+                  server,
+                  teamBalancerProposalMode
+                )}
                 onProposalModeChange={setTeamBalancerProposalMode}
               />
 
