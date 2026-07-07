@@ -1829,13 +1829,6 @@ function ServerActivityPanel({ server }: ServerActivityPanelProps) {
   const recentRounds = activity?.recentRounds.slice(0, 10) || [];
   const killfeedEvents = activity?.killfeed?.events.slice(0, 10) || [];
   const balanceHistory = activity?.teamBalancerHistory.slice(-10).reverse() || [];
-  const hasActivity =
-    topEntries.length > 0 ||
-    recentRounds.length > 0 ||
-    killfeedEvents.length > 0 ||
-    balanceHistory.length > 0;
-
-  if (!hasActivity) return null;
 
   return (
     <section className="server-activity-panel" data-testid="server-activity-panel">

@@ -1355,6 +1355,25 @@ test('renders server activity history, last-10 top and killfeed journal', async 
   await expect(activityPanel).not.toContainText('7656119');
 });
 
+test('keeps server activity journal discoverable before activity data arrives', async ({ page }) => {
+  await page.clock.setFixedTime('2026-07-06T12:02:00.000Z');
+  await mockAutoseedApi(page);
+
+  await page.goto('/');
+  await page.getByTestId('server-card-2').locator('button').first().click();
+
+  const activityPanel = page.getByTestId('server-activity-panel');
+  await expect(activityPanel).toBeVisible();
+  await expect(activityPanel).toContainText('Журнал сервера');
+  await expect(activityPanel).toContainText('Нет операций.');
+  await expect(activityPanel).toContainText('Топ пока пуст.');
+  await expect(activityPanel).toContainText('Истории игр пока нет.');
+  await expect(activityPanel).toContainText('Событий пока нет.');
+  await expect(activityPanel).not.toContainText('snapshot');
+  await expect(activityPanel).not.toContainText('exporter');
+  await expect(activityPanel).not.toContainText('endpoint');
+});
+
 test('keeps all Team Balancer meta cards in one desktop row', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.clock.setFixedTime('2026-07-06T12:01:00.000Z');
