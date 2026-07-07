@@ -1425,6 +1425,12 @@ test('keeps the public page selector and content width stable while switching se
   expect(homeNavBox).not.toBeNull();
   expect(homeShellBox).not.toBeNull();
 
+  await page.evaluate(() => document.fonts.ready);
+  const homeNavBoxAfterFonts = await nav.boundingBox();
+  expect(homeNavBoxAfterFonts).not.toBeNull();
+  expect(Math.abs(homeNavBoxAfterFonts!.x - homeNavBox!.x)).toBeLessThanOrEqual(1);
+  expect(Math.abs(homeNavBoxAfterFonts!.width - homeNavBox!.width)).toBeLessThanOrEqual(1);
+
   await page.getByTestId('winners-nav-link').click();
   await expect(page.getByTestId('winners-page')).toBeVisible();
 
