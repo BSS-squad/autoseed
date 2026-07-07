@@ -1,6 +1,13 @@
 import type {
   CombinedSnapshot,
   ExporterEndpointConfig,
+  ExporterActivityKillfeedEventSnapshot,
+  ExporterActivityKillfeedSnapshot,
+  ExporterActivityRecentRoundSnapshot,
+  ExporterActivitySnapshot,
+  ExporterActivityTeamResultSnapshot,
+  ExporterActivityTopEntrySnapshot,
+  ExporterActivityTopWindowSnapshot,
   ExporterJoinLinkResponse,
   ExporterPlayerSnapshot,
   ExporterRaffleActiveSnapshot,
@@ -19,6 +26,7 @@ import type {
   ExporterSquadSnapshot,
   ExporterTeamBalancerCohortSnapshot,
   ExporterTeamBalancerExecutionSnapshot,
+  ExporterTeamBalancerHistoryEntrySnapshot,
   ExporterTeamBalancerMetricSnapshot,
   ExporterTeamBalancerModeSnapshot,
   ExporterTeamBalancerModeratorDecisionSnapshot,
@@ -565,6 +573,142 @@ function mapTeamBalancerExecution(value: unknown): ExporterTeamBalancerExecution
   };
 }
 
+function mapTeamBalancerHistoryMove(
+  value: unknown
+): ExporterTeamBalancerHistoryEntrySnapshot['moves'][number] | null {
+  const record = getRecord(value);
+  if (!record) return null;
+
+  return {
+    type: toStringOrNull(record.type) || 'move',
+    fromTeamID: toStringOrNull(record.fromTeamID),
+    toTeamID: toStringOrNull(record.toTeamID),
+    squadName: toStringOrNull(record.squadName),
+    playerCount: Math.max(0, Math.round(toNumber(record.playerCount))),
+    status: toStringOrNull(record.status) || 'evaluated'
+  };
+}
+
+function mapTeamBalancerHistoryPlayer(
+  value: unknown
+): ExporterTeamBalancerHistoryEntrySnapshot['players'][number] | null {
+  const record = getRecord(value);
+  if (!record) return null;
+
+  return {
+    name: toStringOrNull(record.name) || 'Игрок',
+    matchKey: toStringOrNull(record.matchKey),
+    fromTeamID: toStringOrNull(record.fromTeamID),
+    toTeamID: toStringOrNull(record.toTeamID),
+    squadName: toStringOrNull(record.squadName),
+    status: toStringOrNull(record.status) || 'move_pending'
+  };
+}
+
+function mapTeamBalancerHistoryMode(
+  value: unknown,
+  fallbackMode: TeamBalancerProposalMode
+): NonNullable<ExporterTeamBalancerHistoryEntrySnapshot['proposalModes']>[TeamBalancerProposalMode] | null {
+  const mode = getRecord(value);
+  if (!mode) return null;
+  const teamCounts = getRecord(mode.teamCounts) || {};
+
+  return {
+    proposalMode: mapTeamBalancerMode(mode.proposalMode) || fallbackMode,
+    action: toStringOrNull(mode.action),
+    result: toStringOrNull(mode.result),
+    status: toStringOrNull(mode.status) || toStringOrNull(mode.result) || 'evaluated',
+    reasonCodes: Array.isArray(mode.reasonCodes)
+      ? mode.reasonCodes
+          .map((reason) => toStringOrNull(reason))
+          .filter((reason): reason is string => Boolean(reason))
+      : [],
+    plannedMoves: Math.max(0, Math.round(toNumber(mode.plannedMoves))),
+    plannedPlayers: Math.max(0, Math.round(toNumber(mode.plannedPlayers))),
+    summary: toStringOrNull(mode.summary),
+    teamCounts: {
+      before: mapTeamBalancerCounts(teamCounts.before),
+      after: mapTeamBalancerCounts(teamCounts.after)
+    },
+    diffBefore: Math.max(0, Math.round(toNumber(mode.diffBefore))),
+    diffAfter: Math.max(0, Math.round(toNumber(mode.diffAfter))),
+    moves: Array.isArray(mode.moves)
+      ? mode.moves
+          .map(mapTeamBalancerHistoryMove)
+          .filter((move): move is ExporterTeamBalancerHistoryEntrySnapshot['moves'][number] =>
+            Boolean(move)
+          )
+      : [],
+    players: Array.isArray(mode.players)
+      ? mode.players
+          .map(mapTeamBalancerHistoryPlayer)
+          .filter((player): player is ExporterTeamBalancerHistoryEntrySnapshot['players'][number] =>
+            Boolean(player)
+          )
+      : []
+  };
+}
+
+function mapTeamBalancerHistoryProposalModes(
+  value: unknown
+): ExporterTeamBalancerHistoryEntrySnapshot['proposalModes'] {
+  const modes = getRecord(value);
+  if (!modes) return undefined;
+
+  return Object.fromEntries(
+    (['squad', 'player'] as TeamBalancerProposalMode[])
+      .map((mode) => [mode, mapTeamBalancerHistoryMode(modes[mode], mode)] as const)
+      .filter(
+        (entry): entry is readonly [
+          TeamBalancerProposalMode,
+          NonNullable<ExporterTeamBalancerHistoryEntrySnapshot['proposalModes']>[TeamBalancerProposalMode]
+        ] => Boolean(entry[1])
+      )
+  );
+}
+
+function mapTeamBalancerHistoryEntry(value: unknown): ExporterTeamBalancerHistoryEntrySnapshot | null {
+  const entry = getRecord(value);
+  if (!entry) return null;
+
+  return {
+    decisionId: toStringOrNull(entry.decisionId),
+    createdAt: toIsoStringOrNull(entry.createdAt),
+    mode: toStringOrNull(entry.mode) || 'dry-run',
+    proposalMode: mapTeamBalancerMode(entry.proposalMode) || toStringOrNull(entry.proposalMode),
+    action: toStringOrNull(entry.action),
+    result: toStringOrNull(entry.result),
+    status: toStringOrNull(entry.status) || toStringOrNull(entry.result) || 'evaluated',
+    trigger: toStringOrNull(entry.trigger),
+    reasonCodes: Array.isArray(entry.reasonCodes)
+      ? entry.reasonCodes
+          .map((reason) => toStringOrNull(reason))
+          .filter((reason): reason is string => Boolean(reason))
+      : [],
+    plannedMoves: Math.max(0, Math.round(toNumber(entry.plannedMoves))),
+    plannedPlayers: Math.max(0, Math.round(toNumber(entry.plannedPlayers))),
+    summary: toStringOrNull(entry.summary),
+    execution: mapTeamBalancerExecution(entry.execution),
+    moves: Array.isArray(entry.moves)
+      ? entry.moves
+          .map(mapTeamBalancerHistoryMove)
+          .filter(
+            (move): move is ExporterTeamBalancerHistoryEntrySnapshot['moves'][number] =>
+              Boolean(move)
+          )
+      : [],
+    players: Array.isArray(entry.players)
+      ? entry.players
+          .map(mapTeamBalancerHistoryPlayer)
+          .filter(
+            (player): player is ExporterTeamBalancerHistoryEntrySnapshot['players'][number] =>
+              Boolean(player)
+          )
+      : [],
+    proposalModes: mapTeamBalancerHistoryProposalModes(entry.proposalModes)
+  };
+}
+
 function mapTeamBalancerSnapshot(value: unknown): ExporterTeamBalancerSnapshot | null {
   const snapshot = getRecord(value);
   if (!snapshot) return null;
@@ -583,6 +727,11 @@ function mapTeamBalancerSnapshot(value: unknown): ExporterTeamBalancerSnapshot |
         .filter((entry): entry is ExporterTeamBalancerPlayerSnapshot => Boolean(entry))
     : [];
   const proposalModes = mapTeamBalancerProposalModes(snapshot.proposalModes);
+  const history = Array.isArray(snapshot.history)
+    ? snapshot.history
+        .map(mapTeamBalancerHistoryEntry)
+        .filter((entry): entry is ExporterTeamBalancerHistoryEntrySnapshot => Boolean(entry))
+    : [];
 
   return {
     version: Math.max(1, Math.round(toNumber(snapshot.version, 1))),
@@ -613,7 +762,142 @@ function mapTeamBalancerSnapshot(value: unknown): ExporterTeamBalancerSnapshot |
     proposalModes,
     voteGate: mapTeamBalancerVoteGate(snapshot.voteGate),
     moderatorDecision: mapTeamBalancerModeratorDecision(snapshot.moderatorDecision),
-    execution: mapTeamBalancerExecution(snapshot.execution)
+    execution: mapTeamBalancerExecution(snapshot.execution),
+    history
+  };
+}
+
+function mapActivityTeamResult(value: unknown): ExporterActivityTeamResultSnapshot | null {
+  const team = getRecord(value);
+  if (!team) return null;
+
+  return {
+    team: toStringIdOrNull(team.team),
+    faction: toStringOrNull(team.faction),
+    subfaction: toStringOrNull(team.subfaction),
+    tickets: toNonNegativeIntegerOrNull(team.tickets)
+  };
+}
+
+function mapActivityRecentRound(value: unknown): ExporterActivityRecentRoundSnapshot | null {
+  const round = getRecord(value);
+  if (!round) return null;
+  const totals = getRecord(round.totals) || {};
+
+  return {
+    endedAt: toIsoStringOrNull(round.endedAt),
+    layer: toStringOrNull(round.layer),
+    winner: mapActivityTeamResult(round.winner),
+    loser: mapActivityTeamResult(round.loser),
+    playerCount: Math.max(0, Math.round(toNumber(round.playerCount))),
+    totals: {
+      kills: Math.max(0, Math.round(toNumber(totals.kills))),
+      deaths: Math.max(0, Math.round(toNumber(totals.deaths))),
+      revives: Math.max(0, Math.round(toNumber(totals.revives))),
+      knockdowns: Math.max(0, Math.round(toNumber(totals.knockdowns)))
+    }
+  };
+}
+
+function mapActivityTopEntry(value: unknown): ExporterActivityTopEntrySnapshot | null {
+  const entry = getRecord(value);
+  if (!entry) return null;
+  const name = toStringOrNull(entry.name);
+  if (!name) return null;
+
+  return {
+    rank: Math.max(1, Math.round(toNumber(entry.rank, 1))),
+    name,
+    roundsPlayed: Math.max(0, Math.round(toNumber(entry.roundsPlayed))),
+    kills: Math.max(0, Math.round(toNumber(entry.kills))),
+    deaths: Math.max(0, Math.round(toNumber(entry.deaths))),
+    revives: Math.max(0, Math.round(toNumber(entry.revives))),
+    knockdowns: Math.max(0, Math.round(toNumber(entry.knockdowns))),
+    kdRatio: Math.max(0, toNumber(entry.kdRatio))
+  };
+}
+
+function mapActivityTopWindow(value: unknown): ExporterActivityTopWindowSnapshot | null {
+  const topWindow = getRecord(value);
+  if (!topWindow) return null;
+
+  return {
+    roundLimit: Math.max(1, Math.round(toNumber(topWindow.roundLimit, 10))),
+    roundCount: Math.max(0, Math.round(toNumber(topWindow.roundCount))),
+    qualificationPercent: Math.max(0, Math.round(toNumber(topWindow.qualificationPercent))),
+    requiredParticipation: Math.max(0, Math.round(toNumber(topWindow.requiredParticipation))),
+    entries: Array.isArray(topWindow.entries)
+      ? topWindow.entries
+          .map(mapActivityTopEntry)
+          .filter((entry): entry is ExporterActivityTopEntrySnapshot => Boolean(entry))
+      : []
+  };
+}
+
+function mapActivityKillfeedEvent(value: unknown): ExporterActivityKillfeedEventSnapshot | null {
+  const event = getRecord(value);
+  if (!event) return null;
+  const attackerName = toStringOrNull(event.attackerName);
+  const victimName = toStringOrNull(event.victimName);
+  if (!attackerName || !victimName) return null;
+
+  return {
+    type: toStringOrNull(event.type) || 'event',
+    attackerName,
+    victimName,
+    count: Math.max(0, Math.round(toNumber(event.count))),
+    roundEndedAt: toIsoStringOrNull(event.roundEndedAt)
+  };
+}
+
+function mapActivityKillfeed(value: unknown): ExporterActivityKillfeedSnapshot | null {
+  const killfeed = getRecord(value);
+  if (!killfeed) return null;
+
+  return {
+    version: Math.max(1, Math.round(toNumber(killfeed.version, 1))),
+    generatedAt: toIsoStringOrNull(killfeed.generatedAt),
+    rounds: Array.isArray(killfeed.rounds)
+      ? killfeed.rounds.map((round) => {
+          const record = getRecord(round) || {};
+          const totals = getRecord(record.totals) || {};
+          return {
+            endedAt: toIsoStringOrNull(record.endedAt),
+            playerCount: toNonNegativeIntegerOrNull(record.playerCount) ?? undefined,
+            totals: {
+              kills: Math.max(0, Math.round(toNumber(totals.kills))),
+              knockdowns: Math.max(0, Math.round(toNumber(totals.knockdowns)))
+            }
+          };
+        })
+      : [],
+    events: Array.isArray(killfeed.events)
+      ? killfeed.events
+          .map(mapActivityKillfeedEvent)
+          .filter((entry): entry is ExporterActivityKillfeedEventSnapshot => Boolean(entry))
+      : []
+  };
+}
+
+function mapActivitySnapshot(value: unknown): ExporterActivitySnapshot | null {
+  const activity = getRecord(value);
+  if (!activity) return null;
+
+  return {
+    version: Math.max(1, Math.round(toNumber(activity.version, 1))),
+    generatedAt: toIsoStringOrNull(activity.generatedAt),
+    teamBalancerHistory: Array.isArray(activity.teamBalancerHistory)
+      ? activity.teamBalancerHistory
+          .map(mapTeamBalancerHistoryEntry)
+          .filter((entry): entry is ExporterTeamBalancerHistoryEntrySnapshot => Boolean(entry))
+      : [],
+    recentRounds: Array.isArray(activity.recentRounds)
+      ? activity.recentRounds
+          .map(mapActivityRecentRound)
+          .filter((entry): entry is ExporterActivityRecentRoundSnapshot => Boolean(entry))
+      : [],
+    topWindow: mapActivityTopWindow(activity.topWindow),
+    killfeed: mapActivityKillfeed(activity.killfeed)
   };
 }
 
@@ -637,6 +921,7 @@ function mapServer(
     players: Array.isArray(server.players) ? server.players.map(mapPlayer) : [],
     raffles: mapRaffleSnapshot(server.raffles),
     teamBalancer: mapTeamBalancerSnapshot(server.teamBalancer),
+    activity: mapActivitySnapshot(server.activity),
     updatedAt: Number(server.updatedAt) || Date.now(),
     sourceUrl,
     joinLinkUrl

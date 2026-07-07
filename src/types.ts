@@ -307,6 +307,64 @@ export type ExporterTeamBalancerExecutionSnapshot = {
   } | null;
 };
 
+export type ExporterTeamBalancerOperationMoveSnapshot = {
+  type: string;
+  fromTeamID: string | null;
+  toTeamID: string | null;
+  squadName: string | null;
+  playerCount: number;
+  status: string;
+};
+
+export type ExporterTeamBalancerOperationPlayerSnapshot = {
+  name: string;
+  matchKey: string | null;
+  fromTeamID: string | null;
+  toTeamID: string | null;
+  squadName: string | null;
+  status: string;
+};
+
+export type ExporterTeamBalancerOperationModeSnapshot = {
+  proposalMode: TeamBalancerProposalMode;
+  action: string | null;
+  result: string | null;
+  status: string;
+  reasonCodes: string[];
+  plannedMoves: number;
+  plannedPlayers: number;
+  summary: string | null;
+  teamCounts: {
+    before: Record<string, number>;
+    after: Record<string, number>;
+  };
+  diffBefore: number;
+  diffAfter: number;
+  moves: ExporterTeamBalancerOperationMoveSnapshot[];
+  players: ExporterTeamBalancerOperationPlayerSnapshot[];
+};
+
+export type ExporterTeamBalancerHistoryEntrySnapshot = {
+  decisionId: string | null;
+  createdAt: string | null;
+  mode: string;
+  proposalMode?: TeamBalancerProposalMode | string | null;
+  action: string | null;
+  result: string | null;
+  status: string;
+  trigger: string | null;
+  reasonCodes: string[];
+  plannedMoves: number;
+  plannedPlayers: number;
+  summary: string | null;
+  execution: ExporterTeamBalancerExecutionSnapshot | null;
+  moves: ExporterTeamBalancerOperationMoveSnapshot[];
+  players: ExporterTeamBalancerOperationPlayerSnapshot[];
+  proposalModes?: Partial<
+    Record<TeamBalancerProposalMode, ExporterTeamBalancerOperationModeSnapshot>
+  >;
+};
+
 export type ExporterTeamBalancerSnapshot = {
   version: number;
   schemaVersion?: number;
@@ -330,6 +388,82 @@ export type ExporterTeamBalancerSnapshot = {
   voteGate: ExporterTeamBalancerVoteGateSnapshot | null;
   moderatorDecision: ExporterTeamBalancerModeratorDecisionSnapshot | null;
   execution: ExporterTeamBalancerExecutionSnapshot | null;
+  history: ExporterTeamBalancerHistoryEntrySnapshot[];
+};
+
+export type ExporterActivityTeamResultSnapshot = {
+  team: string | null;
+  faction: string | null;
+  subfaction: string | null;
+  tickets: number | null;
+};
+
+export type ExporterActivityRoundTotalsSnapshot = {
+  kills: number;
+  deaths?: number;
+  revives?: number;
+  knockdowns: number;
+};
+
+export type ExporterActivityRecentRoundSnapshot = {
+  endedAt: string | null;
+  layer: string | null;
+  winner: ExporterActivityTeamResultSnapshot | null;
+  loser: ExporterActivityTeamResultSnapshot | null;
+  playerCount: number;
+  totals: ExporterActivityRoundTotalsSnapshot;
+};
+
+export type ExporterActivityTopEntrySnapshot = {
+  rank: number;
+  name: string;
+  roundsPlayed: number;
+  kills: number;
+  deaths: number;
+  revives: number;
+  knockdowns: number;
+  kdRatio: number;
+};
+
+export type ExporterActivityTopWindowSnapshot = {
+  roundLimit: number;
+  roundCount: number;
+  qualificationPercent: number;
+  requiredParticipation: number;
+  entries: ExporterActivityTopEntrySnapshot[];
+};
+
+export type ExporterActivityKillfeedEventSnapshot = {
+  type: string;
+  attackerName: string;
+  victimName: string;
+  count: number;
+  roundEndedAt: string | null;
+};
+
+export type ExporterActivityKillfeedRoundSnapshot = {
+  endedAt: string | null;
+  playerCount?: number;
+  totals: {
+    kills: number;
+    knockdowns: number;
+  };
+};
+
+export type ExporterActivityKillfeedSnapshot = {
+  version: number;
+  generatedAt: string | null;
+  rounds: ExporterActivityKillfeedRoundSnapshot[];
+  events: ExporterActivityKillfeedEventSnapshot[];
+};
+
+export type ExporterActivitySnapshot = {
+  version: number;
+  generatedAt: string | null;
+  teamBalancerHistory: ExporterTeamBalancerHistoryEntrySnapshot[];
+  recentRounds: ExporterActivityRecentRoundSnapshot[];
+  topWindow: ExporterActivityTopWindowSnapshot | null;
+  killfeed: ExporterActivityKillfeedSnapshot | null;
 };
 
 export type ExporterServerSnapshot = {
@@ -347,6 +481,7 @@ export type ExporterServerSnapshot = {
   players: ExporterPlayerSnapshot[];
   raffles: ExporterRaffleSnapshot | null;
   teamBalancer: ExporterTeamBalancerSnapshot | null;
+  activity: ExporterActivitySnapshot | null;
   updatedAt: number;
   sourceUrl: string;
   joinLinkUrl: string;
