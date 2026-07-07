@@ -2461,7 +2461,7 @@ export default function App({ config }: AppProps) {
     {
       id: 'mode',
       step: '1',
-      title: 'Выбери режим в правом верхнем блоке',
+      title: 'Выбери режим в первом блоке',
       description: hasConfiguredTestMode
         ? 'Для обычной работы оставляй «Обычный». «Тест» нужен только для проверки и ручного прогона.'
         : 'Сейчас доступен только «Обычный» режим, поэтому ничего переключать не нужно.',
@@ -2488,7 +2488,7 @@ export default function App({ config }: AppProps) {
     {
       id: 'connector',
       step: '4',
-      title: 'Включи «Автоподключение»',
+      title: 'Нажми «Автоподключение»',
       description:
         'После запуска откроется окно автоподключения. Не закрывай его во время работы. Если после отправки оно осталось на вспомогательной карточке, это нормально.',
       hints: ['Кнопка: «Автоподключение»', 'Окно автоподключения не закрывать']
@@ -2554,15 +2554,16 @@ export default function App({ config }: AppProps) {
           <p className="eyebrow">Автосид BSS</p>
           <h1 data-testid="hero-title">{APP_DISPLAY_NAME}</h1>
           <p className="hero-copy hero-copy-tight">
-            Здесь видно, что готово к запуску, куда сейчас заходить и какой сервер лучше выбрать
-            вручную.
+            Рабочий экран для выбора цели, проверки браузера и запуска подключения без лишних
+            переходов.
           </p>
 
           <div className="hero-ribbon" data-testid="hero-ribbon">
-            <span className="hero-ribbon-tag">Быстрый старт</span>
+            <span className="hero-ribbon-tag">Куда заходим</span>
             <p>
-              Выбери режим, проверь браузер, открой Squad и оставь его в главном меню перед
-              запуском.
+              {displayTargetServer
+                ? `${displayTargetServer.name} · ${statusText}`
+                : 'Подходящий сервер пока не найден.'}
             </p>
           </div>
 
@@ -2577,16 +2578,6 @@ export default function App({ config }: AppProps) {
               )}
             >
               {permissionsReady ? 'Браузер готов' : 'Нужна проверка браузера'}
-            </span>
-            <span
-              className={classNames(
-                'status-pill',
-                displayTargetServer ? 'status-good' : 'status-danger'
-              )}
-            >
-              {displayTargetServer
-                ? `Выбранный сервер: ${displayTargetServer.name}`
-                : 'Сервер не выбран'}
             </span>
           </div>
 
@@ -2607,15 +2598,20 @@ export default function App({ config }: AppProps) {
               <p>{heroModeCaption}</p>
             </article>
           </div>
+
+          <div className="mobile-status-strip" data-testid="mobile-monitor-note">
+            <span className="status-pill status-accent">Мобильный просмотр</span>
+            <p>Steam-вход доступен с ПК. Здесь остаются цель, серверы и состав.</p>
+          </div>
         </div>
 
-        <aside className="control-deck">
+        <aside className="control-deck desktop-connector">
           <div className="guide-focus guide-focus-neutral">
             <div className="guide-control-label">
               <span className="guide-inline-step" aria-hidden="true">
                 1
               </span>
-              <span>Сначала выбери режим</span>
+              <span>Режим запуска</span>
             </div>
 
             <div className="segmented-control">
@@ -2636,52 +2632,6 @@ export default function App({ config }: AppProps) {
                 {hasConfiguredTestMode ? `Тест ${testSequencePlanLabel}` : 'Тест недоступен'}
               </button>
             </div>
-          </div>
-
-          <button
-            className={classNames(
-              'power-button',
-              'guide-focus',
-              'guide-focus-primary',
-              enabled && 'power-button-live'
-            )}
-            onClick={enabled ? handleDisable : () => void handleEnable()}
-            data-testid="power-toggle"
-            aria-pressed={enabled}
-          >
-            <div className="power-button-head">
-              <span className="guide-inline-step guide-inline-step-large" aria-hidden="true">
-                3
-              </span>
-              <span className="power-caption">Автоподключение</span>
-            </div>
-            <strong>{enabled ? 'Включён' : 'Выключен'}</strong>
-            <small>{statusText}</small>
-          </button>
-
-          <div className="control-actions">
-            <button
-              className={classNames(
-                'button',
-                'guide-button',
-                'guide-focus',
-                permissionsReady ? 'button-success guide-focus-success' : 'button-primary guide-focus-primary'
-              )}
-              onClick={() => void handlePermissionsCheck()}
-              data-testid="check-browser-button"
-            >
-              <span className="guide-inline-step" aria-hidden="true">
-                2
-              </span>
-              <span>{browserCheckLabel}</span>
-            </button>
-            <button
-              className="button"
-              onClick={() => void refreshSnapshot()}
-              data-testid="refresh-snapshot-button"
-            >
-              Обновить сейчас
-            </button>
           </div>
 
           {hasConfiguredTestMode && isTestModeActive ? (
@@ -2708,6 +2658,57 @@ export default function App({ config }: AppProps) {
               </button>
             </div>
           ) : null}
+
+          <div className="readiness-panel guide-focus guide-focus-primary">
+            <div className="guide-control-label">
+              <span className="guide-inline-step" aria-hidden="true">
+                2
+              </span>
+              <span>Готовность браузера</span>
+            </div>
+
+            <div className="control-actions">
+              <button
+                className={classNames(
+                  'button',
+                  'guide-button',
+                  permissionsReady ? 'button-success guide-focus-success' : 'button-primary'
+                )}
+                onClick={() => void handlePermissionsCheck()}
+                data-testid="check-browser-button"
+              >
+                <span>{browserCheckLabel}</span>
+              </button>
+              <button
+                className="button"
+                onClick={() => void refreshSnapshot()}
+                data-testid="refresh-snapshot-button"
+              >
+                Обновить сейчас
+              </button>
+            </div>
+          </div>
+
+          <button
+            className={classNames(
+              'power-button',
+              'guide-focus',
+              'guide-focus-accent',
+              enabled && 'power-button-live'
+            )}
+            onClick={enabled ? handleDisable : () => void handleEnable()}
+            data-testid="power-toggle"
+            aria-pressed={enabled}
+          >
+            <div className="power-button-head">
+              <span className="guide-inline-step guide-inline-step-large" aria-hidden="true">
+                3
+              </span>
+              <span className="power-caption">Автоподключение</span>
+            </div>
+            <strong>{enabled ? 'Включён' : 'Выключен'}</strong>
+            <small>{statusText}</small>
+          </button>
 
           <div className="signal-grid compact-signal-grid">
             <div className="signal-card signal-card-with-help">
@@ -2817,7 +2818,7 @@ export default function App({ config }: AppProps) {
         </div>
       </details>
 
-      {(fatalError || snapshot.errors.length) && (
+      {(fatalError || snapshot.errors.length > 0) && (
         <section className="alert-strip">
           {fatalError ? <p>{fatalError}</p> : null}
           {snapshot.errors.map((error) => (
@@ -2899,7 +2900,7 @@ export default function App({ config }: AppProps) {
             const switcherHoursLine =
               leftTeam && rightTeam
                 ? `${leftTeam.name}: ${formatHours(leftTeam.totalPlaytimeHours)} · ${rightTeam.name}: ${formatHours(rightTeam.totalPlaytimeHours)}`
-                : 'Часы сторон пока не готовы';
+                : 'Сводка сторон пока не готова';
 
             return (
               <article
@@ -3021,7 +3022,7 @@ export default function App({ config }: AppProps) {
                   </div>
                   <p className="server-board-copy">
                     {weakerTeam
-                      ? `Слабее по часам: ${weakerTeam.name}`
+                      ? `Сторона для захода: ${weakerTeam.name}`
                       : 'Смотри состав сторон и общий баланс часов ниже.'}
                   </p>
                   <div className="server-board-actions">

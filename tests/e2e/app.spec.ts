@@ -1472,8 +1472,8 @@ test('keeps help popovers visible inside the viewport on mobile', async ({ page 
   await expect(page.getByTestId('hero-help-popover')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
 
-  await page.getByTestId('popup-help-trigger').click();
-  await expect(page.getByTestId('popup-help-popover')).toBeVisible();
+  await expect(page.getByTestId('mobile-monitor-note')).toBeVisible();
+  await expect(page.getByTestId('popup-help-trigger')).toBeHidden();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
 });
 
@@ -1485,7 +1485,8 @@ test('keeps the layout usable on mobile without document-level horizontal overfl
 
   await page.goto('/');
 
-  await expect(page.getByTestId('power-toggle')).toBeVisible();
+  await expect(page.getByTestId('mobile-monitor-note')).toBeVisible();
+  await expect(page.getByTestId('power-toggle')).toBeHidden();
   await expect(page.getByTestId('server-card-2')).toBeVisible();
 
   const hasNoDocumentOverflow = await page.evaluate(
