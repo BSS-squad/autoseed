@@ -100,6 +100,7 @@ function mapPlayer(player: ExporterSnapshotPlayerResponse): ExporterPlayerSnapsh
   return {
     eosId: player.eosId || null,
     steamId: player.steamId || null,
+    matchKey: player.matchKey || null,
     name: player.name || 'Игрок',
     teamId: Number(player.teamId) || null,
     teamName: player.teamName || null,
@@ -424,6 +425,7 @@ function mapTeamBalancerPlayer(value: unknown): ExporterTeamBalancerPlayerSnapsh
 
   return {
     name: toStringOrNull(player.name) || 'Игрок',
+    matchKey: toStringOrNull(player.matchKey),
     fromTeamID: toStringOrNull(player.fromTeamID),
     toTeamID: toStringOrNull(player.toTeamID),
     currentTeamID: toStringOrNull(player.currentTeamID),

@@ -226,39 +226,32 @@ function buildTeamBalancerProposalSnapshot(overrides: Record<string, unknown> = 
     defaultProposalMode: 'squad',
     reasonCodes: [],
     signals: {
-      triggerReason: 'impact_diff',
+      triggerReason: 'scramble_dry_run',
       teamSize: {
         before: { 1: 6, 2: 2 },
         after: { 1: 4, 2: 4 },
         diffBefore: 4,
         diffAfter: 0
       },
-      impact: {
-        available: true,
-        metric: 'autobalancerScore',
-        unit: 'score',
-        before: { 1: 1800, 2: 900 },
-        after: { 1: 1440, 2: 1260 },
-        diffBefore: 900,
-        diffAfter: 180,
-        moved: 360
-      },
       winStreak: null,
       ticketDiff: null,
       recentRoundSeverity: null
     },
-    summary: 'Recommended 2 player move from Team 1 to Team 2.',
+    summary: 'Team Balancer dry-run proposal.',
     cohorts: [
       {
         type: 'squad',
         cohortKey: 'squad:1:alpha',
         fromTeamID: '1',
         toTeamID: '2',
+        currentTeamID: '1',
+        expectedTeamID: '2',
         squadID: 'alpha',
+        squadName: 'Vanguard Alpha',
         playerCount: 2,
-        status: 'recommended',
+        status: 'move_pending',
         confidence: null,
-        score: 360
+        score: null
       }
     ],
     players: [
@@ -266,19 +259,25 @@ function buildTeamBalancerProposalSnapshot(overrides: Record<string, unknown> = 
         name: 'Vanguard Commander',
         fromTeamID: '1',
         toTeamID: '2',
+        currentTeamID: '1',
+        expectedTeamID: '2',
         squadID: 'alpha',
-        status: 'recommended',
+        squadName: 'Vanguard Alpha',
+        status: 'move_pending',
         confidence: null,
-        score: 200
+        score: null
       },
       {
         name: 'Player alpha-2',
         fromTeamID: '1',
         toTeamID: '2',
+        currentTeamID: '1',
+        expectedTeamID: '2',
         squadID: 'alpha',
-        status: 'recommended',
+        squadName: 'Vanguard Alpha',
+        status: 'move_pending',
         confidence: null,
-        score: 160
+        score: null
       }
     ],
     ...overrides
@@ -1070,24 +1069,14 @@ test('renders healthy Team Balancer state without proposal rows', async ({ page 
     squadjs2TeamBalancer: buildTeamBalancerProposalSnapshot({
       action: 'noop',
       result: 'balanced',
-      reasonCodes: ['team_impact_within_tolerance'],
+      reasonCodes: ['team_size_within_tolerance'],
       signals: {
-        triggerReason: 'team_impact_within_tolerance',
+        triggerReason: 'team_size_within_tolerance',
         teamSize: {
           before: { 1: 40, 2: 39 },
           after: { 1: 40, 2: 39 },
           diffBefore: 1,
           diffAfter: 1
-        },
-        impact: {
-          available: true,
-          metric: 'autobalancerScore',
-          unit: 'score',
-          before: { 1: 1200, 2: 1180 },
-          after: { 1: 1200, 2: 1180 },
-          diffBefore: 20,
-          diffAfter: 20,
-          moved: 0
         },
         winStreak: null,
         ticketDiff: null,
@@ -1102,9 +1091,10 @@ test('renders healthy Team Balancer state without proposal rows', async ({ page 
   await page.getByTestId('server-card-2').locator('button').first().click();
 
   const panel = page.getByTestId('team-balancer-panel');
-  await expect(panel).toContainText('Импакт в допуске');
-  await expect(panel).toContainText('сейчас 1 200:1 180 · dry-run 1 200:1 180');
+  await expect(panel).toContainText('Без изменений');
   await expect(panel).toContainText('сейчас 40:39 · dry-run 40:39');
+  await expect(panel).not.toContainText('Импакт');
+  await expect(panel).not.toContainText('Сила сторон');
   await expect(page.getByTestId('team-balancer-round-signals')).toHaveCount(0);
   await expect(page.getByTestId('team-balancer-diff-row')).toHaveCount(0);
 });
@@ -1139,27 +1129,17 @@ test('keeps all Team Balancer meta cards in one desktop row', async ({ page }) =
   );
 });
 
-test('renders Team Balancer marks inside the current roster and switches squad/player modes', async ({ page }) => {
+test('renders Team Balancer diff on squad headers and switches to player rows', async ({ page }) => {
   await page.clock.setFixedTime('2026-07-06T12:01:00.000Z');
   await mockAutoseedApi(page, undefined, runtimeConfig, {
     squadjs2TeamBalancer: buildTeamBalancerProposalSnapshot({
       signals: {
-        triggerReason: 'impact_diff',
+        triggerReason: 'scramble_dry_run',
         teamSize: {
           before: { 1: 6, 2: 2 },
           after: { 1: 4, 2: 4 },
           diffBefore: 4,
           diffAfter: 0
-        },
-        impact: {
-          available: true,
-          metric: 'autobalancerScore',
-          unit: 'score',
-          before: { 1: 1800, 2: 900 },
-          after: { 1: 1440, 2: 1260 },
-          diffBefore: 900,
-          diffAfter: 180,
-          moved: 360
         },
         ticketDiff: {
           winnerTeamID: '1',
@@ -1225,10 +1205,12 @@ test('renders Team Balancer marks inside the current roster and switches squad/p
   await page.getByTestId('server-card-2').locator('button').first().click();
 
   const panel = page.getByTestId('team-balancer-panel');
-  await expect(panel).toContainText('Нужно действие');
-  await expect(panel).toContainText('Перекос импакта');
-  await expect(panel).toContainText('сейчас 1 800:900 · dry-run 1 440:1 260');
+  await expect(panel).toContainText('Есть diff');
+  await expect(panel).toContainText('Scramble dry-run');
+  await expect(panel).toContainText('1 к смене');
   await expect(panel).toContainText('сейчас 6:2 · dry-run 4:4');
+  await expect(panel).not.toContainText('Сила сторон');
+  await expect(panel).not.toContainText('Перекос импакта');
   await expect(page.getByTestId('team-balancer-round-signal-severity')).toContainText(
     'Последние раунды'
   );
@@ -1255,23 +1237,27 @@ test('renders Team Balancer marks inside the current roster and switches squad/p
   await expect(page.getByTestId('team-balancer-safety-execution')).toContainText('Заблокировано');
   await expect(page.getByTestId('team-balancer-safety-execution')).toContainText('игроки 0/2');
   await expect(panel).not.toContainText('->');
-  await expect(panel).not.toContainText(/impact\s+\d+\s*ч/);
+  await expect(panel).not.toContainText(/impact|skill|score/i);
   await expect(page.getByTestId('team-balancer-diff-row')).toHaveCount(0);
 
-  const markedRosterRow = page.getByTestId('team-balancer-roster-mark');
-  await expect(markedRosterRow).toHaveCount(1);
-  await expect(markedRosterRow.first()).toContainText('Vanguard Commander');
-  await expect(markedRosterRow.first()).toContainText('В плане баланса');
-  await expect(markedRosterRow.first()).toContainText('Ожидаемая сторона: Сторона 2');
-  await expect(markedRosterRow.first()).toContainText('score 360');
-  await expect(markedRosterRow.first()).toHaveAttribute('data-team-balancer-tone', 'conflict');
+  const markedSquad = page.getByTestId('team-balancer-squad-mark');
+  await expect(markedSquad).toHaveCount(1);
+  await expect(markedSquad.first()).toContainText('Vanguard Alpha');
+  await expect(markedSquad.first()).toContainText('Нужна смена');
+  await expect(markedSquad.first()).toContainText('Сторона по dry-run: Сторона 2');
+  await expect(markedSquad.first()).toHaveAttribute('data-team-balancer-tone', 'conflict');
+  await expect(page.getByTestId('team-balancer-roster-mark')).toHaveCount(0);
 
   await page.getByTestId('team-balancer-mode-player').click();
 
   await expect(page.getByTestId('team-balancer-diff-row')).toHaveCount(0);
+  await expect(page.getByTestId('team-balancer-squad-mark')).toHaveCount(0);
+  const markedRosterRow = page.getByTestId('team-balancer-roster-mark');
   await expect(markedRosterRow).toHaveCount(1);
   await expect(markedRosterRow.first()).toContainText('Vanguard Commander');
-  await expect(markedRosterRow.first()).toContainText('score 200');
+  await expect(markedRosterRow.first()).toContainText('Нужна смена');
+  await expect(markedRosterRow.first()).toContainText('Сторона по dry-run: Сторона 2');
+  await expect(markedRosterRow.first()).not.toContainText(/impact|skill|score/i);
   await expect(panel).not.toContainText('steamID');
   await expect(panel).not.toContainText('discordID');
   await expect(panel).not.toContainText('playerIds');

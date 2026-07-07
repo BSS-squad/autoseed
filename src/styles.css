@@ -1730,6 +1730,24 @@ input {
   overflow: hidden;
 }
 
+.squad-group-balancer-conflict {
+  border-color: rgba(255, 120, 120, 0.34);
+  background:
+    linear-gradient(90deg, rgba(255, 120, 120, 0.1), rgba(255, 255, 255, 0.02) 58%),
+    rgba(255, 255, 255, 0.02);
+}
+
+.squad-group-balancer-neutral {
+  border-color: rgba(178, 190, 205, 0.22);
+}
+
+.squad-group-balancer-success {
+  border-color: rgba(104, 230, 166, 0.32);
+  background:
+    linear-gradient(90deg, rgba(104, 230, 166, 0.1), rgba(255, 255, 255, 0.02) 58%),
+    rgba(255, 255, 255, 0.02);
+}
+
 .squad-group-head {
   display: flex;
   align-items: center;
@@ -1749,6 +1767,21 @@ input {
   margin: 4px 0 0;
   color: var(--muted);
   font-size: 0.82rem;
+}
+
+.squad-group-title {
+  min-width: 0;
+}
+
+.squad-group-name-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.squad-balance-detail {
+  margin-top: 6px;
 }
 
 .squad-group-body {
