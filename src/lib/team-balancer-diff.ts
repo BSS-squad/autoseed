@@ -60,6 +60,13 @@ type TeamBalancerDiffOptions = {
   freshnessMs?: number;
 };
 
+type SquadIdentity = {
+  squadId?: string | number | null;
+  squadName?: string | null;
+  name?: string | null;
+  players?: ExporterPlayerSnapshot[] | null;
+};
+
 const DEFAULT_MODES: TeamBalancerProposalMode[] = ['squad', 'player'];
 
 const TRIGGER_LABELS: Record<string, string> = {
@@ -494,6 +501,30 @@ function normalizeComparable(value: string | number | null | undefined): string 
   return String(value ?? '').trim().toLowerCase();
 }
 
+function buildStableCompositionHash(value: string): string {
+  let hash = 0xcbf29ce484222325n;
+  const prime = 0x100000001b3n;
+
+  for (const char of value) {
+    hash ^= BigInt(char.codePointAt(0) || 0);
+    hash = BigInt.asUintN(64, hash * prime);
+  }
+
+  return hash.toString(16).padStart(16, '0');
+}
+
+export function buildTeamBalancerCompositionKey(
+  players: Array<Pick<ExporterPlayerSnapshot, 'matchKey'>> | null | undefined
+): string | null {
+  if (!Array.isArray(players) || players.length === 0) return null;
+
+  const matchKeys = players.map((player) => normalizeComparable(player.matchKey));
+  if (matchKeys.some((matchKey) => !matchKey)) return null;
+
+  const signature = matchKeys.sort().join('|');
+  return `players:${matchKeys.length}:${buildStableCompositionHash(signature)}`;
+}
+
 function isSameTeamId(
   left: string | number | null | undefined,
   right: string | number | null | undefined
@@ -545,8 +576,15 @@ function matchesSquad(player: ExporterPlayerSnapshot, squadID: string | number |
 
 function matchesSquadIdentity(
   proposal: ExporterTeamBalancerCohortSnapshot,
-  squad: { squadId?: string | number | null; squadName?: string | null; name?: string | null }
+  squad: SquadIdentity
 ): boolean {
+  const proposalCompositionKey = normalizeComparable(proposal.compositionKey);
+  if (proposalCompositionKey) {
+    return proposalCompositionKey === normalizeComparable(buildTeamBalancerCompositionKey(squad.players));
+  }
+
+  if (proposal.type === 'squad') return false;
+
   const proposalSquadId = normalizeComparable(proposal.squadID);
   const squadId = normalizeComparable(squad.squadId);
   if (proposalSquadId && squadId && proposalSquadId === squadId) return true;
@@ -637,7 +675,7 @@ export function buildTeamBalancerSquadMark(
   snapshot: ExporterTeamBalancerSnapshot | null,
   requestedMode: TeamBalancerProposalMode,
   teamID: string | number | null | undefined,
-  squad: { squadId?: string | number | null; squadName?: string | null; name?: string | null },
+  squad: SquadIdentity,
   options: TeamBalancerDiffOptions = {}
 ): TeamBalancerRosterMark | null {
   if (!snapshot) return null;

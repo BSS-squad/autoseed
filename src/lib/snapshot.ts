@@ -411,6 +411,7 @@ function mapTeamBalancerCohort(value: unknown): ExporterTeamBalancerCohortSnapsh
         ? cohort.squadID
         : null,
     squadName: toStringOrNull(cohort.squadName),
+    compositionKey: toStringOrNull(cohort.compositionKey),
     playerCount: Math.max(0, Math.round(toNumber(cohort.playerCount))),
     status: toStringOrNull(cohort.status) || 'noop',
     confidence: toFiniteNumberOrNull(cohort.confidence),
