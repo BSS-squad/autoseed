@@ -39,6 +39,10 @@ body,
   min-height: 100%;
 }
 
+html {
+  scrollbar-gutter: stable;
+}
+
 body {
   margin: 0;
   min-width: 320px;
@@ -201,8 +205,16 @@ input {
   gap: 6px;
 }
 
+.app-topbar {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 14px;
+}
+
 .app-nav {
-  display: inline-flex;
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(112px, 1fr);
   align-items: center;
   gap: 6px;
   min-height: 44px;
@@ -1959,10 +1971,6 @@ input {
   word-break: break-word;
 }
 
-.winners-shell {
-  max-width: 1280px;
-}
-
 .winners-hero,
 .winners-card,
 .winner-row,
@@ -2272,10 +2280,6 @@ input {
   line-height: 1.6;
 }
 
-.leaderboards-shell {
-  max-width: 1280px;
-}
-
 .leaderboards-hero {
   display: grid;
   gap: 24px;
@@ -2518,7 +2522,12 @@ input {
 
   .app-nav {
     width: 100%;
+    grid-auto-columns: minmax(0, 1fr);
     justify-content: stretch;
+  }
+
+  .app-topbar {
+    margin-bottom: 10px;
   }
 
   .app-nav-link {

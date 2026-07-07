@@ -900,6 +900,14 @@ function AppNav({ currentRoute, vipShopUrl }: AppNavProps) {
   );
 }
 
+function AppTopbar({ currentRoute, vipShopUrl }: AppNavProps) {
+  return (
+    <div className="app-topbar">
+      <AppNav currentRoute={currentRoute} vipShopUrl={vipShopUrl} />
+    </div>
+  );
+}
+
 function getRaffleServers(snapshot: CombinedSnapshot): RaffleServerSnapshot[] {
   return snapshot.servers.flatMap((server) =>
     server.raffles ? [{ server, raffles: server.raffles }] : []
@@ -1046,6 +1054,7 @@ function LeaderboardsPage({ config, route, vipShopUrl }: LeaderboardsPageProps) 
       style={BRAND_STYLE}
       data-testid="leaderboards-page"
     >
+      <AppTopbar currentRoute={route} vipShopUrl={vipShopUrl} />
       <header className="winners-hero leaderboards-hero">
         <div className="winners-hero-top">
           <div className="hero-brand">
@@ -1057,8 +1066,6 @@ function LeaderboardsPage({ config, route, vipShopUrl }: LeaderboardsPageProps) 
               <span className="hero-brand-subtitle">статистика игроков</span>
             </div>
           </div>
-
-          <AppNav currentRoute={route} vipShopUrl={vipShopUrl} />
         </div>
 
         <div className="winners-hero-main">
@@ -1178,6 +1185,7 @@ function WinnersPage({ snapshot, now, route, vipShopUrl }: WinnersPageProps) {
 
   return (
     <div className="shell modern-shell winners-shell" style={BRAND_STYLE} data-testid="winners-page">
+      <AppTopbar currentRoute={route} vipShopUrl={vipShopUrl} />
       <header className="winners-hero">
         <div className="winners-hero-top">
           <div className="hero-brand">
@@ -1189,8 +1197,6 @@ function WinnersPage({ snapshot, now, route, vipShopUrl }: WinnersPageProps) {
               <span className="hero-brand-subtitle">розыгрыши и победители</span>
             </div>
           </div>
-
-          <AppNav currentRoute={route} vipShopUrl={vipShopUrl} />
         </div>
 
         <div className="winners-hero-main">
@@ -2571,6 +2577,7 @@ export default function App({ config }: AppProps) {
 
   return (
     <div className="shell modern-shell" style={BRAND_STYLE} data-testid="app-shell">
+      <AppTopbar currentRoute={route} vipShopUrl={vipShopUrl} />
       <header className="hero hero-redesign" data-testid="hero">
         <div className="hero-main hero-main-tight">
           <div className="hero-topline">
@@ -2583,8 +2590,6 @@ export default function App({ config }: AppProps) {
                 <span className="hero-brand-subtitle">подключение к серверам</span>
               </div>
             </div>
-
-            <AppNav currentRoute={route} vipShopUrl={vipShopUrl} />
 
             <InlineHelp
               label="Справка по главному экрану"
