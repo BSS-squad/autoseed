@@ -354,6 +354,106 @@ test('uses mode-specific dry-run slices when proposalModes are present', () => {
   });
 });
 
+test('does not report player diff while the squad slice has no visible marks', () => {
+  const staleSquadCohort = {
+    type: 'squad',
+    cohortKey: 'squad:1:alpha',
+    fromTeamID: '1',
+    toTeamID: '2',
+    currentTeamID: '1',
+    expectedTeamID: '2',
+    squadID: 'alpha',
+    squadName: 'Alpha',
+    playerCount: 2,
+    status: 'move_pending',
+    confidence: null,
+    score: null,
+    compositionKey: 'players:2:stale'
+  };
+  const snapshot = buildProposalSnapshot({
+    cohorts: [staleSquadCohort],
+    proposalModes: {
+      squad: {
+        proposalMode: 'squad',
+        action: 'recommend',
+        result: 'proposal',
+        reasonCodes: [],
+        summary: 'Squad dry-run.',
+        signals: {
+          triggerReason: 'scramble_dry_run',
+          teamSize: {
+            before: { 1: 6, 2: 2 },
+            after: { 1: 4, 2: 4 },
+            diffBefore: 4,
+            diffAfter: 0
+          },
+          winStreak: null,
+          ticketDiff: null,
+          recentRoundSeverity: null
+        },
+        cohorts: [staleSquadCohort],
+        players: []
+      },
+      player: {
+        proposalMode: 'player',
+        action: 'recommend',
+        result: 'proposal',
+        reasonCodes: [],
+        summary: 'Player dry-run.',
+        signals: {
+          triggerReason: 'scramble_dry_run',
+          teamSize: {
+            before: { 1: 6, 2: 2 },
+            after: { 1: 5, 2: 3 },
+            diffBefore: 4,
+            diffAfter: 2
+          },
+          winStreak: null,
+          ticketDiff: null,
+          recentRoundSeverity: null
+        },
+        cohorts: [],
+        players: [
+          {
+            name: 'Player alpha-1',
+            matchKey: 'steam:alpha-1',
+            fromTeamID: '1',
+            toTeamID: '2',
+            currentTeamID: '1',
+            expectedTeamID: '2',
+            squadID: 'alpha',
+            squadName: 'Alpha',
+            status: 'move_pending',
+            confidence: null,
+            score: null,
+            reward: null
+          }
+        ]
+      }
+    }
+  });
+
+  const squadView = buildTeamBalancerDiffView(snapshot, 'squad', {
+    nowMs: NOW_MS,
+    visibleAssignmentTones: []
+  });
+  const playerView = buildTeamBalancerDiffView(snapshot, 'player', {
+    nowMs: NOW_MS,
+    visibleAssignmentTones: ['conflict']
+  });
+
+  assert.equal(squadView.state, 'healthy');
+  assert.equal(squadView.tone, 'neutral');
+  assert.equal(squadView.message, 'Без изменений');
+  assert.equal(squadView.assignmentSummary, 'Без изменений');
+  assert.equal(squadView.teamSizeSummary, 'сейчас 6:2 · dry-run 4:4');
+  assert.equal(playerView.state, 'proposal');
+  assert.equal(playerView.tone, 'conflict');
+  assert.equal(playerView.message, 'Есть diff');
+  assert.equal(playerView.assignmentSummary, '1 к смене');
+  assert.equal(playerView.teamSizeSummary, 'сейчас 6:2 · dry-run 5:3');
+});
+
 test('keeps safety and recent-round cards separate from dry-run assignment diff', () => {
   const view = buildTeamBalancerDiffView(
     buildProposalSnapshot({
