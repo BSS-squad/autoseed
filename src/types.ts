@@ -325,10 +325,30 @@ export type ExporterTeamBalancerOperationPlayerSnapshot = {
   status: string;
 };
 
+export type ExporterTeamBalancerOperationModeSnapshot = {
+  proposalMode: TeamBalancerProposalMode;
+  action: string | null;
+  result: string | null;
+  status: string;
+  reasonCodes: string[];
+  plannedMoves: number;
+  plannedPlayers: number;
+  summary: string | null;
+  teamCounts: {
+    before: Record<string, number>;
+    after: Record<string, number>;
+  };
+  diffBefore: number;
+  diffAfter: number;
+  moves: ExporterTeamBalancerOperationMoveSnapshot[];
+  players: ExporterTeamBalancerOperationPlayerSnapshot[];
+};
+
 export type ExporterTeamBalancerHistoryEntrySnapshot = {
   decisionId: string | null;
   createdAt: string | null;
   mode: string;
+  proposalMode?: TeamBalancerProposalMode | string | null;
   action: string | null;
   result: string | null;
   status: string;
@@ -340,6 +360,9 @@ export type ExporterTeamBalancerHistoryEntrySnapshot = {
   execution: ExporterTeamBalancerExecutionSnapshot | null;
   moves: ExporterTeamBalancerOperationMoveSnapshot[];
   players: ExporterTeamBalancerOperationPlayerSnapshot[];
+  proposalModes?: Partial<
+    Record<TeamBalancerProposalMode, ExporterTeamBalancerOperationModeSnapshot>
+  >;
 };
 
 export type ExporterTeamBalancerSnapshot = {

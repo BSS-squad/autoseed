@@ -343,6 +343,31 @@ function formatBalancerHistoryStatus(entry: ExporterTeamBalancerHistoryEntrySnap
   return `${modeLabel} · ${formatBalancerStatusLabel(entry.status)}`;
 }
 
+function formatBalancerProposalModeLabel(value: TeamBalancerProposalMode | string | null | undefined): string {
+  const mode = String(value || '').trim().toLowerCase();
+  if (mode === 'squad') return 'Сквады';
+  if (mode === 'player') return 'Игроки';
+  return String(value || '').trim() || 'Режим';
+}
+
+function formatBalancerHistoryModeSummaries(
+  entry: ExporterTeamBalancerHistoryEntrySnapshot
+): string[] {
+  const modes = entry.proposalModes;
+  if (!modes) return [];
+
+  return (['squad', 'player'] as TeamBalancerProposalMode[]).flatMap((mode) => {
+    const proposal = modes[mode];
+    if (!proposal) return [];
+
+    const label = formatBalancerProposalModeLabel(proposal.proposalMode || mode);
+    const count = proposal.plannedPlayers
+      ? formatPlayerMoveCount(proposal.plannedPlayers)
+      : 'без перемещений';
+    return [`${label}: ${count}`];
+  });
+}
+
 function formatKillfeedType(value: string): string {
   const labels: Record<string, string> = {
     kill: 'Убийство',
@@ -1853,6 +1878,7 @@ function ServerActivityPanel({ server }: ServerActivityPanelProps) {
               const move = entry.moves[0];
               const actor = move?.squadName || entry.players[0]?.name || 'Состав';
               const moveSummary = formatSideMoveSummary(move);
+              const modeSummaries = formatBalancerHistoryModeSummaries(entry);
               return (
                 <div className="server-activity-row" key={entry.decisionId || entry.createdAt}>
                   <span>{formatCompactTimestamp(entry.createdAt || undefined)}</span>
@@ -1863,6 +1889,7 @@ function ServerActivityPanel({ server }: ServerActivityPanelProps) {
                       ? formatPlayerMoveCount(entry.plannedPlayers)
                       : 'без перемещений'}
                     {moveSummary ? ` · ${moveSummary}` : ''}
+                    {modeSummaries.length ? ` · ${modeSummaries.join(' · ')}` : ''}
                   </p>
                 </div>
               );

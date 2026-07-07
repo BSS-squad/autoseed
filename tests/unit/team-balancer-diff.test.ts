@@ -354,6 +354,59 @@ test('uses mode-specific dry-run slices when proposalModes are present', () => {
   });
 });
 
+test('does not reuse squad-first top-level players when player dry-run slice is missing', () => {
+  const snapshot = buildProposalSnapshot({
+    availableProposalModes: ['squad', 'player'],
+    proposalModes: {
+      squad: {
+        proposalMode: 'squad',
+        action: 'recommend',
+        result: 'proposal',
+        reasonCodes: [],
+        summary: 'Squad dry-run.',
+        signals: {
+          triggerReason: 'scramble_dry_run',
+          teamSize: {
+            before: { 1: 6, 2: 2 },
+            after: { 1: 4, 2: 4 },
+            diffBefore: 4,
+            diffAfter: 0
+          },
+          winStreak: null,
+          ticketDiff: null,
+          recentRoundSeverity: null
+        },
+        cohorts: [
+          {
+            type: 'squad',
+            cohortKey: 'squad:1:alpha',
+            fromTeamID: '1',
+            toTeamID: '2',
+            currentTeamID: '1',
+            expectedTeamID: '2',
+            squadID: 'alpha',
+            squadName: 'Alpha',
+            playerCount: 2,
+            status: 'move_pending',
+            confidence: null,
+            score: null
+          }
+        ],
+        players: []
+      }
+    }
+  });
+
+  const view = buildTeamBalancerDiffView(snapshot, 'player', { nowMs: NOW_MS });
+  const playerMark = buildTeamBalancerRosterMark(snapshot, 'player', 1, buildRosterPlayer(), {
+    nowMs: NOW_MS
+  });
+
+  assert.deepEqual(view.modes, ['squad']);
+  assert.equal(view.mode, 'squad');
+  assert.equal(playerMark, null);
+});
+
 test('keeps squad dry-run diff visible when the live roster has no matching marks', () => {
   const staleSquadCohort = {
     type: 'squad',

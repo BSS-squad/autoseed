@@ -267,7 +267,56 @@ test('keeps public activity fields and drops private ids from exporter snapshots
                       status: 'move_pending',
                       steamID: '76561190000000001'
                     }
-                  ]
+                  ],
+                  proposalModes: {
+                    squad: {
+                      proposalMode: 'squad',
+                      action: 'recommend',
+                      result: 'evaluated',
+                      status: 'evaluated',
+                      reasonCodes: [],
+                      plannedMoves: 1,
+                      plannedPlayers: 2,
+                      teamCounts: { before: { 1: 6, 2: 2 }, after: { 1: 4, 2: 4 } },
+                      diffBefore: 4,
+                      diffAfter: 0,
+                      moves: [
+                        {
+                          type: 'squad',
+                          fromTeamID: '1',
+                          toTeamID: '2',
+                          squadName: 'Vanguard Alpha',
+                          playerCount: 2,
+                          status: 'evaluated'
+                        }
+                      ],
+                      players: []
+                    },
+                    player: {
+                      proposalMode: 'player',
+                      action: 'recommend',
+                      result: 'evaluated',
+                      status: 'evaluated',
+                      reasonCodes: [],
+                      plannedMoves: 1,
+                      plannedPlayers: 1,
+                      teamCounts: { before: { 1: 6, 2: 2 }, after: { 1: 5, 2: 3 } },
+                      diffBefore: 4,
+                      diffAfter: 2,
+                      moves: [
+                        {
+                          type: 'player',
+                          fromTeamID: '1',
+                          toTeamID: '2',
+                          squadName: 'Vanguard Alpha',
+                          playerCount: 1,
+                          status: 'evaluated',
+                          playerIds: ['alpha-1']
+                        }
+                      ],
+                      players: []
+                    }
+                  }
                 }
               ],
               recentRounds: [
@@ -339,6 +388,9 @@ test('keeps public activity fields and drops private ids from exporter snapshots
   assert.equal(activity?.teamBalancerHistory[0]?.mode, 'execute');
   assert.equal(activity?.teamBalancerHistory[0]?.execution?.succeededPlayers, 2);
   assert.equal(activity?.teamBalancerHistory[0]?.moves[0]?.squadName, 'Vanguard Alpha');
+  assert.equal(activity?.teamBalancerHistory[0]?.proposalModes?.squad?.plannedPlayers, 2);
+  assert.equal(activity?.teamBalancerHistory[0]?.proposalModes?.player?.plannedPlayers, 1);
+  assert.equal(activity?.teamBalancerHistory[0]?.proposalModes?.player?.moves[0]?.type, 'player');
   assert.equal(activity?.topWindow?.requiredParticipation, 3);
   assert.equal(activity?.topWindow?.entries[0]?.name, 'Qualified A');
   assert.equal(activity?.killfeed?.events[0]?.attackerName, 'Attacker');

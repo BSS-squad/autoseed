@@ -370,7 +370,55 @@ function buildActivitySnapshot() {
             status: 'evaluated'
           }
         ],
-        players: []
+        players: [],
+        proposalModes: {
+          squad: {
+            proposalMode: 'squad',
+            action: 'recommend',
+            result: 'evaluated',
+            status: 'evaluated',
+            reasonCodes: [],
+            plannedMoves: 1,
+            plannedPlayers: 2,
+            teamCounts: { before: { 1: 6, 2: 2 }, after: { 1: 4, 2: 4 } },
+            diffBefore: 4,
+            diffAfter: 0,
+            moves: [
+              {
+                type: 'squad',
+                fromTeamID: '1',
+                toTeamID: '2',
+                squadName: 'Vanguard Alpha',
+                playerCount: 2,
+                status: 'evaluated'
+              }
+            ],
+            players: []
+          },
+          player: {
+            proposalMode: 'player',
+            action: 'recommend',
+            result: 'evaluated',
+            status: 'evaluated',
+            reasonCodes: [],
+            plannedMoves: 1,
+            plannedPlayers: 1,
+            teamCounts: { before: { 1: 6, 2: 2 }, after: { 1: 5, 2: 3 } },
+            diffBefore: 4,
+            diffAfter: 2,
+            moves: [
+              {
+                type: 'player',
+                fromTeamID: '1',
+                toTeamID: '2',
+                squadName: 'Vanguard Alpha',
+                playerCount: 1,
+                status: 'evaluated'
+              }
+            ],
+            players: []
+          }
+        }
       },
       {
         decisionId: 'activity-decision-2',
@@ -1299,6 +1347,8 @@ test('renders server activity history, last-10 top and killfeed journal', async 
   await expect(activityPanel).toContainText('Vanguard Alpha');
   await expect(activityPanel).toContainText('Боевой · выполнено 2/2');
   await expect(activityPanel).toContainText('Dry-run · рассчитано');
+  await expect(activityPanel).toContainText('Сквады: 2 игрока');
+  await expect(activityPanel).toContainText('Игроки: 1 игрок');
   await expect(activityPanel).toContainText('Сторона 1 в Сторона 2');
   await expect(activityPanel).not.toContainText('->');
   await expect(activityPanel).not.toContainText('snapshot');

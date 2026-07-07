@@ -573,6 +573,100 @@ function mapTeamBalancerExecution(value: unknown): ExporterTeamBalancerExecution
   };
 }
 
+function mapTeamBalancerHistoryMove(
+  value: unknown
+): ExporterTeamBalancerHistoryEntrySnapshot['moves'][number] | null {
+  const record = getRecord(value);
+  if (!record) return null;
+
+  return {
+    type: toStringOrNull(record.type) || 'move',
+    fromTeamID: toStringOrNull(record.fromTeamID),
+    toTeamID: toStringOrNull(record.toTeamID),
+    squadName: toStringOrNull(record.squadName),
+    playerCount: Math.max(0, Math.round(toNumber(record.playerCount))),
+    status: toStringOrNull(record.status) || 'evaluated'
+  };
+}
+
+function mapTeamBalancerHistoryPlayer(
+  value: unknown
+): ExporterTeamBalancerHistoryEntrySnapshot['players'][number] | null {
+  const record = getRecord(value);
+  if (!record) return null;
+
+  return {
+    name: toStringOrNull(record.name) || 'Игрок',
+    matchKey: toStringOrNull(record.matchKey),
+    fromTeamID: toStringOrNull(record.fromTeamID),
+    toTeamID: toStringOrNull(record.toTeamID),
+    squadName: toStringOrNull(record.squadName),
+    status: toStringOrNull(record.status) || 'move_pending'
+  };
+}
+
+function mapTeamBalancerHistoryMode(
+  value: unknown,
+  fallbackMode: TeamBalancerProposalMode
+): NonNullable<ExporterTeamBalancerHistoryEntrySnapshot['proposalModes']>[TeamBalancerProposalMode] | null {
+  const mode = getRecord(value);
+  if (!mode) return null;
+  const teamCounts = getRecord(mode.teamCounts) || {};
+
+  return {
+    proposalMode: mapTeamBalancerMode(mode.proposalMode) || fallbackMode,
+    action: toStringOrNull(mode.action),
+    result: toStringOrNull(mode.result),
+    status: toStringOrNull(mode.status) || toStringOrNull(mode.result) || 'evaluated',
+    reasonCodes: Array.isArray(mode.reasonCodes)
+      ? mode.reasonCodes
+          .map((reason) => toStringOrNull(reason))
+          .filter((reason): reason is string => Boolean(reason))
+      : [],
+    plannedMoves: Math.max(0, Math.round(toNumber(mode.plannedMoves))),
+    plannedPlayers: Math.max(0, Math.round(toNumber(mode.plannedPlayers))),
+    summary: toStringOrNull(mode.summary),
+    teamCounts: {
+      before: mapTeamBalancerCounts(teamCounts.before),
+      after: mapTeamBalancerCounts(teamCounts.after)
+    },
+    diffBefore: Math.max(0, Math.round(toNumber(mode.diffBefore))),
+    diffAfter: Math.max(0, Math.round(toNumber(mode.diffAfter))),
+    moves: Array.isArray(mode.moves)
+      ? mode.moves
+          .map(mapTeamBalancerHistoryMove)
+          .filter((move): move is ExporterTeamBalancerHistoryEntrySnapshot['moves'][number] =>
+            Boolean(move)
+          )
+      : [],
+    players: Array.isArray(mode.players)
+      ? mode.players
+          .map(mapTeamBalancerHistoryPlayer)
+          .filter((player): player is ExporterTeamBalancerHistoryEntrySnapshot['players'][number] =>
+            Boolean(player)
+          )
+      : []
+  };
+}
+
+function mapTeamBalancerHistoryProposalModes(
+  value: unknown
+): ExporterTeamBalancerHistoryEntrySnapshot['proposalModes'] {
+  const modes = getRecord(value);
+  if (!modes) return undefined;
+
+  return Object.fromEntries(
+    (['squad', 'player'] as TeamBalancerProposalMode[])
+      .map((mode) => [mode, mapTeamBalancerHistoryMode(modes[mode], mode)] as const)
+      .filter(
+        (entry): entry is readonly [
+          TeamBalancerProposalMode,
+          NonNullable<ExporterTeamBalancerHistoryEntrySnapshot['proposalModes']>[TeamBalancerProposalMode]
+        ] => Boolean(entry[1])
+      )
+  );
+}
+
 function mapTeamBalancerHistoryEntry(value: unknown): ExporterTeamBalancerHistoryEntrySnapshot | null {
   const entry = getRecord(value);
   if (!entry) return null;
@@ -581,6 +675,7 @@ function mapTeamBalancerHistoryEntry(value: unknown): ExporterTeamBalancerHistor
     decisionId: toStringOrNull(entry.decisionId),
     createdAt: toIsoStringOrNull(entry.createdAt),
     mode: toStringOrNull(entry.mode) || 'dry-run',
+    proposalMode: mapTeamBalancerMode(entry.proposalMode) || toStringOrNull(entry.proposalMode),
     action: toStringOrNull(entry.action),
     result: toStringOrNull(entry.result),
     status: toStringOrNull(entry.status) || toStringOrNull(entry.result) || 'evaluated',
@@ -596,18 +691,7 @@ function mapTeamBalancerHistoryEntry(value: unknown): ExporterTeamBalancerHistor
     execution: mapTeamBalancerExecution(entry.execution),
     moves: Array.isArray(entry.moves)
       ? entry.moves
-          .map((move) => {
-            const record = getRecord(move);
-            if (!record) return null;
-            return {
-              type: toStringOrNull(record.type) || 'move',
-              fromTeamID: toStringOrNull(record.fromTeamID),
-              toTeamID: toStringOrNull(record.toTeamID),
-              squadName: toStringOrNull(record.squadName),
-              playerCount: Math.max(0, Math.round(toNumber(record.playerCount))),
-              status: toStringOrNull(record.status) || 'evaluated'
-            };
-          })
+          .map(mapTeamBalancerHistoryMove)
           .filter(
             (move): move is ExporterTeamBalancerHistoryEntrySnapshot['moves'][number] =>
               Boolean(move)
@@ -615,23 +699,13 @@ function mapTeamBalancerHistoryEntry(value: unknown): ExporterTeamBalancerHistor
       : [],
     players: Array.isArray(entry.players)
       ? entry.players
-          .map((player) => {
-            const record = getRecord(player);
-            if (!record) return null;
-            return {
-              name: toStringOrNull(record.name) || 'Игрок',
-              matchKey: toStringOrNull(record.matchKey),
-              fromTeamID: toStringOrNull(record.fromTeamID),
-              toTeamID: toStringOrNull(record.toTeamID),
-              squadName: toStringOrNull(record.squadName),
-              status: toStringOrNull(record.status) || 'move_pending'
-            };
-          })
+          .map(mapTeamBalancerHistoryPlayer)
           .filter(
             (player): player is ExporterTeamBalancerHistoryEntrySnapshot['players'][number] =>
               Boolean(player)
           )
-      : []
+      : [],
+    proposalModes: mapTeamBalancerHistoryProposalModes(entry.proposalModes)
   };
 }
 
