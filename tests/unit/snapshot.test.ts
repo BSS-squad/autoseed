@@ -333,6 +333,16 @@ test('keeps public activity fields and drops private ids from exporter snapshots
                     knockdowns: 61
                   },
                   eosID: 'private-round-id'
+                },
+                {
+                  layer: 'Current round',
+                  playerCount: 80,
+                  totals: {
+                    kills: 99,
+                    deaths: 99,
+                    revives: 0,
+                    knockdowns: 0
+                  }
                 }
               ],
               topWindow: {
@@ -365,6 +375,12 @@ test('keeps public activity fields and drops private ids from exporter snapshots
                     count: 2,
                     roundEndedAt: '2026-07-06T12:00:00.000Z',
                     playerId: 'private-player-id'
+                  },
+                  {
+                    type: 'kill',
+                    attackerName: 'Current Attacker',
+                    victimName: 'Current Victim',
+                    count: 99
                   }
                 ]
               }
@@ -384,6 +400,7 @@ test('keeps public activity fields and drops private ids from exporter snapshots
   const activity = snapshot.servers[0]?.activity;
 
   assert.equal(activity?.recentRounds[0]?.layer, 'Narva RAAS v2');
+  assert.equal(activity?.recentRounds.length, 1);
   assert.equal(activity?.teamBalancerHistory[0]?.plannedPlayers, 2);
   assert.equal(activity?.teamBalancerHistory[0]?.mode, 'execute');
   assert.equal(activity?.teamBalancerHistory[0]?.execution?.succeededPlayers, 2);
@@ -394,6 +411,7 @@ test('keeps public activity fields and drops private ids from exporter snapshots
   assert.equal(activity?.topWindow?.requiredParticipation, 3);
   assert.equal(activity?.topWindow?.entries[0]?.name, 'Qualified A');
   assert.equal(activity?.killfeed?.events[0]?.attackerName, 'Attacker');
+  assert.equal(activity?.killfeed?.events.length, 1);
   assert.doesNotMatch(
     JSON.stringify(activity),
     /eosID|steamID|playerId|playerIds|7656119|alpha-1|private-round-id|private-player-id|private-execution-player/

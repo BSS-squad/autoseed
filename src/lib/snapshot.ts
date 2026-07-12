@@ -783,9 +783,11 @@ function mapActivityRecentRound(value: unknown): ExporterActivityRecentRoundSnap
   const round = getRecord(value);
   if (!round) return null;
   const totals = getRecord(round.totals) || {};
+  const endedAt = toIsoStringOrNull(round.endedAt);
+  if (!endedAt) return null;
 
   return {
-    endedAt: toIsoStringOrNull(round.endedAt),
+    endedAt,
     layer: toStringOrNull(round.layer),
     winner: mapActivityTeamResult(round.winner),
     loser: mapActivityTeamResult(round.loser),
@@ -839,14 +841,15 @@ function mapActivityKillfeedEvent(value: unknown): ExporterActivityKillfeedEvent
   if (!event) return null;
   const attackerName = toStringOrNull(event.attackerName);
   const victimName = toStringOrNull(event.victimName);
-  if (!attackerName || !victimName) return null;
+  const roundEndedAt = toIsoStringOrNull(event.roundEndedAt);
+  if (!attackerName || !victimName || !roundEndedAt) return null;
 
   return {
     type: toStringOrNull(event.type) || 'event',
     attackerName,
     victimName,
     count: Math.max(0, Math.round(toNumber(event.count))),
-    roundEndedAt: toIsoStringOrNull(event.roundEndedAt)
+    roundEndedAt
   };
 }
 
@@ -858,17 +861,19 @@ function mapActivityKillfeed(value: unknown): ExporterActivityKillfeedSnapshot |
     version: Math.max(1, Math.round(toNumber(killfeed.version, 1))),
     generatedAt: toIsoStringOrNull(killfeed.generatedAt),
     rounds: Array.isArray(killfeed.rounds)
-      ? killfeed.rounds.map((round) => {
+      ? killfeed.rounds.flatMap((round) => {
           const record = getRecord(round) || {};
           const totals = getRecord(record.totals) || {};
-          return {
-            endedAt: toIsoStringOrNull(record.endedAt),
+          const endedAt = toIsoStringOrNull(record.endedAt);
+          if (!endedAt) return [];
+          return [{
+            endedAt,
             playerCount: toNonNegativeIntegerOrNull(record.playerCount) ?? undefined,
             totals: {
               kills: Math.max(0, Math.round(toNumber(totals.kills))),
               knockdowns: Math.max(0, Math.round(toNumber(totals.knockdowns)))
             }
-          };
+          }];
         })
       : [],
     events: Array.isArray(killfeed.events)
@@ -882,6 +887,11 @@ function mapActivityKillfeed(value: unknown): ExporterActivityKillfeedSnapshot |
 function mapActivitySnapshot(value: unknown): ExporterActivitySnapshot | null {
   const activity = getRecord(value);
   if (!activity) return null;
+  const recentRounds = Array.isArray(activity.recentRounds)
+    ? activity.recentRounds
+        .map(mapActivityRecentRound)
+        .filter((entry): entry is ExporterActivityRecentRoundSnapshot => Boolean(entry))
+    : [];
 
   return {
     version: Math.max(1, Math.round(toNumber(activity.version, 1))),
@@ -891,12 +901,8 @@ function mapActivitySnapshot(value: unknown): ExporterActivitySnapshot | null {
           .map(mapTeamBalancerHistoryEntry)
           .filter((entry): entry is ExporterTeamBalancerHistoryEntrySnapshot => Boolean(entry))
       : [],
-    recentRounds: Array.isArray(activity.recentRounds)
-      ? activity.recentRounds
-          .map(mapActivityRecentRound)
-          .filter((entry): entry is ExporterActivityRecentRoundSnapshot => Boolean(entry))
-      : [],
-    topWindow: mapActivityTopWindow(activity.topWindow),
+    recentRounds,
+    topWindow: recentRounds.length ? mapActivityTopWindow(activity.topWindow) : null,
     killfeed: mapActivityKillfeed(activity.killfeed)
   };
 }

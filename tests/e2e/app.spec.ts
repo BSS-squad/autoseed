@@ -1278,9 +1278,9 @@ test('renders an empty Team Balancer state when no fresh report exists', async (
   await page.clock.setFixedTime('2026-07-06T12:01:00.000Z');
   await mockAutoseedApi(page);
 
-  await page.goto('/');
+  await page.goto('/#balance');
 
-  const panel = page.getByTestId('team-balancer-panel');
+  const panel = page.getByTestId('balance-server-2').getByTestId('team-balancer-panel');
   await expect(panel).toBeVisible();
   await expect(panel).toContainText('Баланс сторон');
   await expect(panel).toContainText('Отчета по dry-run балансу пока нет');
@@ -1313,10 +1313,9 @@ test('renders healthy Team Balancer state without proposal rows', async ({ page 
     })
   });
 
-  await page.goto('/');
-  await page.getByTestId('server-card-2').locator('button').first().click();
+  await page.goto('/#balance');
 
-  const panel = page.getByTestId('team-balancer-panel');
+  const panel = page.getByTestId('balance-server-2').getByTestId('team-balancer-panel');
   await expect(panel).toContainText('Без изменений');
   await expect(panel).toContainText('сейчас 40:39 · dry-run 40:39');
   await expect(panel).not.toContainText('Импакт');
@@ -1331,10 +1330,9 @@ test('renders server activity history, last-10 top and killfeed journal', async 
     squadjs2Activity: buildActivitySnapshot()
   });
 
-  await page.goto('/');
-  await page.getByTestId('server-card-2').locator('button').first().click();
+  await page.goto('/#journal');
 
-  const activityPanel = page.getByTestId('server-activity-panel');
+  const activityPanel = page.getByTestId('journal-server-2').getByTestId('server-activity-panel');
   await expect(activityPanel).toBeVisible();
   await expect(activityPanel).toContainText('Журнал сервера');
   await expect(activityPanel).toContainText('10 игр');
@@ -1344,13 +1342,6 @@ test('renders server activity history, last-10 top and killfeed journal', async 
   await expect(activityPanel).toContainText('Narva RAAS v2');
   await expect(activityPanel).toContainText('Attacker');
   await expect(activityPanel).toContainText('Victim');
-  await expect(activityPanel).toContainText('Vanguard Alpha');
-  await expect(activityPanel).toContainText('Боевой · выполнено 2/2');
-  await expect(activityPanel).toContainText('Dry-run · рассчитано');
-  await expect(activityPanel).toContainText('Сквады: 2 игрока');
-  await expect(activityPanel).toContainText('Игроки: 1 игрок');
-  await expect(activityPanel).toContainText('Сторона 1 в Сторона 2');
-  await expect(activityPanel).not.toContainText('->');
   await expect(activityPanel).not.toContainText('snapshot');
   await expect(activityPanel).not.toContainText('7656119');
 });
@@ -1359,19 +1350,44 @@ test('keeps server activity journal discoverable before activity data arrives', 
   await page.clock.setFixedTime('2026-07-06T12:02:00.000Z');
   await mockAutoseedApi(page);
 
-  await page.goto('/');
-  await page.getByTestId('server-card-2').locator('button').first().click();
+  await page.goto('/#journal');
 
-  const activityPanel = page.getByTestId('server-activity-panel');
+  const activityPanel = page.getByTestId('journal-server-2').getByTestId('server-activity-panel');
   await expect(activityPanel).toBeVisible();
   await expect(activityPanel).toContainText('Журнал сервера');
-  await expect(activityPanel).toContainText('Нет операций.');
   await expect(activityPanel).toContainText('Топ пока пуст.');
   await expect(activityPanel).toContainText('Истории игр пока нет.');
   await expect(activityPanel).toContainText('Событий пока нет.');
   await expect(activityPanel).not.toContainText('snapshot');
   await expect(activityPanel).not.toContainText('exporter');
   await expect(activityPanel).not.toContainText('endpoint');
+});
+
+test('shows the balancer and completed-game journal on separate routes', async ({ page }) => {
+  await page.clock.setFixedTime('2026-07-06T12:02:00.000Z');
+  await mockAutoseedApi(page, undefined, runtimeConfig, {
+    squadjs2Activity: buildActivitySnapshot(),
+    squadjs2TeamBalancer: buildTeamBalancerProposalSnapshot()
+  });
+
+  await page.goto('/#balance');
+
+  const balancePage = page.getByTestId('balance-page');
+  await expect(balancePage).toBeVisible();
+  await expect(balancePage).toContainText('Балансер');
+  await expect(
+    balancePage.getByTestId('balance-server-2').getByTestId('team-balancer-history-panel')
+  ).toContainText('Vanguard Alpha');
+  await expect(balancePage.getByTestId('server-activity-panel')).toHaveCount(0);
+
+  await page.getByTestId('journal-nav-link').click();
+  const journalPage = page.getByTestId('journal-page');
+  await expect(journalPage).toBeVisible();
+  await expect(journalPage).toContainText('Только данные завершённых игр');
+  await expect(
+    journalPage.getByTestId('journal-server-2').getByTestId('server-activity-panel')
+  ).toContainText('Narva RAAS v2');
+  await expect(journalPage.getByTestId('team-balancer-history-panel')).toHaveCount(0);
 });
 
 test('keeps all Team Balancer meta cards in one desktop row', async ({ page }) => {
@@ -1381,10 +1397,9 @@ test('keeps all Team Balancer meta cards in one desktop row', async ({ page }) =
     squadjs2TeamBalancer: buildTeamBalancerProposalSnapshot()
   });
 
-  await page.goto('/');
-  await page.getByTestId('server-card-2').locator('button').first().click();
+  await page.goto('/#balance');
 
-  const metaCards = page.locator('.team-balancer-meta > div');
+  const metaCards = page.getByTestId('balance-server-2').locator('.team-balancer-meta > div');
   await expect(metaCards).toHaveCount(4);
 
   const cardBoxes = await metaCards.evaluateAll((nodes) =>
@@ -1404,7 +1419,7 @@ test('keeps all Team Balancer meta cards in one desktop row', async ({ page }) =
   );
 });
 
-test('renders Team Balancer diff on squad headers and switches to player rows', async ({ page }) => {
+test('renders Team Balancer diff and switches its proposal mode', async ({ page }) => {
   await page.clock.setFixedTime('2026-07-06T12:01:00.000Z');
   const squadSignals = {
     triggerReason: 'scramble_dry_run',
@@ -1553,10 +1568,9 @@ test('renders Team Balancer diff on squad headers and switches to player rows', 
     })
   });
 
-  await page.goto('/');
-  await page.getByTestId('server-card-2').locator('button').first().click();
+  await page.goto('/#balance');
 
-  const panel = page.getByTestId('team-balancer-panel');
+  const panel = page.getByTestId('balance-server-2').getByTestId('team-balancer-panel');
   await expect(panel).toContainText('Есть diff');
   await expect(panel).toContainText('Scramble dry-run');
   await expect(panel).toContainText('1 к смене');
@@ -1596,14 +1610,6 @@ test('renders Team Balancer diff on squad headers and switches to player rows', 
   await expect(squadDiffRow.first()).toContainText('2 игрока · Сторона 1 в Сторона 2');
   await expect(squadDiffRow.first()).toContainText('Нужна смена');
 
-  const markedSquad = page.getByTestId('team-balancer-squad-mark');
-  await expect(markedSquad).toHaveCount(1);
-  await expect(markedSquad.first()).toContainText('Vanguard Alpha');
-  await expect(markedSquad.first()).toContainText('Нужна смена');
-  await expect(markedSquad.first()).toContainText('Сторона по dry-run: Сторона 2');
-  await expect(markedSquad.first()).toHaveAttribute('data-team-balancer-tone', 'conflict');
-  await expect(page.getByTestId('team-balancer-roster-mark')).toHaveCount(0);
-
   await page.getByTestId('team-balancer-mode-player').click();
 
   const playerDiffRow = page.getByTestId('team-balancer-diff-row');
@@ -1611,14 +1617,7 @@ test('renders Team Balancer diff on squad headers and switches to player rows', 
   await expect(playerDiffRow.first()).toContainText('Vanguard Commander');
   await expect(playerDiffRow.first()).toContainText('Vanguard Alpha · Сторона 1 в Сторона 2');
   await expect(playerDiffRow.first()).toContainText('Нужна смена');
-  await expect(page.getByTestId('team-balancer-squad-mark')).toHaveCount(0);
-  const markedRosterRow = page.getByTestId('team-balancer-roster-mark');
-  await expect(markedRosterRow).toHaveCount(1);
-  await expect(markedRosterRow.first()).toContainText('Vanguard Commander');
-  await expect(markedRosterRow.first()).toContainText('Нужна смена');
-  await expect(markedRosterRow.first()).toContainText('Сторона по dry-run: Сторона 2');
   await expect(panel).toContainText('сейчас 6:2 · dry-run 5:3');
-  await expect(markedRosterRow.first()).not.toContainText(/impact|skill|score/i);
   await expect(panel).not.toContainText('steamID');
   await expect(panel).not.toContainText('discordID');
   await expect(panel).not.toContainText('playerIds');
@@ -1709,10 +1708,9 @@ test('keeps squad diff visible when the live roster has no visible marks', async
     })
   });
 
-  await page.goto('/');
-  await page.getByTestId('server-card-2').locator('button').first().click();
+  await page.goto('/#balance');
 
-  const panel = page.getByTestId('team-balancer-panel');
+  const panel = page.getByTestId('balance-server-2').getByTestId('team-balancer-panel');
   await expect(panel).toContainText('Есть diff');
   await expect(panel).toContainText('1 к смене');
   await expect(panel).toContainText('сейчас 6:2 · dry-run 4:4');
@@ -1720,9 +1718,6 @@ test('keeps squad diff visible when the live roster has no visible marks', async
   await expect(squadDiffRow).toHaveCount(1);
   await expect(squadDiffRow.first()).toContainText('Vanguard Alpha');
   await expect(squadDiffRow.first()).toContainText('Нужна смена');
-  await expect(page.getByTestId('team-balancer-squad-mark')).toHaveCount(0);
-  await expect(page.getByTestId('team-balancer-roster-mark')).toHaveCount(0);
-
   await page.getByTestId('team-balancer-mode-player').click();
 
   await expect(panel).toContainText('Есть diff');
@@ -1731,11 +1726,6 @@ test('keeps squad diff visible when the live roster has no visible marks', async
   const playerDiffRow = page.getByTestId('team-balancer-diff-row');
   await expect(playerDiffRow).toHaveCount(1);
   await expect(playerDiffRow.first()).toContainText('Vanguard Commander');
-  await expect(page.getByTestId('team-balancer-squad-mark')).toHaveCount(0);
-  const markedRosterRow = page.getByTestId('team-balancer-roster-mark');
-  await expect(markedRosterRow).toHaveCount(1);
-  await expect(markedRosterRow.first()).toContainText('Vanguard Commander');
-  await expect(markedRosterRow.first()).toContainText('Нужна смена');
 });
 
 test('uses player-friendly language on the home page', async ({ page }) => {
