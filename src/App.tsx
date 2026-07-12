@@ -1849,6 +1849,7 @@ function ServerActivityPanel({ server }: ServerActivityPanelProps) {
   const topWindow = activity?.topWindow || null;
   const topEntries = topWindow?.entries.slice(0, 10) || [];
   const recentRounds = activity?.recentRounds.slice(0, 10) || [];
+  const tabRounds = recentRounds.filter((round) => (round.scoreboard?.teams.length || 0) > 0);
   const killfeedEvents = activity?.killfeed?.events.slice(0, 10) || [];
   return (
     <section className="server-activity-panel" data-testid="server-activity-panel">
@@ -1871,6 +1872,10 @@ function ServerActivityPanel({ server }: ServerActivityPanelProps) {
         <div>
           <span>Игры</span>
           <strong>{recentRounds.length}</strong>
+        </div>
+        <div>
+          <span>Табы</span>
+          <strong>{tabRounds.length}</strong>
         </div>
         <div>
           <span>Килфид</span>
@@ -1896,6 +1901,71 @@ function ServerActivityPanel({ server }: ServerActivityPanelProps) {
             ))
           ) : (
             <div className="server-activity-empty">Топ пока пуст.</div>
+          )}
+        </div>
+
+        <div className="server-activity-list server-scoreboard-list">
+          <div className="server-activity-list-head">
+            <span>Итоговые табы</span>
+            <strong>{tabRounds.length}</strong>
+          </div>
+          {tabRounds.length ? (
+            tabRounds.map((round) => (
+              <details
+                className="server-scoreboard"
+                data-testid="server-scoreboard"
+                key={`${round.endedAt}:${round.layer}:scoreboard`}
+              >
+                <summary>
+                  <span>{formatCompactTimestamp(round.endedAt || undefined)}</span>
+                  <strong>{round.layer || 'Раунд'}</strong>
+                  <p>{round.scoreboard?.teams.length || 0} стороны · {round.playerCount} игроков</p>
+                </summary>
+                <div className="server-scoreboard-teams">
+                  {round.scoreboard?.teams.map((team) => (
+                    <section className="server-scoreboard-team" key={`${round.endedAt}:${team.teamID}`}>
+                      <header>
+                        <div>
+                          <strong>{team.name}</strong>
+                          <span>{team.result === 'winner' ? 'Победа' : team.result === 'loser' ? 'Поражение' : 'Итог'}</span>
+                        </div>
+                        <p>
+                          {team.totals.kills}/{team.totals.deaths} · {team.totals.revives} поднятий · {team.totals.knockdowns} ноков
+                        </p>
+                      </header>
+                      <div className="server-scoreboard-table-wrap">
+                        <table className="server-scoreboard-table">
+                          <thead>
+                            <tr>
+                              <th>Игрок</th>
+                              <th>Отряд / роль</th>
+                              <th>У</th>
+                              <th>С</th>
+                              <th>П</th>
+                              <th>Н</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {team.players.map((player, index) => (
+                              <tr key={`${player.name}:${index}`}>
+                                <td>{player.name}</td>
+                                <td>{[player.squad, player.role].filter(Boolean).join(' · ') || '—'}</td>
+                                <td>{player.kills}</td>
+                                <td>{player.deaths}</td>
+                                <td>{player.revives}</td>
+                                <td>{player.knockdowns}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </section>
+                  ))}
+                </div>
+              </details>
+            ))
+          ) : (
+            <div className="server-activity-empty">Итоговые табы пока не поступили.</div>
           )}
         </div>
 
@@ -1933,7 +2003,9 @@ function ServerActivityPanel({ server }: ServerActivityPanelProps) {
                 <span>{formatKillfeedType(event.type)}</span>
                 <strong>{event.attackerName}</strong>
                 <p>
-                  {event.victimName} x{event.count}
+                  {event.victimName}
+                  {event.weapon ? ` · ${event.weapon}` : ''}
+                  {event.damage ? ` · ${event.damage} урона` : event.count > 1 ? ` x${event.count}` : ''}
                 </p>
               </div>
             ))

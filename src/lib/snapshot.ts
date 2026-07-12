@@ -4,6 +4,10 @@ import type {
   ExporterActivityKillfeedEventSnapshot,
   ExporterActivityKillfeedSnapshot,
   ExporterActivityRecentRoundSnapshot,
+  ExporterActivityRoundTotalsSnapshot,
+  ExporterActivityScoreboardPlayerSnapshot,
+  ExporterActivityScoreboardSnapshot,
+  ExporterActivityScoreboardTeamSnapshot,
   ExporterActivitySnapshot,
   ExporterActivityTeamResultSnapshot,
   ExporterActivityTopEntrySnapshot,
@@ -779,10 +783,72 @@ function mapActivityTeamResult(value: unknown): ExporterActivityTeamResultSnapsh
   };
 }
 
+function mapActivityRoundTotals(value: unknown): ExporterActivityRoundTotalsSnapshot {
+  const totals = getRecord(value) || {};
+  return {
+    kills: Math.max(0, Math.round(toNumber(totals.kills))),
+    deaths: Math.max(0, Math.round(toNumber(totals.deaths))),
+    revives: Math.max(0, Math.round(toNumber(totals.revives))),
+    knockdowns: Math.max(0, Math.round(toNumber(totals.knockdowns)))
+  };
+}
+
+function mapActivityScoreboardPlayer(
+  value: unknown
+): ExporterActivityScoreboardPlayerSnapshot | null {
+  const player = getRecord(value);
+  const name = toStringOrNull(player?.name);
+  if (!name) return null;
+  const totals = mapActivityRoundTotals(player);
+
+  return {
+    name,
+    squad: toStringOrNull(player?.squad),
+    role: toStringOrNull(player?.role),
+    kills: totals.kills,
+    deaths: totals.deaths ?? 0,
+    revives: totals.revives ?? 0,
+    knockdowns: totals.knockdowns
+  };
+}
+
+function mapActivityScoreboardTeam(
+  value: unknown
+): ExporterActivityScoreboardTeamSnapshot | null {
+  const team = getRecord(value);
+  const teamID = toStringIdOrNull(team?.teamID);
+  const name = toStringOrNull(team?.name);
+  if (!teamID || !name) return null;
+
+  const result = team?.result === 'winner' || team?.result === 'loser' ? team.result : null;
+  return {
+    teamID,
+    name,
+    result,
+    players: Array.isArray(team?.players)
+      ? team.players
+          .map(mapActivityScoreboardPlayer)
+          .filter((entry): entry is ExporterActivityScoreboardPlayerSnapshot => Boolean(entry))
+      : [],
+    totals: mapActivityRoundTotals(team?.totals)
+  };
+}
+
+function mapActivityScoreboard(value: unknown): ExporterActivityScoreboardSnapshot | null {
+  const scoreboard = getRecord(value);
+  if (!scoreboard) return null;
+
+  const teams = Array.isArray(scoreboard.teams)
+    ? scoreboard.teams
+        .map(mapActivityScoreboardTeam)
+        .filter((entry): entry is ExporterActivityScoreboardTeamSnapshot => Boolean(entry))
+    : [];
+  return teams.length ? { teams } : null;
+}
+
 function mapActivityRecentRound(value: unknown): ExporterActivityRecentRoundSnapshot | null {
   const round = getRecord(value);
   if (!round) return null;
-  const totals = getRecord(round.totals) || {};
   const endedAt = toIsoStringOrNull(round.endedAt);
   if (!endedAt) return null;
 
@@ -792,12 +858,8 @@ function mapActivityRecentRound(value: unknown): ExporterActivityRecentRoundSnap
     winner: mapActivityTeamResult(round.winner),
     loser: mapActivityTeamResult(round.loser),
     playerCount: Math.max(0, Math.round(toNumber(round.playerCount))),
-    totals: {
-      kills: Math.max(0, Math.round(toNumber(totals.kills))),
-      deaths: Math.max(0, Math.round(toNumber(totals.deaths))),
-      revives: Math.max(0, Math.round(toNumber(totals.revives))),
-      knockdowns: Math.max(0, Math.round(toNumber(totals.knockdowns)))
-    }
+    totals: mapActivityRoundTotals(round.totals),
+    scoreboard: mapActivityScoreboard(round.scoreboard)
   };
 }
 
@@ -849,6 +911,9 @@ function mapActivityKillfeedEvent(value: unknown): ExporterActivityKillfeedEvent
     attackerName,
     victimName,
     count: Math.max(0, Math.round(toNumber(event.count))),
+    weapon: toStringOrNull(event.weapon),
+    damage: toNonNegativeIntegerOrNull(event.damage),
+    occurredAt: toIsoStringOrNull(event.occurredAt),
     roundEndedAt
   };
 }

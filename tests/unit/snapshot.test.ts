@@ -332,6 +332,35 @@ test('keeps public activity fields and drops private ids from exporter snapshots
                     revives: 7,
                     knockdowns: 61
                   },
+                  scoreboard: {
+                    teams: [
+                      {
+                        teamID: '1',
+                        name: 'Winner',
+                        result: 'winner',
+                        totals: { kills: 30, deaths: 20, revives: 5, knockdowns: 41 },
+                        players: [
+                          {
+                            name: 'Winner Player',
+                            squad: 'Orange',
+                            role: 'Rifleman',
+                            kills: 8,
+                            deaths: 2,
+                            revives: 3,
+                            knockdowns: 5,
+                            eosID: 'private-scoreboard-player'
+                          }
+                        ]
+                      },
+                      {
+                        teamID: '2',
+                        name: 'Loser',
+                        result: 'loser',
+                        totals: { kills: 12, deaths: 20, revives: 2, knockdowns: 20 },
+                        players: []
+                      }
+                    ]
+                  },
                   eosID: 'private-round-id'
                 },
                 {
@@ -373,6 +402,9 @@ test('keeps public activity fields and drops private ids from exporter snapshots
                     attackerName: 'Attacker',
                     victimName: 'Victim',
                     count: 2,
+                    weapon: 'Vehicle_Cannon',
+                    damage: 45,
+                    occurredAt: '2026-07-06T11:59:50.000Z',
                     roundEndedAt: '2026-07-06T12:00:00.000Z',
                     playerId: 'private-player-id'
                   },
@@ -401,6 +433,16 @@ test('keeps public activity fields and drops private ids from exporter snapshots
 
   assert.equal(activity?.recentRounds[0]?.layer, 'Narva RAAS v2');
   assert.equal(activity?.recentRounds.length, 1);
+  assert.equal(activity?.recentRounds[0]?.scoreboard?.teams.length, 2);
+  assert.deepEqual(activity?.recentRounds[0]?.scoreboard?.teams[0]?.players[0], {
+    name: 'Winner Player',
+    squad: 'Orange',
+    role: 'Rifleman',
+    kills: 8,
+    deaths: 2,
+    revives: 3,
+    knockdowns: 5
+  });
   assert.equal(activity?.teamBalancerHistory[0]?.plannedPlayers, 2);
   assert.equal(activity?.teamBalancerHistory[0]?.mode, 'execute');
   assert.equal(activity?.teamBalancerHistory[0]?.execution?.succeededPlayers, 2);
@@ -411,9 +453,11 @@ test('keeps public activity fields and drops private ids from exporter snapshots
   assert.equal(activity?.topWindow?.requiredParticipation, 3);
   assert.equal(activity?.topWindow?.entries[0]?.name, 'Qualified A');
   assert.equal(activity?.killfeed?.events[0]?.attackerName, 'Attacker');
+  assert.equal(activity?.killfeed?.events[0]?.weapon, 'Vehicle_Cannon');
+  assert.equal(activity?.killfeed?.events[0]?.damage, 45);
   assert.equal(activity?.killfeed?.events.length, 1);
   assert.doesNotMatch(
     JSON.stringify(activity),
-    /eosID|steamID|playerId|playerIds|7656119|alpha-1|private-round-id|private-player-id|private-execution-player/
+    /eosID|steamID|playerId|playerIds|7656119|alpha-1|private-round-id|private-player-id|private-execution-player|private-scoreboard-player/
   );
 });
