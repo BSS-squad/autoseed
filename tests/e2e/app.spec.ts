@@ -239,7 +239,7 @@ function buildSnapshot({
 
 function buildTeamBalancerProposalSnapshot(overrides: Record<string, unknown> = {}) {
   return {
-    version: 1,
+    version: 2,
     generatedAt: '2026-07-06T12:00:00.000Z',
     decisionId: 'decision-1',
     serverId: 'squadjs2',
@@ -463,7 +463,36 @@ function buildActivitySnapshot() {
         winner: { team: '1', faction: 'Winner', tickets: 123 },
         loser: { team: '2', faction: 'Loser', tickets: 20 },
         playerCount: 80,
-        totals: { kills: 42, deaths: 40, revives: 7, knockdowns: 61 }
+        totals: { kills: 42, deaths: 40, revives: 7, knockdowns: 61 },
+        scoreboard: {
+          teams: [
+            {
+              teamID: '1',
+              name: 'Winner',
+              result: 'winner',
+              totals: { kills: 30, deaths: 20, revives: 5, knockdowns: 41 },
+              players: [
+                {
+                  name: 'Winner Player',
+                  squad: 'Orange',
+                  role: 'Rifleman',
+                  kills: 8,
+                  deaths: 2,
+                  revives: 3,
+                  knockdowns: 5,
+                  eosID: 'private-scoreboard-player'
+                }
+              ]
+            },
+            {
+              teamID: '2',
+              name: 'Loser',
+              result: 'loser',
+              totals: { kills: 12, deaths: 20, revives: 2, knockdowns: 20 },
+              players: []
+            }
+          ]
+        }
       },
       {
         endedAt: '2026-07-06T11:00:00.000Z',
@@ -502,6 +531,9 @@ function buildActivitySnapshot() {
           attackerName: 'Attacker',
           victimName: 'Victim',
           count: 2,
+          weapon: 'Vehicle_Cannon',
+          damage: 45,
+          occurredAt: '2026-07-06T11:59:50.000Z',
           roundEndedAt: '2026-07-06T12:00:00.000Z'
         }
       ]
@@ -1340,10 +1372,18 @@ test('renders server activity history, last-10 top and killfeed journal', async 
   await expect(activityPanel).toContainText('Qualified A');
   await expect(activityPanel).toContainText('15');
   await expect(activityPanel).toContainText('Narva RAAS v2');
+  const tabs = activityPanel.getByTestId('server-scoreboard').first();
+  await tabs.locator('summary').click();
+  await expect(tabs).toContainText('Winner Player');
+  await expect(tabs).toContainText('Orange · Rifleman');
+  await expect(tabs).toContainText('Победа');
   await expect(activityPanel).toContainText('Attacker');
   await expect(activityPanel).toContainText('Victim');
+  await expect(activityPanel).toContainText('Vehicle_Cannon');
+  await expect(activityPanel).toContainText('45 урона');
   await expect(activityPanel).not.toContainText('snapshot');
   await expect(activityPanel).not.toContainText('7656119');
+  await expect(activityPanel).not.toContainText('private-scoreboard-player');
 });
 
 test('keeps server activity journal discoverable before activity data arrives', async ({ page }) => {

@@ -405,6 +405,28 @@ export type ExporterActivityRoundTotalsSnapshot = {
   knockdowns: number;
 };
 
+export type ExporterActivityScoreboardPlayerSnapshot = {
+  name: string;
+  squad: string | null;
+  role: string | null;
+  kills: number;
+  deaths: number;
+  revives: number;
+  knockdowns: number;
+};
+
+export type ExporterActivityScoreboardTeamSnapshot = {
+  teamID: string;
+  name: string;
+  result: 'winner' | 'loser' | null;
+  players: ExporterActivityScoreboardPlayerSnapshot[];
+  totals: ExporterActivityRoundTotalsSnapshot;
+};
+
+export type ExporterActivityScoreboardSnapshot = {
+  teams: ExporterActivityScoreboardTeamSnapshot[];
+};
+
 export type ExporterActivityRecentRoundSnapshot = {
   endedAt: string | null;
   layer: string | null;
@@ -412,6 +434,7 @@ export type ExporterActivityRecentRoundSnapshot = {
   loser: ExporterActivityTeamResultSnapshot | null;
   playerCount: number;
   totals: ExporterActivityRoundTotalsSnapshot;
+  scoreboard: ExporterActivityScoreboardSnapshot | null;
 };
 
 export type ExporterActivityTopEntrySnapshot = {
@@ -438,6 +461,9 @@ export type ExporterActivityKillfeedEventSnapshot = {
   attackerName: string;
   victimName: string;
   count: number;
+  weapon: string | null;
+  damage: number | null;
+  occurredAt: string | null;
   roundEndedAt: string | null;
 };
 

@@ -1794,6 +1794,111 @@ input {
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+.server-scoreboard-list {
+  grid-column: span 2;
+}
+
+.server-scoreboard {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.server-scoreboard summary {
+  display: grid;
+  gap: 5px;
+  padding: 10px 0;
+  cursor: pointer;
+  list-style: none;
+}
+
+.server-scoreboard summary::-webkit-details-marker {
+  display: none;
+}
+
+.server-scoreboard summary span,
+.server-scoreboard-team header span {
+  color: rgba(255, 255, 255, 0.52);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.server-scoreboard summary p,
+.server-scoreboard-team header p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.server-scoreboard-teams {
+  display: grid;
+  gap: 10px;
+  padding: 0 0 10px;
+}
+
+.server-scoreboard-team {
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+}
+
+.server-scoreboard-team header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.server-scoreboard-team header strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.server-scoreboard-table-wrap {
+  overflow-x: auto;
+}
+
+.server-scoreboard-table {
+  width: 100%;
+  min-width: 520px;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+
+.server-scoreboard-table th,
+.server-scoreboard-table td {
+  padding: 8px 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  text-align: left;
+  vertical-align: top;
+}
+
+.server-scoreboard-table th {
+  color: rgba(255, 255, 255, 0.52);
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.server-scoreboard-table td:nth-child(n + 3),
+.server-scoreboard-table th:nth-child(n + 3) {
+  width: 1%;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.server-scoreboard-table td:first-child {
+  font-weight: 700;
+}
+
+@media (max-width: 900px) {
+  .server-scoreboard-list {
+    grid-column: auto;
+  }
+}
+
 .teams-grid {
   position: relative;
   z-index: 1;
