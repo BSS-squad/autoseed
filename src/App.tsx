@@ -62,7 +62,7 @@ type AppProps = {
   config: AppConfig;
 };
 
-type AppRoute = 'home' | 'winners' | 'leaderboards';
+type AppRoute = 'home' | 'winners' | 'leaderboards' | 'balance' | 'journal';
 
 type PendingSequence = {
   remaining: ExporterServerSnapshot[];
@@ -174,6 +174,12 @@ type WinnersPageProps = {
 
 type LeaderboardsPageProps = {
   config: AppConfig;
+  route: AppRoute;
+  vipShopUrl: string | null;
+};
+
+type ServerHistoryPageProps = {
+  snapshot: CombinedSnapshot;
   route: AppRoute;
   vipShopUrl: string | null;
 };
@@ -451,7 +457,9 @@ function getSafeHttpUrl(value?: string | null): string | null {
 function getRouteFromHash(): AppRoute {
   if (typeof window === 'undefined') return 'home';
   if (window.location.hash === '#leaderboards') return 'leaderboards';
-  return window.location.hash === '#winners' ? 'winners' : 'home';
+  if (window.location.hash === '#winners') return 'winners';
+  if (window.location.hash === '#balance') return 'balance';
+  return window.location.hash === '#journal' ? 'journal' : 'home';
 }
 
 function normalizeDelaySeconds(value: number): number {
@@ -1031,6 +1039,20 @@ function AppNav({ currentRoute, vipShopUrl }: AppNavProps) {
         data-testid="leaderboards-nav-link"
       >
         Топы
+      </a>
+      <a
+        className={classNames('app-nav-link', currentRoute === 'balance' && 'app-nav-link-active')}
+        href="#balance"
+        data-testid="balance-nav-link"
+      >
+        Балансер
+      </a>
+      <a
+        className={classNames('app-nav-link', currentRoute === 'journal' && 'app-nav-link-active')}
+        href="#journal"
+        data-testid="journal-nav-link"
+      >
+        Журнал
       </a>
       {vipShopUrl ? (
         <a
@@ -1828,8 +1850,6 @@ function ServerActivityPanel({ server }: ServerActivityPanelProps) {
   const topEntries = topWindow?.entries.slice(0, 10) || [];
   const recentRounds = activity?.recentRounds.slice(0, 10) || [];
   const killfeedEvents = activity?.killfeed?.events.slice(0, 10) || [];
-  const balanceHistory = activity?.teamBalancerHistory.slice(-10).reverse() || [];
-
   return (
     <section className="server-activity-panel" data-testid="server-activity-panel">
       <div className="server-activity-head">
@@ -1859,39 +1879,6 @@ function ServerActivityPanel({ server }: ServerActivityPanelProps) {
       </div>
 
       <div className="server-activity-grid">
-        <div className="server-activity-list">
-          <div className="server-activity-list-head">
-            <span>Балансер</span>
-            <strong>
-              {balanceHistory.length ? formatPlayerMoveCount(balanceHistory[0].plannedPlayers) : '—'}
-            </strong>
-          </div>
-          {balanceHistory.length ? (
-            balanceHistory.map((entry) => {
-              const move = entry.moves[0];
-              const actor = move?.squadName || entry.players[0]?.name || 'Состав';
-              const moveSummary = formatSideMoveSummary(move);
-              const modeSummaries = formatBalancerHistoryModeSummaries(entry);
-              return (
-                <div className="server-activity-row" key={entry.decisionId || entry.createdAt}>
-                  <span>{formatCompactTimestamp(entry.createdAt || undefined)}</span>
-                  <strong>{actor}</strong>
-                  <p>
-                    {formatBalancerHistoryStatus(entry)} ·{' '}
-                    {entry.plannedPlayers
-                      ? formatPlayerMoveCount(entry.plannedPlayers)
-                      : 'без перемещений'}
-                    {moveSummary ? ` · ${moveSummary}` : ''}
-                    {modeSummaries.length ? ` · ${modeSummaries.join(' · ')}` : ''}
-                  </p>
-                </div>
-              );
-            })
-          ) : (
-            <div className="server-activity-empty">Нет операций.</div>
-          )}
-        </div>
-
         <div className="server-activity-list">
           <div className="server-activity-list-head">
             <span>Топ 10 игр</span>
@@ -1956,6 +1943,142 @@ function ServerActivityPanel({ server }: ServerActivityPanelProps) {
         </div>
       </div>
     </section>
+  );
+}
+
+function TeamBalancerHistoryPanel({ server }: ServerActivityPanelProps) {
+  const balanceHistory = server.activity?.teamBalancerHistory.slice(-10).reverse() || [];
+
+  return (
+    <section className="server-activity-panel" data-testid="team-balancer-history-panel">
+      <div className="server-activity-head">
+        <div>
+          <span className="section-eyebrow">История</span>
+          <h3>Операции балансера</h3>
+        </div>
+      </div>
+
+      <div className="server-activity-list">
+        <div className="server-activity-list-head">
+          <span>Последние решения</span>
+          <strong>
+            {balanceHistory.length ? formatPlayerMoveCount(balanceHistory[0].plannedPlayers) : '—'}
+          </strong>
+        </div>
+        {balanceHistory.length ? (
+          balanceHistory.map((entry) => {
+            const move = entry.moves[0];
+            const actor = move?.squadName || entry.players[0]?.name || 'Состав';
+            const moveSummary = formatSideMoveSummary(move);
+            const modeSummaries = formatBalancerHistoryModeSummaries(entry);
+            return (
+              <div className="server-activity-row" key={entry.decisionId || entry.createdAt}>
+                <span>{formatCompactTimestamp(entry.createdAt || undefined)}</span>
+                <strong>{actor}</strong>
+                <p>
+                  {formatBalancerHistoryStatus(entry)} ·{' '}
+                  {entry.plannedPlayers
+                    ? formatPlayerMoveCount(entry.plannedPlayers)
+                    : 'без перемещений'}
+                  {moveSummary ? ` · ${moveSummary}` : ''}
+                  {modeSummaries.length ? ` · ${modeSummaries.join(' · ')}` : ''}
+                </p>
+              </div>
+            );
+          })
+        ) : (
+          <div className="server-activity-empty">Нет операций.</div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function BalancePage({ snapshot, route, vipShopUrl }: ServerHistoryPageProps) {
+  const [proposalMode, setProposalMode] = useState<TeamBalancerProposalMode>('squad');
+
+  return (
+    <div className="shell modern-shell" style={BRAND_STYLE} data-testid="balance-page">
+      <AppTopbar currentRoute={route} vipShopUrl={vipShopUrl} />
+      <section className="section-shell">
+        <div className="section-head">
+          <div>
+            <span className="section-eyebrow">Серверы</span>
+            <h1>Балансер</h1>
+          </div>
+          <p>Текущее состояние и завершённая история решений по каждому серверу.</p>
+        </div>
+      </section>
+
+      {snapshot.servers.length ? (
+        snapshot.servers.map((server) => (
+          <section
+            className="section-shell"
+            key={getServerSelectionKey(server)}
+            data-testid={`balance-server-${server.id}`}
+          >
+            <div className="section-head">
+              <div>
+                <span className="section-eyebrow">{server.online ? 'В сети' : 'Оффлайн'}</span>
+                <h2>{server.name}</h2>
+              </div>
+              <p>Текущая оценка состава и журнал уже завершённых операций.</p>
+            </div>
+            <TeamBalancerPanel
+              snapshot={server.teamBalancer}
+              proposalMode={proposalMode}
+              visibleAssignmentTones={buildTeamBalancerVisibleTones(server, proposalMode)}
+              onProposalModeChange={setProposalMode}
+            />
+            <TeamBalancerHistoryPanel server={server} />
+          </section>
+        ))
+      ) : (
+        <section className="section-shell">
+          <div className="server-activity-empty">Данные о серверах пока не поступили.</div>
+        </section>
+      )}
+    </div>
+  );
+}
+
+function JournalPage({ snapshot, route, vipShopUrl }: ServerHistoryPageProps) {
+  return (
+    <div className="shell modern-shell" style={BRAND_STYLE} data-testid="journal-page">
+      <AppTopbar currentRoute={route} vipShopUrl={vipShopUrl} />
+      <section className="section-shell">
+        <div className="section-head">
+          <div>
+            <span className="section-eyebrow">История</span>
+            <h1>Журнал сервера</h1>
+          </div>
+          <p>Только данные завершённых игр: последние 10 раундов, итоговый топ и килфид.</p>
+        </div>
+      </section>
+
+      {snapshot.servers.length ? (
+        snapshot.servers.map((server) => (
+          <section
+            className="section-shell"
+            key={getServerSelectionKey(server)}
+            data-testid={`journal-server-${server.id}`}
+          >
+            <div className="section-head">
+              <div>
+                <span className="section-eyebrow">{server.online ? 'В сети' : 'Оффлайн'}</span>
+                <h2>{server.name}</h2>
+              </div>
+              <p>Записи появляются только после завершения раунда.</p>
+            </div>
+            <ServerActivityPanel server={server} />
+          </section>
+        ))
+      ) : (
+        <section className="section-shell">
+          <div className="server-activity-empty">Данные о серверах пока не поступили.</div>
+        </section>
+      )}
+    </div>
   );
 }
 
@@ -2880,6 +3003,14 @@ export default function App({ config }: AppProps) {
     return <LeaderboardsPage config={config} route={route} vipShopUrl={vipShopUrl} />;
   }
 
+  if (route === 'balance') {
+    return <BalancePage snapshot={snapshot} route={route} vipShopUrl={vipShopUrl} />;
+  }
+
+  if (route === 'journal') {
+    return <JournalPage snapshot={snapshot} route={route} vipShopUrl={vipShopUrl} />;
+  }
+
   return (
     <div className="shell modern-shell" style={BRAND_STYLE} data-testid="app-shell">
       <AppTopbar currentRoute={route} vipShopUrl={vipShopUrl} />
@@ -3471,18 +3602,6 @@ export default function App({ config }: AppProps) {
               </div>
 
               {server.error ? <p className="error-text">{server.error}</p> : null}
-
-              <TeamBalancerPanel
-                snapshot={server.teamBalancer}
-                proposalMode={teamBalancerProposalMode}
-                visibleAssignmentTones={buildTeamBalancerVisibleTones(
-                  server,
-                  teamBalancerProposalMode
-                )}
-                onProposalModeChange={setTeamBalancerProposalMode}
-              />
-
-              <ServerActivityPanel server={server} />
 
               <div className="teams-grid">
                 {teamOne ? (
