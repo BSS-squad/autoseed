@@ -3,11 +3,14 @@ import type {
   ExporterEndpointConfig,
   ExporterActivityKillfeedEventSnapshot,
   ExporterActivityKillfeedSnapshot,
+  ExporterActivityEventCountsSnapshot,
   ExporterActivityRecentRoundSnapshot,
   ExporterActivityRoundTotalsSnapshot,
   ExporterActivityScoreboardPlayerSnapshot,
   ExporterActivityScoreboardSnapshot,
   ExporterActivityScoreboardTeamSnapshot,
+  ExporterActivitySessionEventsSnapshot,
+  ExporterActivitySessionResponse,
   ExporterActivitySnapshot,
   ExporterActivityTeamResultSnapshot,
   ExporterActivityTopEntrySnapshot,
@@ -100,10 +103,21 @@ function toNonNegativeIntegerOrNull(value: unknown): number | null {
   return Math.round(parsed);
 }
 
+function toNonNegativeNumberOrNull(value: unknown): number | null {
+  const parsed = toFiniteNumberOrNull(value);
+  return parsed === null || parsed < 0 ? null : parsed;
+}
+
 function toIsoStringOrNull(value: unknown): string | null {
   if (!value) return null;
   const date = new Date(String(value));
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function buildLegacyActivitySessionId(endedAt: string | null): string {
+  if (!endedAt) return '';
+  const timestamp = Date.parse(endedAt);
+  return Number.isFinite(timestamp) ? `legacy-${Math.floor(timestamp / 1000)}` : '';
 }
 
 function normalizeBaseUrl(value: string): string {
@@ -793,6 +807,17 @@ function mapActivityRoundTotals(value: unknown): ExporterActivityRoundTotalsSnap
   };
 }
 
+function mapActivityEventCounts(value: unknown): ExporterActivityEventCountsSnapshot {
+  const counts = getRecord(value) || {};
+  return {
+    kills: Math.max(0, Math.round(toNumber(counts.kills))),
+    damage: Math.max(0, Math.round(toNumber(counts.damage))),
+    knockdowns: Math.max(0, Math.round(toNumber(counts.knockdowns))),
+    revives: Math.max(0, Math.round(toNumber(counts.revives))),
+    vehicles: Math.max(0, Math.round(toNumber(counts.vehicles)))
+  };
+}
+
 function mapActivityScoreboardPlayer(
   value: unknown
 ): ExporterActivityScoreboardPlayerSnapshot | null {
@@ -851,16 +876,27 @@ function mapActivityRecentRound(value: unknown): ExporterActivityRecentRoundSnap
   if (!round) return null;
   const endedAt = toIsoStringOrNull(round.endedAt);
   if (!endedAt) return null;
+  const sessionId = toStringOrNull(round.sessionId) || buildLegacyActivitySessionId(endedAt);
+  if (!sessionId) return null;
 
   return {
+    sessionId,
+    journalAvailable: Boolean(round.journalAvailable),
+    journalComplete: Boolean(round.journalComplete),
     endedAt,
     layer: toStringOrNull(round.layer),
     winner: mapActivityTeamResult(round.winner),
     loser: mapActivityTeamResult(round.loser),
     playerCount: Math.max(0, Math.round(toNumber(round.playerCount))),
     totals: mapActivityRoundTotals(round.totals),
+    eventCounts: mapActivityEventCounts(round.eventCounts),
     scoreboard: mapActivityScoreboard(round.scoreboard)
   };
+}
+
+function mapActivitySessionIndex(value: unknown): ExporterActivityRecentRoundSnapshot | null {
+  const session = mapActivityRecentRound(value);
+  return session ? { ...session, scoreboard: null } : null;
 }
 
 function mapActivityTopEntry(value: unknown): ExporterActivityTopEntrySnapshot | null {
@@ -912,9 +948,12 @@ function mapActivityKillfeedEvent(value: unknown): ExporterActivityKillfeedEvent
     victimName,
     count: Math.max(0, Math.round(toNumber(event.count))),
     weapon: toStringOrNull(event.weapon),
-    damage: toNonNegativeIntegerOrNull(event.damage),
+    damage: toNonNegativeNumberOrNull(event.damage),
     occurredAt: toIsoStringOrNull(event.occurredAt),
-    roundEndedAt
+    roundEndedAt,
+    vehicleName: null,
+    healthRemaining: null,
+    destroyed: false
   };
 }
 
@@ -931,13 +970,18 @@ function mapActivityKillfeed(value: unknown): ExporterActivityKillfeedSnapshot |
           const totals = getRecord(record.totals) || {};
           const endedAt = toIsoStringOrNull(record.endedAt);
           if (!endedAt) return [];
+          const sessionId =
+            toStringOrNull(record.sessionId) || buildLegacyActivitySessionId(endedAt);
+          if (!sessionId) return [];
           return [{
+            sessionId,
             endedAt,
             playerCount: toNonNegativeIntegerOrNull(record.playerCount) ?? undefined,
             totals: {
               kills: Math.max(0, Math.round(toNumber(totals.kills))),
               knockdowns: Math.max(0, Math.round(toNumber(totals.knockdowns)))
-            }
+            },
+            eventCounts: mapActivityEventCounts(record.eventCounts)
           }];
         })
       : [],
@@ -957,6 +1001,11 @@ function mapActivitySnapshot(value: unknown): ExporterActivitySnapshot | null {
         .map(mapActivityRecentRound)
         .filter((entry): entry is ExporterActivityRecentRoundSnapshot => Boolean(entry))
     : [];
+  const sessions = Array.isArray(activity.sessions)
+    ? activity.sessions
+        .map(mapActivitySessionIndex)
+        .filter((entry): entry is ExporterActivityRecentRoundSnapshot => Boolean(entry))
+    : recentRounds;
 
   return {
     version: Math.max(1, Math.round(toNumber(activity.version, 1))),
@@ -966,9 +1015,67 @@ function mapActivitySnapshot(value: unknown): ExporterActivitySnapshot | null {
           .map(mapTeamBalancerHistoryEntry)
           .filter((entry): entry is ExporterTeamBalancerHistoryEntrySnapshot => Boolean(entry))
       : [],
+    sessions,
     recentRounds,
-    topWindow: recentRounds.length ? mapActivityTopWindow(activity.topWindow) : null,
+    topWindow: sessions.length || recentRounds.length ? mapActivityTopWindow(activity.topWindow) : null,
     killfeed: mapActivityKillfeed(activity.killfeed)
+  };
+}
+
+function mapActivitySessionEvent(
+  value: unknown,
+  fallbackType: string
+): ExporterActivityKillfeedEventSnapshot | null {
+  const event = getRecord(value);
+  if (!event) return null;
+
+  const type = toStringOrNull(event.type) || fallbackType;
+  const vehicleName = toStringOrNull(event.vehicleName);
+  const attackerName = toStringOrNull(event.attackerName);
+  const victimName = toStringOrNull(event.victimName);
+  if (!type || (!vehicleName && !attackerName && !victimName)) return null;
+
+  return {
+    type,
+    attackerName,
+    victimName,
+    count: Math.max(1, Math.round(toNumber(event.count, 1))),
+    weapon: toStringOrNull(event.weapon),
+    damage: toNonNegativeNumberOrNull(event.damage),
+    occurredAt: toIsoStringOrNull(event.occurredAt),
+    roundEndedAt: null,
+    vehicleName,
+    healthRemaining: toNonNegativeNumberOrNull(event.healthRemaining),
+    destroyed: Boolean(event.destroyed)
+  };
+}
+
+function mapActivitySessionEvents(value: unknown): ExporterActivitySessionEventsSnapshot {
+  const events = getRecord(value) || {};
+  const mapList = (key: string, fallbackType: string) =>
+    (Array.isArray(events[key]) ? events[key] : [])
+      .map((event) => mapActivitySessionEvent(event, fallbackType))
+      .filter((event): event is ExporterActivityKillfeedEventSnapshot => Boolean(event));
+
+  return {
+    kills: mapList('kills', 'kill'),
+    damage: mapList('damage', 'damage'),
+    knockdowns: mapList('knockdowns', 'knockdown'),
+    revives: mapList('revives', 'revive'),
+    vehicles: mapList('vehicles', 'vehicle')
+  };
+}
+
+function mapActivitySessionResponse(value: unknown): ExporterActivitySessionResponse | null {
+  const payload = getRecord(value);
+  if (!payload || payload.ok !== true) return null;
+  const session = mapActivityRecentRound(payload.session);
+  if (!session) return null;
+
+  return {
+    generatedAt: toIsoStringOrNull(payload.generatedAt),
+    session,
+    events: mapActivitySessionEvents(payload.events)
   };
 }
 
@@ -995,7 +1102,8 @@ function mapServer(
     activity: mapActivitySnapshot(server.activity),
     updatedAt: Number(server.updatedAt) || Date.now(),
     sourceUrl,
-    joinLinkUrl
+    joinLinkUrl,
+    activitySessionBaseUrl: sourceUrl.replace(/\/snapshot$/, '/activity/sessions')
   };
 }
 
@@ -1144,6 +1252,27 @@ export async function fetchServerJoinLink(joinLinkUrl: string): Promise<string> 
   }
 
   return joinLink;
+}
+
+export async function fetchActivitySession(
+  server: ExporterServerSnapshot,
+  sessionId: string
+): Promise<ExporterActivitySessionResponse> {
+  const normalizedSessionId = sessionId.trim();
+  if (!normalizedSessionId) throw new Error('Session id is required.');
+
+  const response = await fetch(
+    `${server.activitySessionBaseUrl}/${encodeURIComponent(normalizedSessionId)}`,
+    {
+      headers: SNAPSHOT_HEADERS,
+      cache: 'no-store'
+    }
+  );
+  if (!response.ok) throw new Error(await buildHttpError(response));
+
+  const payload = mapActivitySessionResponse(await response.json());
+  if (!payload) throw new Error('Session response is invalid.');
+  return payload;
 }
 
 export async function fetchCombinedSnapshot(

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { fetchCombinedSnapshot } from '../../src/lib/snapshot.ts';
+import { fetchActivitySession, fetchCombinedSnapshot } from '../../src/lib/snapshot.ts';
 
 const ORIGINAL_FETCH = globalThis.fetch;
 
@@ -459,5 +459,179 @@ test('keeps public activity fields and drops private ids from exporter snapshots
   assert.doesNotMatch(
     JSON.stringify(activity),
     /eosID|steamID|playerId|playerIds|7656119|alpha-1|private-round-id|private-player-id|private-execution-player|private-scoreboard-player/
+  );
+});
+
+test('loads a complete journal for one finished session without exposing private ids', async () => {
+  const requestedUrls: string[] = [];
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    requestedUrls.push(url);
+
+    if (url.endsWith('/snapshot')) {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          timestamp: Date.parse('2026-07-13T18:00:00.000Z'),
+          generatedAt: '2026-07-13T18:00:00.000Z',
+          version: 3,
+          servers: [
+            {
+              id: 2,
+              code: 'squadjs2',
+              name: '[RU] BSS Spec Ops',
+              online: true,
+              teams: [],
+              players: [],
+              activity: {
+                version: 3,
+                generatedAt: '2026-07-13T18:00:00.000Z',
+                sessions: [
+                  {
+                    sessionId: 's2_0123456789abcdef01234567',
+                    journalAvailable: true,
+                    journalComplete: true,
+                    endedAt: '2026-07-13T17:55:00.000Z',
+                    layer: 'Narva RAAS v3',
+                    playerCount: 91,
+                    totals: { kills: 83, deaths: 87, revives: 14, knockdowns: 106 },
+                    eventCounts: {
+                      kills: 83,
+                      damage: 512,
+                      knockdowns: 106,
+                      revives: 14,
+                      vehicles: 9
+                    },
+                    scoreboard: {
+                      teams: [{ teamID: 'private-live-team', name: 'Не должно попасть', players: [] }]
+                    }
+                  }
+                ],
+                recentRounds: [],
+                killfeed: { version: 3, rounds: [], events: [] }
+              }
+            }
+          ]
+        })
+      );
+    }
+
+    if (url.endsWith('/activity/sessions/s2_0123456789abcdef01234567')) {
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          version: 1,
+          generatedAt: '2026-07-13T18:01:00.000Z',
+          server: { id: 2, code: 'squadjs2', name: '[RU] BSS Spec Ops' },
+          session: {
+            sessionId: 's2_0123456789abcdef01234567',
+            journalAvailable: true,
+            journalComplete: true,
+            endedAt: '2026-07-13T17:55:00.000Z',
+            layer: 'Narva RAAS v3',
+            playerCount: 91,
+            totals: { kills: 83, deaths: 87, revives: 14, knockdowns: 106 },
+            eventCounts: { kills: 1, damage: 1, knockdowns: 1, revives: 1, vehicles: 1 },
+            scoreboard: {
+              teams: [
+                {
+                  teamID: '1',
+                  name: 'Победители',
+                  result: 'winner',
+                  totals: { kills: 1, deaths: 0, revives: 1, knockdowns: 1 },
+                  players: [
+                    {
+                      name: 'Игрок',
+                      squad: 'Альфа',
+                      role: 'Rifleman',
+                      kills: 1,
+                      deaths: 0,
+                      revives: 1,
+                      knockdowns: 1,
+                      steamID: 'private-steam-id'
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          events: {
+            kills: [
+              {
+                type: 'kill',
+                occurredAt: '2026-07-13T17:10:01.123Z',
+                attackerName: 'Игрок',
+                victimName: 'Противник',
+                weapon: 'BP_Rifle_C',
+                playerId: 'private-player-id'
+              }
+            ],
+            damage: [
+              {
+                type: 'damage',
+                occurredAt: '2026-07-13T17:10:00.100Z',
+                attackerName: 'Игрок',
+                victimName: 'Противник',
+                weapon: 'BP_Rifle_C',
+                damage: 37.5
+              }
+            ],
+            knockdowns: [
+              {
+                occurredAt: '2026-07-13T17:10:00.900Z',
+                attackerName: 'Игрок',
+                victimName: 'Противник'
+              }
+            ],
+            revives: [
+              {
+                occurredAt: '2026-07-13T17:11:00.000Z',
+                attackerName: 'Медик',
+                victimName: 'Игрок'
+              }
+            ],
+            vehicles: [
+              {
+                type: 'vehicle',
+                occurredAt: '2026-07-13T17:12:00.000Z',
+                attackerName: null,
+                vehicleName: 'M1A2 Abrams',
+                weapon: 'Projectile_TOW',
+                damage: 480.75,
+                healthRemaining: 1200.25,
+                destroyed: false,
+                controllerId: 'private-controller-id'
+              }
+            ]
+          }
+        })
+      );
+    }
+
+    return new Response('not found', { status: 404 });
+  };
+
+  const snapshot = await fetchCombinedSnapshot([
+    { name: 'squadjs2', baseUrl: 'https://exporter.example.test/v1/autoseed' }
+  ]);
+  const server = snapshot.servers[0];
+  assert.ok(server);
+  assert.equal(server.activitySessionBaseUrl, 'https://exporter.example.test/v1/autoseed/activity/sessions');
+  assert.equal(server.activity?.sessions[0]?.sessionId, 's2_0123456789abcdef01234567');
+  assert.equal(server.activity?.sessions[0]?.scoreboard, null);
+  assert.equal(server.activity?.sessions[0]?.eventCounts.damage, 512);
+
+  const detail = await fetchActivitySession(server, 's2_0123456789abcdef01234567');
+  assert.equal(detail.session.scoreboard?.teams[0]?.players[0]?.name, 'Игрок');
+  assert.equal(detail.events.damage[0]?.damage, 37.5);
+  assert.equal(detail.events.knockdowns[0]?.type, 'knockdown');
+  assert.equal(detail.events.revives[0]?.type, 'revive');
+  assert.equal(detail.events.vehicles[0]?.vehicleName, 'M1A2 Abrams');
+  assert.equal(detail.events.vehicles[0]?.healthRemaining, 1200.25);
+  assert.equal(detail.events.vehicles[0]?.attackerName, null);
+  assert.match(requestedUrls[1] || '', /\/activity\/sessions\/s2_0123456789abcdef01234567$/);
+  assert.doesNotMatch(
+    JSON.stringify(detail),
+    /steamID|playerId|controllerId|private-steam-id|private-player-id|private-controller-id/
   );
 });
