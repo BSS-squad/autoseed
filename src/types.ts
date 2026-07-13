@@ -405,6 +405,14 @@ export type ExporterActivityRoundTotalsSnapshot = {
   knockdowns: number;
 };
 
+export type ExporterActivityEventCountsSnapshot = {
+  kills: number;
+  damage: number;
+  knockdowns: number;
+  revives: number;
+  vehicles: number;
+};
+
 export type ExporterActivityScoreboardPlayerSnapshot = {
   name: string;
   squad: string | null;
@@ -428,12 +436,16 @@ export type ExporterActivityScoreboardSnapshot = {
 };
 
 export type ExporterActivityRecentRoundSnapshot = {
+  sessionId: string;
+  journalAvailable: boolean;
+  journalComplete: boolean;
   endedAt: string | null;
   layer: string | null;
   winner: ExporterActivityTeamResultSnapshot | null;
   loser: ExporterActivityTeamResultSnapshot | null;
   playerCount: number;
   totals: ExporterActivityRoundTotalsSnapshot;
+  eventCounts: ExporterActivityEventCountsSnapshot;
   scoreboard: ExporterActivityScoreboardSnapshot | null;
 };
 
@@ -458,22 +470,27 @@ export type ExporterActivityTopWindowSnapshot = {
 
 export type ExporterActivityKillfeedEventSnapshot = {
   type: string;
-  attackerName: string;
-  victimName: string;
+  attackerName: string | null;
+  victimName: string | null;
   count: number;
   weapon: string | null;
   damage: number | null;
   occurredAt: string | null;
   roundEndedAt: string | null;
+  vehicleName: string | null;
+  healthRemaining: number | null;
+  destroyed: boolean;
 };
 
 export type ExporterActivityKillfeedRoundSnapshot = {
+  sessionId: string;
   endedAt: string | null;
   playerCount?: number;
   totals: {
     kills: number;
     knockdowns: number;
   };
+  eventCounts: ExporterActivityEventCountsSnapshot;
 };
 
 export type ExporterActivityKillfeedSnapshot = {
@@ -487,9 +504,28 @@ export type ExporterActivitySnapshot = {
   version: number;
   generatedAt: string | null;
   teamBalancerHistory: ExporterTeamBalancerHistoryEntrySnapshot[];
+  sessions: ExporterActivityRecentRoundSnapshot[];
   recentRounds: ExporterActivityRecentRoundSnapshot[];
   topWindow: ExporterActivityTopWindowSnapshot | null;
   killfeed: ExporterActivityKillfeedSnapshot | null;
+};
+
+export type ExporterActivitySessionDetailSnapshot = ExporterActivityRecentRoundSnapshot & {
+  scoreboard: ExporterActivityScoreboardSnapshot | null;
+};
+
+export type ExporterActivitySessionEventsSnapshot = {
+  kills: ExporterActivityKillfeedEventSnapshot[];
+  damage: ExporterActivityKillfeedEventSnapshot[];
+  knockdowns: ExporterActivityKillfeedEventSnapshot[];
+  revives: ExporterActivityKillfeedEventSnapshot[];
+  vehicles: ExporterActivityKillfeedEventSnapshot[];
+};
+
+export type ExporterActivitySessionResponse = {
+  generatedAt: string | null;
+  session: ExporterActivitySessionDetailSnapshot;
+  events: ExporterActivitySessionEventsSnapshot;
 };
 
 export type ExporterServerSnapshot = {
@@ -511,6 +547,7 @@ export type ExporterServerSnapshot = {
   updatedAt: number;
   sourceUrl: string;
   joinLinkUrl: string;
+  activitySessionBaseUrl: string;
   error?: string | null;
 };
 

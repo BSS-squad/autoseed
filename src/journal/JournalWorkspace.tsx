@@ -1,0 +1,813 @@
+import { useEffect, useMemo, useState } from 'react';
+
+import { fetchActivitySession } from '../lib/snapshot';
+import type {
+  ExporterActivityEventCountsSnapshot,
+  ExporterActivityKillfeedEventSnapshot,
+  ExporterActivityRecentRoundSnapshot,
+  ExporterActivityScoreboardPlayerSnapshot,
+  ExporterActivitySessionEventsSnapshot,
+  ExporterActivitySessionResponse,
+  ExporterActivityTopWindowSnapshot,
+  ExporterServerSnapshot
+} from '../types';
+
+type JournalWorkspaceProps = {
+  servers: ExporterServerSnapshot[];
+};
+
+type JournalTab = 'scoreboard' | 'kills' | 'damage' | 'vehicles' | 'revives';
+type ScoreboardSort = 'kills' | 'deaths' | 'revives' | 'knockdowns' | 'name';
+
+type DetailState = {
+  key: string;
+  status: 'idle' | 'loading' | 'ready' | 'error';
+  response: ExporterActivitySessionResponse | null;
+  partial: boolean;
+  error: string | null;
+};
+
+const EMPTY_COUNTS: ExporterActivityEventCountsSnapshot = {
+  kills: 0,
+  damage: 0,
+  knockdowns: 0,
+  revives: 0,
+  vehicles: 0
+};
+
+const EMPTY_EVENTS: ExporterActivitySessionEventsSnapshot = {
+  kills: [],
+  damage: [],
+  knockdowns: [],
+  revives: [],
+  vehicles: []
+};
+
+const EVENT_PAGE_SIZE = 100;
+
+function classNames(...values: Array<string | false | null | undefined>): string {
+  return values.filter(Boolean).join(' ');
+}
+
+function parseJournalSelection(): {
+  server: string;
+  session: string;
+  tab: JournalTab | null;
+} {
+  if (typeof window === 'undefined') return { server: '', session: '', tab: null };
+  const [, query = ''] = window.location.hash.split('?');
+  const params = new URLSearchParams(query);
+  const tab = params.get('tab');
+  return {
+    server: params.get('server') || '',
+    session: params.get('session') || '',
+    tab:
+      tab === 'scoreboard' ||
+      tab === 'kills' ||
+      tab === 'damage' ||
+      tab === 'vehicles' ||
+      tab === 'revives'
+        ? tab
+        : null
+  };
+}
+
+function updateJournalLocation(server: string, session: string, tab: JournalTab): void {
+  if (typeof window === 'undefined') return;
+  const params = new URLSearchParams();
+  if (server) params.set('server', server);
+  if (session) params.set('session', session);
+  params.set('tab', tab);
+  const suffix = params.toString();
+  window.history.replaceState(
+    null,
+    '',
+    `${window.location.pathname}${window.location.search}#journal${suffix ? `?${suffix}` : ''}`
+  );
+}
+
+function getSessions(server: ExporterServerSnapshot | null): ExporterActivityRecentRoundSnapshot[] {
+  if (!server?.activity) return [];
+  const sessions = server.activity.sessions.length
+    ? server.activity.sessions
+    : server.activity.recentRounds;
+  return sessions.slice(0, 10);
+}
+
+function formatMatchDate(value: string | null): string {
+  if (!value) return 'Время не записано';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Время не записано';
+  return new Intl.DateTimeFormat('ru-RU', {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(date);
+}
+
+function formatServerName(server: ExporterServerSnapshot): string {
+  const identity = `${server.code} ${server.name}`.toLocaleLowerCase('ru');
+  if (identity.includes('squadjs1') || identity.includes('[mix]') || identity.includes('[микс]')) {
+    return 'MIX';
+  }
+  if (identity.includes('squadjs2') || identity.includes('spec ops')) return 'SPEC OPS';
+  if (
+    identity.includes('squadjs3') ||
+    identity.includes('invasion') ||
+    identity.includes('инвейжен')
+  ) {
+    return 'INVASION';
+  }
+  return server.name;
+}
+
+function formatEventTime(value: string | null): string {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return new Intl.DateTimeFormat('ru-RU', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  }).format(date);
+}
+
+function formatNumber(value: number | null | undefined): string {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '—';
+  return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(value);
+}
+
+function formatWeapon(value: string | null): string {
+  if (!value) return 'оружие не записано';
+  return value
+    .replace(/^BP_/i, '')
+    .replace(/_C$/i, '')
+    .replace(/_/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function formatTeamName(
+  team: ExporterActivityRecentRoundSnapshot['winner'],
+  fallback: string
+): string {
+  return team?.faction || team?.subfaction || (team?.team ? `Сторона ${team.team}` : fallback);
+}
+
+function formatResult(session: ExporterActivityRecentRoundSnapshot): string {
+  if (!session.winner && !session.loser) return 'Результат не записан';
+  const winner = formatTeamName(session.winner, 'Победитель');
+  const loser = formatTeamName(session.loser, 'Проигравший');
+  const winnerTickets = session.winner?.tickets;
+  const loserTickets = session.loser?.tickets;
+  const tickets =
+    winnerTickets !== null && winnerTickets !== undefined
+      ? ` · ${winnerTickets}:${loserTickets ?? 0}`
+      : '';
+  return `${winner} победил ${loser}${tickets}`;
+}
+
+function legacySessionKey(value: string | null): string {
+  if (!value) return '';
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? `legacy-${Math.floor(timestamp / 1000)}` : '';
+}
+
+function matchesSession(
+  event: ExporterActivityKillfeedEventSnapshot,
+  session: ExporterActivityRecentRoundSnapshot
+): boolean {
+  if (!event.roundEndedAt) return false;
+  return legacySessionKey(event.roundEndedAt) === legacySessionKey(session.endedAt);
+}
+
+function groupLegacyEvents(
+  server: ExporterServerSnapshot,
+  session: ExporterActivityRecentRoundSnapshot
+): ExporterActivitySessionEventsSnapshot {
+  const grouped: ExporterActivitySessionEventsSnapshot = {
+    kills: [],
+    damage: [],
+    knockdowns: [],
+    revives: [],
+    vehicles: []
+  };
+
+  for (const event of server.activity?.killfeed?.events || []) {
+    if (!matchesSession(event, session)) continue;
+    const type = event.type.trim().toLowerCase();
+    if (event.vehicleName || type.startsWith('vehicle')) grouped.vehicles.push(event);
+    else if (type === 'damage') grouped.damage.push(event);
+    else if (type === 'revive') grouped.revives.push(event);
+    else if (type === 'knockdown' || type === 'wound') grouped.knockdowns.push(event);
+    else grouped.kills.push(event);
+  }
+
+  return grouped;
+}
+
+function countEvents(events: ExporterActivitySessionEventsSnapshot): ExporterActivityEventCountsSnapshot {
+  return {
+    kills: events.kills.length,
+    damage: events.damage.length,
+    knockdowns: events.knockdowns.length,
+    revives: events.revives.length,
+    vehicles: events.vehicles.length
+  };
+}
+
+function buildLegacyResponse(
+  server: ExporterServerSnapshot,
+  session: ExporterActivityRecentRoundSnapshot
+): ExporterActivitySessionResponse {
+  const events = groupLegacyEvents(server, session);
+  const inferredCounts = countEvents(events);
+  const hasIndexCounts = Object.values(session.eventCounts).some((value) => value > 0);
+  const hasEvents = Object.values(events).some((entries) => entries.length > 0);
+  return {
+    generatedAt: server.activity?.generatedAt || null,
+    session: {
+      ...session,
+      journalAvailable: session.journalAvailable || hasEvents,
+      journalComplete: false,
+      eventCounts: hasIndexCounts ? session.eventCounts : inferredCounts
+    },
+    events
+  };
+}
+
+function sortEvents(events: ExporterActivityKillfeedEventSnapshot[]) {
+  return events.slice().sort((left, right) => {
+    const leftTime = Date.parse(left.occurredAt || '') || 0;
+    const rightTime = Date.parse(right.occurredAt || '') || 0;
+    return leftTime - rightTime;
+  });
+}
+
+function getTabEvents(
+  events: ExporterActivitySessionEventsSnapshot,
+  tab: JournalTab
+): ExporterActivityKillfeedEventSnapshot[] {
+  if (tab === 'kills') return sortEvents([...events.kills, ...events.knockdowns]);
+  if (tab === 'damage') return sortEvents(events.damage);
+  if (tab === 'vehicles') return sortEvents(events.vehicles);
+  if (tab === 'revives') return sortEvents(events.revives);
+  return [];
+}
+
+function matchesSearch(event: ExporterActivityKillfeedEventSnapshot, search: string): boolean {
+  const normalizedSearch = search.trim().toLocaleLowerCase('ru');
+  if (!normalizedSearch) return true;
+  return [
+    event.attackerName,
+    event.victimName,
+    event.vehicleName,
+    event.weapon,
+    event.type
+  ].some((value) => String(value || '').toLocaleLowerCase('ru').includes(normalizedSearch));
+}
+
+function getEventTone(event: ExporterActivityKillfeedEventSnapshot): string {
+  const type = event.type.toLowerCase();
+  if (event.vehicleName || type.startsWith('vehicle')) return 'vehicle';
+  if (type === 'revive') return 'revive';
+  if (type === 'damage') return 'damage';
+  if (type === 'knockdown' || type === 'wound') return 'knockdown';
+  return 'kill';
+}
+
+function getEventLabel(event: ExporterActivityKillfeedEventSnapshot): string {
+  const tone = getEventTone(event);
+  if (tone === 'vehicle') return event.destroyed ? 'Уничтожена' : 'Повреждена';
+  if (tone === 'revive') return 'Поднятие';
+  if (tone === 'damage') return 'Урон';
+  if (tone === 'knockdown') return 'Нокаут';
+  return event.type.toLowerCase() === 'teamkill' ? 'Тимкилл' : 'Убийство';
+}
+
+function sortScoreboardPlayers(
+  players: ExporterActivityScoreboardPlayerSnapshot[],
+  sort: ScoreboardSort
+): ExporterActivityScoreboardPlayerSnapshot[] {
+  return players.slice().sort((left, right) => {
+    if (sort === 'name') return left.name.localeCompare(right.name, 'ru');
+    const difference = Number(right[sort]) - Number(left[sort]);
+    return difference || right.kills - left.kills || left.name.localeCompare(right.name, 'ru');
+  });
+}
+
+function SessionTopSummary({ topWindow }: { topWindow: ExporterActivityTopWindowSnapshot | null }) {
+  if (!topWindow?.entries.length) return null;
+  return (
+    <details className="journal-top-summary">
+      <summary>
+        <span>Сводка {topWindow.roundCount} матчей</span>
+        <strong>{topWindow.entries.length} игроков</strong>
+      </summary>
+      <div className="journal-top-list">
+        {topWindow.entries.map((entry) => (
+          <div className="journal-top-row" key={`${entry.rank}:${entry.name}`}>
+            <span>#{entry.rank}</span>
+            <strong>{entry.name}</strong>
+            <p>{entry.kills} убийств · {entry.roundsPlayed} матчей · K/D {entry.kdRatio}</p>
+          </div>
+        ))}
+      </div>
+    </details>
+  );
+}
+
+function ScoreboardView({
+  response,
+  sort,
+  onSortChange
+}: {
+  response: ExporterActivitySessionResponse;
+  sort: ScoreboardSort;
+  onSortChange: (value: ScoreboardSort) => void;
+}) {
+  const teams = response.session.scoreboard?.teams || [];
+  if (!teams.length) {
+    return (
+      <div className="journal-empty-state">
+        <strong>Итоговые табы не сохранились</strong>
+        <p>Матч завершён, но сервер не передал состав сторон и показатели игроков.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="journal-scoreboard" data-testid="journal-scoreboard">
+      <div className="journal-toolbar journal-scoreboard-toolbar">
+        <div>
+          <strong>Итоговая таблица</strong>
+          <span>Данные за выбранный завершённый матч</span>
+        </div>
+        <label>
+          <span>Сортировка</span>
+          <select
+            value={sort}
+            onChange={(event) => onSortChange(event.target.value as ScoreboardSort)}
+          >
+            <option value="kills">По убийствам</option>
+            <option value="deaths">По смертям</option>
+            <option value="revives">По поднятиям</option>
+            <option value="knockdowns">По нокаутам</option>
+            <option value="name">По имени</option>
+          </select>
+        </label>
+      </div>
+
+      <div className="journal-scoreboard-teams">
+        {teams.map((team) => {
+          const unknown = team.teamID === 'unknown' || team.result === null;
+          return (
+            <section
+              className={classNames('journal-team-card', unknown && 'journal-team-card-unknown')}
+              key={team.teamID}
+            >
+              <header>
+                <div>
+                  <span>{team.result === 'winner' ? 'Победа' : team.result === 'loser' ? 'Поражение' : 'Без стороны'}</span>
+                  <h3>{team.name}</h3>
+                </div>
+                <p>
+                  {team.totals.kills} убийств · {team.totals.deaths || 0} смертей ·{' '}
+                  {team.totals.revives || 0} поднятий
+                </p>
+              </header>
+              {unknown ? (
+                <div className="journal-data-note">
+                  Сервер не успел сохранить сторону части игроков — они вынесены отдельно.
+                </div>
+              ) : null}
+              <div className="journal-table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Игрок</th>
+                      <th>Отряд / роль</th>
+                      <th>Убийства</th>
+                      <th>Смерти</th>
+                      <th>Поднятия</th>
+                      <th>Нокауты</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortScoreboardPlayers(team.players, sort).map((player, index) => (
+                      <tr key={`${player.name}:${index}`}>
+                        <td>{player.name}</td>
+                        <td>{[player.squad, player.role].filter(Boolean).join(' · ') || '—'}</td>
+                        <td>{player.kills}</td>
+                        <td>{player.deaths}</td>
+                        <td>{player.revives}</td>
+                        <td>{player.knockdowns}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function EventRow({ event }: { event: ExporterActivityKillfeedEventSnapshot }) {
+  const tone = getEventTone(event);
+  const actor = event.attackerName || 'Источник не определён';
+  const target = event.vehicleName || event.victimName || 'Цель не определена';
+  const damage = typeof event.damage === 'number' ? `${formatNumber(event.damage)} урона` : null;
+  const health =
+    tone === 'vehicle' && typeof event.healthRemaining === 'number'
+      ? `осталось ${formatNumber(event.healthRemaining)}`
+      : null;
+
+  return (
+    <article className={classNames('journal-event-row', `tone-${tone}`)}>
+      <time dateTime={event.occurredAt || undefined}>{formatEventTime(event.occurredAt)}</time>
+      <span className="journal-event-kind">{getEventLabel(event)}</span>
+      <div className="journal-event-main">
+        <strong>{actor}</strong>
+        <span aria-hidden="true">→</span>
+        <strong>{target}</strong>
+      </div>
+      <p>{[formatWeapon(event.weapon), damage, health].filter(Boolean).join(' · ')}</p>
+    </article>
+  );
+}
+
+function EventJournal({
+  events,
+  tab,
+  search,
+  visibleLimit,
+  onSearchChange,
+  onShowMore
+}: {
+  events: ExporterActivitySessionEventsSnapshot;
+  tab: JournalTab;
+  search: string;
+  visibleLimit: number;
+  onSearchChange: (value: string) => void;
+  onShowMore: () => void;
+}) {
+  const allEvents = getTabEvents(events, tab);
+  const filteredEvents = allEvents.filter((event) => matchesSearch(event, search));
+  const visibleEvents = filteredEvents.slice(0, visibleLimit);
+
+  return (
+    <div className="journal-events" data-testid={`journal-events-${tab}`}>
+      <div className="journal-toolbar">
+        <div>
+          <strong>Полный журнал сессии</strong>
+          <span>
+            Показано {visibleEvents.length} из {filteredEvents.length}
+            {search ? ` · всего ${allEvents.length}` : ''}
+          </span>
+        </div>
+        <label className="journal-search">
+          <span>Поиск</span>
+          <input
+            type="search"
+            value={search}
+            onChange={(event) => onSearchChange(event.target.value)}
+            placeholder="Игрок, цель или оружие"
+          />
+        </label>
+      </div>
+
+      {visibleEvents.length ? (
+        <div className="journal-event-list">
+          {visibleEvents.map((event, index) => (
+            <EventRow
+              event={event}
+              key={`${event.type}:${event.occurredAt || 'no-time'}:${event.attackerName || ''}:${event.victimName || event.vehicleName || ''}:${index}`}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="journal-empty-state">
+          <strong>{search ? 'Ничего не найдено' : 'В этой категории нет событий'}</strong>
+          <p>
+            {tab === 'vehicles'
+              ? 'Техника появляется здесь только по реальным событиям повреждения или уничтожения — по названию оружия мы её не угадываем.'
+              : search
+                ? 'Попробуйте другое имя игрока, цели или оружия.'
+                : 'Сервер не записал таких событий в выбранном матче.'}
+          </p>
+        </div>
+      )}
+
+      {visibleEvents.length < filteredEvents.length ? (
+        <button className="journal-more-button" type="button" onClick={onShowMore}>
+          Показать ещё {Math.min(EVENT_PAGE_SIZE, filteredEvents.length - visibleEvents.length)}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+export function JournalWorkspace({ servers }: JournalWorkspaceProps) {
+  const initialSelection = useMemo(parseJournalSelection, []);
+  const [selectedServerCode, setSelectedServerCode] = useState(initialSelection.server);
+  const [selectedSessionId, setSelectedSessionId] = useState(initialSelection.session);
+  const [tab, setTab] = useState<JournalTab>(initialSelection.tab || 'scoreboard');
+  const [detail, setDetail] = useState<DetailState>({
+    key: '',
+    status: 'idle',
+    response: null,
+    partial: false,
+    error: null
+  });
+  const [search, setSearch] = useState('');
+  const [visibleLimit, setVisibleLimit] = useState(EVENT_PAGE_SIZE);
+  const [scoreboardSort, setScoreboardSort] = useState<ScoreboardSort>('kills');
+
+  const selectedServer = useMemo(() => {
+    const requestedCode = selectedServerCode.trim();
+    if (requestedCode) {
+      return (
+        servers.find(
+          (server) => server.code === requestedCode || String(server.id) === requestedCode
+        ) || null
+      );
+    }
+    return servers.find((server) => getSessions(server).length > 0) || servers[0] || null;
+  }, [selectedServerCode, servers]);
+  const sessions = useMemo(() => getSessions(selectedServer), [selectedServer]);
+  const selectedSession = useMemo(
+    () => sessions.find((session) => session.sessionId === selectedSessionId) || sessions[0] || null,
+    [selectedSessionId, sessions]
+  );
+  const detailKey =
+    selectedServer && selectedSession
+      ? `${selectedServer.activitySessionBaseUrl}:${selectedSession.sessionId}`
+      : '';
+
+  useEffect(() => {
+    if (!selectedServer) return;
+    if (selectedServerCode !== selectedServer.code) setSelectedServerCode(selectedServer.code);
+  }, [selectedServer, selectedServerCode]);
+
+  useEffect(() => {
+    if (!selectedServer) return;
+    if (!selectedSession) {
+      if (!sessions.length) return;
+      if (selectedSessionId) setSelectedSessionId('');
+      return;
+    }
+    if (selectedSessionId !== selectedSession.sessionId) {
+      setSelectedSessionId(selectedSession.sessionId);
+    }
+  }, [selectedServer, selectedSession, selectedSessionId, sessions.length]);
+
+  useEffect(() => {
+    if (!selectedServer && selectedServerCode) return;
+    updateJournalLocation(selectedServer?.code || '', selectedSession?.sessionId || '', tab);
+  }, [selectedServer?.code, selectedServerCode, selectedSession?.sessionId, tab]);
+
+  useEffect(() => {
+    setSearch('');
+    setVisibleLimit(EVENT_PAGE_SIZE);
+  }, [selectedServer?.code, selectedSession?.sessionId, tab]);
+
+  useEffect(() => {
+    if (!selectedServer || !selectedSession) {
+      setDetail({ key: '', status: 'idle', response: null, partial: false, error: null });
+      return;
+    }
+
+    const key = detailKey;
+    const legacyResponse = buildLegacyResponse(selectedServer, selectedSession);
+    if (selectedSession.sessionId.startsWith('legacy-')) {
+      setDetail({
+        key,
+        status: 'ready',
+        response: legacyResponse,
+        partial: true,
+        error: null
+      });
+      return;
+    }
+
+    let cancelled = false;
+    const hasLegacyData = Boolean(
+      legacyResponse.session.scoreboard?.teams.length ||
+        Object.values(legacyResponse.events).some((events) => events.length > 0)
+    );
+    setDetail({
+      key,
+      status: 'loading',
+      response: hasLegacyData ? legacyResponse : null,
+      partial: hasLegacyData,
+      error: null
+    });
+    void fetchActivitySession(selectedServer, selectedSession.sessionId)
+      .then((response) => {
+        if (cancelled) return;
+        setDetail({
+          key,
+          status: 'ready',
+          response,
+          partial: !response.session.journalComplete,
+          error: null
+        });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setDetail({
+          key,
+          status: hasLegacyData ? 'ready' : 'error',
+          response: hasLegacyData ? legacyResponse : null,
+          partial: hasLegacyData,
+          error: hasLegacyData ? null : 'Подробности матча пока недоступны.'
+        });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [detailKey]);
+
+  const activeDetail = detail.key === detailKey ? detail : null;
+  const response = activeDetail?.response || null;
+  const counts = response?.session.eventCounts || selectedSession?.eventCounts || EMPTY_COUNTS;
+  const tabs: Array<{ id: JournalTab; label: string; count: number | null }> = [
+    { id: 'scoreboard', label: 'Табы', count: response?.session.scoreboard?.teams.length || null },
+    { id: 'kills', label: 'Убийства', count: counts.kills + counts.knockdowns },
+    { id: 'damage', label: 'Урон', count: counts.damage },
+    { id: 'vehicles', label: 'Техника', count: counts.vehicles },
+    { id: 'revives', label: 'Поднятия', count: counts.revives }
+  ];
+
+  if (!servers.length) {
+    return (
+      <section className="journal-empty-state journal-page-empty">
+        <strong>Серверы пока не ответили</strong>
+        <p>Журнал появится после получения данных мониторинга.</p>
+      </section>
+    );
+  }
+
+  return (
+    <>
+      <section className="journal-server-switcher" aria-label="Выбор сервера">
+        {servers.map((server) => {
+          const serverSessions = getSessions(server);
+          const active = server.code === selectedServer?.code;
+          return (
+            <button
+              type="button"
+              className={classNames('journal-server-button', active && 'is-active')}
+              onClick={() => {
+                setSelectedServerCode(server.code);
+                setSelectedSessionId('');
+              }}
+              key={`${server.code}:${server.id}`}
+              aria-pressed={active}
+              title={server.name}
+              data-testid={`journal-server-${server.id}`}
+            >
+              <span>{server.online ? 'В сети' : 'Оффлайн'}</span>
+              <strong>{formatServerName(server)}</strong>
+              <p>
+                {serverSessions.length} матчей ·{' '}
+                {serverSessions[0] ? formatMatchDate(serverSessions[0].endedAt) : 'истории нет'}
+              </p>
+            </button>
+          );
+        })}
+      </section>
+
+      <section className="journal-workspace" data-testid="journal-workspace">
+        <aside className="journal-session-sidebar">
+          <div className="journal-sidebar-head">
+            <span>Последние матчи</span>
+            <strong>{sessions.length} / 10</strong>
+          </div>
+          {sessions.length ? (
+            <ul className="journal-session-list">
+              {sessions.map((session) => {
+                const active = session.sessionId === selectedSession?.sessionId;
+                return (
+                  <li className="journal-session-item" key={session.sessionId}>
+                    <button
+                      type="button"
+                      className={classNames('journal-session-button', active && 'is-active')}
+                      onClick={() => setSelectedSessionId(session.sessionId)}
+                      aria-pressed={active}
+                      data-testid={`journal-session-${session.sessionId}`}
+                    >
+                      <time dateTime={session.endedAt || undefined}>
+                        {formatMatchDate(session.endedAt)}
+                      </time>
+                      <strong>{session.layer || 'Карта не записана'}</strong>
+                      <span>{formatResult(session)}</span>
+                      <p>
+                        {session.playerCount} игроков · {session.totals.kills} убийств
+                      </p>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <div className="journal-empty-state journal-sidebar-empty">
+              <strong>Завершённых матчей ещё нет</strong>
+              <p>Запись появится только после конца игры.</p>
+            </div>
+          )}
+          <SessionTopSummary topWindow={selectedServer?.activity?.topWindow || null} />
+        </aside>
+
+        <main className="journal-match-panel">
+          {selectedSession ? (
+            <>
+              <header className="journal-match-hero">
+                <div className="journal-match-copy">
+                  <span className="journal-complete-badge">Завершённый матч</span>
+                  <h2>{selectedSession.layer || 'Карта не записана'}</h2>
+                  <p>{formatResult(selectedSession)}</p>
+                </div>
+                <time dateTime={selectedSession.endedAt || undefined}>
+                  {formatMatchDate(selectedSession.endedAt)}
+                </time>
+              </header>
+
+              <div className="journal-match-metrics">
+                <div><span>Игроков</span><strong>{selectedSession.playerCount}</strong></div>
+                <div><span>Убийств</span><strong>{selectedSession.totals.kills}</strong></div>
+                <div><span>Смертей</span><strong>{selectedSession.totals.deaths || 0}</strong></div>
+                <div><span>Поднятий</span><strong>{selectedSession.totals.revives || 0}</strong></div>
+                <div><span>Нокаутов</span><strong>{selectedSession.totals.knockdowns}</strong></div>
+              </div>
+
+              {response && !response.session.journalAvailable ? (
+                <div className="journal-legacy-note" role="status">
+                  Итоговые табы доступны, но журнал событий этой сессии не сохранился.
+                </div>
+              ) : activeDetail?.partial ? (
+                <div className="journal-legacy-note" role="status">
+                  Эта запись создана старой версией сборщика: показываем всё, что успело
+                  сохраниться, но не называем журнал полным.
+                </div>
+              ) : null}
+
+              <div className="journal-tabs" role="tablist" aria-label="Раздел журнала матча">
+                {tabs.map((item) => (
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={tab === item.id}
+                    className={classNames('journal-tab', tab === item.id && 'is-active')}
+                    onClick={() => setTab(item.id)}
+                    key={item.id}
+                    data-testid={`journal-tab-${item.id}`}
+                  >
+                    <span>{item.label}</span>
+                    {item.count !== null ? <strong>{item.count}</strong> : null}
+                  </button>
+                ))}
+              </div>
+
+              <div className="journal-tab-panel" role="tabpanel">
+                {(!activeDetail || activeDetail.status === 'loading') && !response ? (
+                  <div className="journal-loading" role="status">Загружаем полный журнал матча…</div>
+                ) : activeDetail?.status === 'error' || !response ? (
+                  <div className="journal-empty-state">
+                    <strong>Подробности пока недоступны</strong>
+                    <p>{activeDetail?.error || 'Сервер ещё не подготовил архив выбранного матча.'}</p>
+                  </div>
+                ) : tab === 'scoreboard' ? (
+                  <ScoreboardView
+                    response={response}
+                    sort={scoreboardSort}
+                    onSortChange={setScoreboardSort}
+                  />
+                ) : (
+                  <EventJournal
+                    events={response.events || EMPTY_EVENTS}
+                    tab={tab}
+                    search={search}
+                    visibleLimit={visibleLimit}
+                    onSearchChange={setSearch}
+                    onShowMore={() => setVisibleLimit((value) => value + EVENT_PAGE_SIZE)}
+                  />
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="journal-empty-state journal-match-empty">
+              <strong>Выберите завершённый матч</strong>
+              <p>Табы и журнал никогда не показываются до окончания игры.</p>
+            </div>
+          )}
+        </main>
+      </section>
+    </>
+  );
+}

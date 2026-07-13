@@ -64,6 +64,11 @@ const leaderboardsRuntimeConfig = {
   }
 };
 
+const singleJournalServerRuntimeConfig = {
+  ...runtimeConfig,
+  exporters: runtimeConfig.exporters.filter((exporter) => exporter.name === 'squadjs2')
+};
+
 const productionSwitchRuntimeConfig = {
   ...runtimeConfig,
   policy: {
@@ -94,6 +99,8 @@ const priorityRuntimeConfig = {
 };
 
 const SQUADJS2_SELECTION_KEY = 'http://127.0.0.1:4173/mock/squadjs2/snapshot::2::squadjs2';
+const NARVA_SESSION_ID = 'session-narva-20260706-1200';
+const GORODOK_SESSION_ID = 'session-gorodok-20260706-1100';
 
 const JULY_RAFFLE_CAMPAIGN = {
   startsAt: '2026-07-01T00:00:00+03:00',
@@ -348,7 +355,7 @@ function buildTeamBalancerProposalSnapshot(overrides: Record<string, unknown> = 
 
 function buildActivitySnapshot() {
   return {
-    version: 1,
+    version: 3,
     generatedAt: '2026-07-06T12:01:00.000Z',
     teamBalancerHistory: [
       {
@@ -456,51 +463,52 @@ function buildActivitySnapshot() {
         players: []
       }
     ],
-    recentRounds: [
+    sessions: [
       {
+        sessionId: NARVA_SESSION_ID,
+        journalAvailable: true,
+        journalComplete: true,
         endedAt: '2026-07-06T12:00:00.000Z',
         layer: 'Narva RAAS v2',
         winner: { team: '1', faction: 'Winner', tickets: 123 },
         loser: { team: '2', faction: 'Loser', tickets: 20 },
         playerCount: 80,
         totals: { kills: 42, deaths: 40, revives: 7, knockdowns: 61 },
-        scoreboard: {
-          teams: [
-            {
-              teamID: '1',
-              name: 'Winner',
-              result: 'winner',
-              totals: { kills: 30, deaths: 20, revives: 5, knockdowns: 41 },
-              players: [
-                {
-                  name: 'Winner Player',
-                  squad: 'Orange',
-                  role: 'Rifleman',
-                  kills: 8,
-                  deaths: 2,
-                  revives: 3,
-                  knockdowns: 5,
-                  eosID: 'private-scoreboard-player'
-                }
-              ]
-            },
-            {
-              teamID: '2',
-              name: 'Loser',
-              result: 'loser',
-              totals: { kills: 12, deaths: 20, revives: 2, knockdowns: 20 },
-              players: []
-            }
-          ]
-        }
+        eventCounts: { kills: 1, damage: 105, knockdowns: 1, revives: 1, vehicles: 1 }
       },
       {
+        sessionId: GORODOK_SESSION_ID,
+        journalAvailable: true,
+        journalComplete: true,
         endedAt: '2026-07-06T11:00:00.000Z',
         layer: 'Gorodok Invasion v1',
         winner: { team: '2', faction: 'Winner', tickets: 88 },
         loser: { team: '1', faction: 'Loser', tickets: 0 },
         playerCount: 76,
-        totals: { kills: 38, deaths: 37, revives: 9, knockdowns: 55 }
+        totals: { kills: 38, deaths: 37, revives: 9, knockdowns: 55 },
+        eventCounts: { kills: 1, damage: 0, knockdowns: 0, revives: 0, vehicles: 1 }
+      }
+    ],
+    recentRounds: [
+      {
+        sessionId: NARVA_SESSION_ID,
+        endedAt: '2026-07-06T12:00:00.000Z',
+        layer: 'Narva RAAS v2',
+        winner: { team: '1', faction: 'Winner', tickets: 123 },
+        loser: { team: '2', faction: 'Loser', tickets: 20 },
+        playerCount: 80,
+        totals: { kills: 42, deaths: 40, revives: 7, knockdowns: 61 },
+        eventCounts: { kills: 1, damage: 105, knockdowns: 1, revives: 1, vehicles: 1 }
+      },
+      {
+        sessionId: GORODOK_SESSION_ID,
+        endedAt: '2026-07-06T11:00:00.000Z',
+        layer: 'Gorodok Invasion v1',
+        winner: { team: '2', faction: 'Winner', tickets: 88 },
+        loser: { team: '1', faction: 'Loser', tickets: 0 },
+        playerCount: 76,
+        totals: { kills: 38, deaths: 37, revives: 9, knockdowns: 55 },
+        eventCounts: { kills: 1, damage: 0, knockdowns: 0, revives: 0, vehicles: 1 }
       }
     ],
     topWindow: {
@@ -522,19 +530,191 @@ function buildActivitySnapshot() {
       ]
     },
     killfeed: {
-      version: 1,
+      version: 3,
       generatedAt: '2026-07-06T12:01:00.000Z',
-      rounds: [{ endedAt: '2026-07-06T12:00:00.000Z', totals: { kills: 3, knockdowns: 4 } }],
-      events: [
+      rounds: [
+        {
+          sessionId: NARVA_SESSION_ID,
+          endedAt: '2026-07-06T12:00:00.000Z',
+          playerCount: 80,
+          totals: { kills: 42, knockdowns: 61 },
+          eventCounts: { kills: 1, damage: 105, knockdowns: 1, revives: 1, vehicles: 1 }
+        }
+      ],
+      events: []
+    }
+  };
+}
+
+function buildActivitySessionDetail(sessionId = NARVA_SESSION_ID) {
+  if (sessionId === GORODOK_SESSION_ID) {
+    return {
+      ok: true,
+      version: 1,
+      generatedAt: '2026-07-06T12:02:00.000Z',
+      server: { id: 2, code: 'squadjs2', name: '[RU] BSS Spec Ops' },
+      session: {
+        sessionId: GORODOK_SESSION_ID,
+        journalAvailable: true,
+        journalComplete: true,
+        endedAt: '2026-07-06T11:00:00.000Z',
+        layer: 'Gorodok Invasion v1',
+        winner: { team: '2', faction: 'Winner', tickets: 88 },
+        loser: { team: '1', faction: 'Loser', tickets: 0 },
+        playerCount: 76,
+        totals: { kills: 38, deaths: 37, revives: 9, knockdowns: 55 },
+        eventCounts: { kills: 1, damage: 0, knockdowns: 0, revives: 0, vehicles: 1 },
+        scoreboard: {
+          teams: [
+            {
+              teamID: '2',
+              name: 'Gorodok Winner',
+              result: 'winner',
+              totals: { kills: 38, deaths: 37, revives: 9, knockdowns: 55 },
+              players: [
+                {
+                  name: 'Gorodok Player',
+                  squad: 'Blue',
+                  role: 'Medic',
+                  kills: 7,
+                  deaths: 3,
+                  revives: 6,
+                  knockdowns: 9,
+                  eosID: 'private-gorodok-player'
+                }
+              ]
+            }
+          ]
+        }
+      },
+      events: {
+        kills: [
+          {
+            type: 'kill',
+            occurredAt: '2026-07-06T10:59:30.000Z',
+            attackerName: 'Gorodok Killer',
+            victimName: 'Gorodok Victim',
+            weapon: 'BP_SVDM_C',
+            damage: 100,
+            attackerEosID: 'private-gorodok-attacker'
+          }
+        ],
+        damage: [],
+        knockdowns: [],
+        revives: [],
+        vehicles: [
+          {
+            type: 'vehicle-destroyed',
+            occurredAt: '2026-07-06T10:58:00.000Z',
+            attackerName: 'Gorodok LAT',
+            vehicleName: 'BTR82A',
+            weapon: 'RPG26',
+            damage: 300,
+            healthRemaining: 0,
+            destroyed: true
+          }
+        ]
+      }
+    };
+  }
+
+  return {
+    ok: true,
+    version: 1,
+    generatedAt: '2026-07-06T12:02:00.000Z',
+    server: { id: 2, code: 'squadjs2', name: '[RU] BSS Spec Ops' },
+    session: {
+      sessionId: NARVA_SESSION_ID,
+      journalAvailable: true,
+      journalComplete: true,
+      endedAt: '2026-07-06T12:00:00.000Z',
+      layer: 'Narva RAAS v2',
+      winner: { team: '1', faction: 'Winner', tickets: 123 },
+      loser: { team: '2', faction: 'Loser', tickets: 20 },
+      playerCount: 80,
+      totals: { kills: 42, deaths: 40, revives: 7, knockdowns: 61 },
+      eventCounts: { kills: 1, damage: 105, knockdowns: 1, revives: 1, vehicles: 1 },
+      scoreboard: {
+        teams: [
+          {
+            teamID: '1',
+            name: 'Winner',
+            result: 'winner',
+            totals: { kills: 30, deaths: 20, revives: 5, knockdowns: 41 },
+            players: [
+              {
+                name: 'Winner Player',
+                squad: 'Orange',
+                role: 'Rifleman',
+                kills: 8,
+                deaths: 2,
+                revives: 3,
+                knockdowns: 5,
+                eosID: 'private-scoreboard-player'
+              }
+            ]
+          },
+          {
+            teamID: '2',
+            name: 'Loser',
+            result: 'loser',
+            totals: { kills: 12, deaths: 20, revives: 2, knockdowns: 20 },
+            players: []
+          }
+        ]
+      }
+    },
+    events: {
+      kills: [
         {
           type: 'kill',
-          attackerName: 'Attacker',
-          victimName: 'Victim',
-          count: 2,
-          weapon: 'Vehicle_Cannon',
-          damage: 45,
           occurredAt: '2026-07-06T11:59:50.000Z',
-          roundEndedAt: '2026-07-06T12:00:00.000Z'
+          attackerName: 'Killer Alpha',
+          victimName: 'Victim Bravo',
+          weapon: 'BP_AK74_C',
+          damage: 100,
+          attackerEosID: 'private-killer-alpha'
+        }
+      ],
+      damage: Array.from({ length: 105 }, (_, index) => ({
+        type: 'damage',
+        occurredAt: new Date(Date.parse('2026-07-06T11:50:00.000Z') + index * 1000).toISOString(),
+        attackerName: `Damage Attacker ${index}`,
+        victimName: `Damage Target ${index}`,
+        weapon: index === 0 ? 'BP_PKM_C' : 'BP_AK74_C',
+        damage: index === 0 ? 31.5 : 10,
+        internalEventId: `private-damage-${index}`
+      })),
+      knockdowns: [
+        {
+          type: 'knockdown',
+          occurredAt: '2026-07-06T11:57:00.000Z',
+          attackerName: 'Knockdown Charlie',
+          victimName: 'Knockdown Delta',
+          weapon: 'BP_M240B_C',
+          damage: 75
+        }
+      ],
+      revives: [
+        {
+          type: 'revive',
+          occurredAt: '2026-07-06T11:58:00.000Z',
+          attackerName: 'Medic Echo',
+          victimName: 'Patient Foxtrot',
+          weapon: 'Field_Dressing'
+        }
+      ],
+      vehicles: [
+        {
+          type: 'vehicle-damage',
+          occurredAt: '2026-07-06T11:56:00.000Z',
+          attackerName: 'Vehicle Hunter',
+          vehicleName: 'T72B3',
+          weapon: 'TOW',
+          damage: 420,
+          healthRemaining: 80,
+          destroyed: false,
+          attackerSteamID: '76561198000000001'
         }
       ]
     }
@@ -639,7 +819,12 @@ async function mockAutoseedApi(
   page: Page,
   counters?: { joinLinkRequests: number },
   config = runtimeConfig,
-  options: { squadjs2TeamBalancer?: unknown; squadjs2Activity?: unknown } = {}
+  options: {
+    squadjs2TeamBalancer?: unknown;
+    squadjs2Activity?: unknown;
+    squadjs2ActivitySessions?: Record<string, unknown>;
+    squadjs2ActivitySessionRequests?: string[];
+  } = {}
 ) {
   await page.route('**/runtime-config.json', (route) => fulfillJson(route, config));
   await page.route('**/mock/**/events', (route) =>
@@ -679,6 +864,20 @@ async function mockAutoseedApi(
       })
     )
   );
+  await page.route('**/mock/squadjs2/activity/sessions/*', async (route) => {
+    const sessionId = decodeURIComponent(new URL(route.request().url()).pathname.split('/').pop() || '');
+    options.squadjs2ActivitySessionRequests?.push(sessionId);
+    const payload = options.squadjs2ActivitySessions?.[sessionId];
+    if (!payload) {
+      await route.fulfill({
+        status: 404,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: false, error: 'Session not found' })
+      });
+      return;
+    }
+    await fulfillJson(route, payload);
+  });
   await page.route('**/mock/squadjs1/join-link', (route) =>
     fulfillJson(route, {
       ok: true,
@@ -1356,57 +1555,137 @@ test('renders healthy Team Balancer state without proposal rows', async ({ page 
   await expect(page.getByTestId('team-balancer-diff-row')).toHaveCount(0);
 });
 
-test('renders server activity history, last-10 top and killfeed journal', async ({ page }) => {
+test('renders one completed session with separate full journal categories', async ({ page }) => {
   await page.clock.setFixedTime('2026-07-06T12:02:00.000Z');
+  const sessionRequests: string[] = [];
   await mockAutoseedApi(page, undefined, runtimeConfig, {
-    squadjs2Activity: buildActivitySnapshot()
+    squadjs2Activity: buildActivitySnapshot(),
+    squadjs2ActivitySessions: {
+      [NARVA_SESSION_ID]: buildActivitySessionDetail(),
+      [GORODOK_SESSION_ID]: buildActivitySessionDetail(GORODOK_SESSION_ID)
+    },
+    squadjs2ActivitySessionRequests: sessionRequests
   });
 
   await page.goto('/#journal');
 
-  const activityPanel = page.getByTestId('journal-server-2').getByTestId('server-activity-panel');
-  await expect(activityPanel).toBeVisible();
-  await expect(activityPanel).toContainText('Журнал сервера');
-  await expect(activityPanel).toContainText('10 игр');
-  await expect(activityPanel).toContainText('3 игры');
-  await expect(activityPanel).toContainText('Qualified A');
-  await expect(activityPanel).toContainText('15');
-  await expect(activityPanel).toContainText('Narva RAAS v2');
-  const tabs = activityPanel.getByTestId('server-scoreboard').first();
-  await tabs.locator('summary').click();
-  await expect(tabs).toContainText('Winner Player');
-  await expect(tabs).toContainText('Orange · Rifleman');
-  await expect(tabs).toContainText('Победа');
-  await expect(activityPanel).toContainText('Attacker');
-  await expect(activityPanel).toContainText('Victim');
-  await expect(activityPanel).toContainText('Vehicle_Cannon');
-  await expect(activityPanel).toContainText('45 урона');
-  await expect(activityPanel).not.toContainText('snapshot');
-  await expect(activityPanel).not.toContainText('7656119');
-  await expect(activityPanel).not.toContainText('private-scoreboard-player');
+  const workspace = page.getByTestId('journal-workspace');
+  const matchPanel = workspace.locator('.journal-match-panel');
+  await expect(workspace).toBeVisible();
+  await expect(page.getByTestId('journal-server-2')).toContainText('2 матчей');
+  await page.getByTestId('journal-server-2').click();
+  await expect(page.getByTestId('journal-server-2')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('journal-server-1')).toHaveAttribute('aria-pressed', 'false');
+  await expect(workspace.locator('.journal-match-panel')).toHaveCount(1);
+  await expect(workspace.locator('.journal-session-button')).toHaveCount(2);
+  await expect(page.getByTestId(`journal-session-${NARVA_SESSION_ID}`)).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  );
+  await expect(matchPanel.locator('h2')).toHaveText('Narva RAAS v2');
+  await expect(page.getByTestId('journal-scoreboard')).toContainText('Winner Player');
+  await expect(page.getByTestId('journal-scoreboard')).toContainText('Orange · Rifleman');
+  await expect(page.getByTestId('journal-scoreboard')).toContainText('Победа');
+  await expect.poll(() => sessionRequests).toContain(NARVA_SESSION_ID);
+  await expect(page).toHaveURL(
+    new RegExp(`#journal\\?server=squadjs2&session=${NARVA_SESSION_ID}&tab=scoreboard$`)
+  );
+
+  await page.getByTestId('journal-tab-kills').click();
+  const kills = page.getByTestId('journal-events-kills');
+  await expect(kills).toContainText('Killer Alpha');
+  await expect(kills).toContainText('Victim Bravo');
+  await expect(kills).toContainText('Knockdown Charlie');
+  await expect(kills).toContainText('Knockdown Delta');
+  await expect(page).toHaveURL(/tab=kills$/);
+
+  await page.getByTestId('journal-tab-damage').click();
+  const damage = page.getByTestId('journal-events-damage');
+  await expect(damage.locator('.journal-event-row')).toHaveCount(100);
+  await expect(damage).toContainText('Показано 100 из 105');
+  await expect(damage).toContainText('Damage Attacker 0');
+  await expect(damage).toContainText('31,5 урона');
+  await damage.getByRole('button', { name: 'Показать ещё 5' }).click();
+  await expect(damage.locator('.journal-event-row')).toHaveCount(105);
+  await expect(damage).toContainText('Damage Attacker 104');
+
+  await page.getByTestId('journal-tab-vehicles').click();
+  const vehicles = page.getByTestId('journal-events-vehicles');
+  await expect(vehicles).toContainText('Vehicle Hunter');
+  await expect(vehicles).toContainText('T72B3');
+  await expect(vehicles).toContainText('420 урона');
+  await expect(vehicles).toContainText('осталось 80');
+
+  await page.getByTestId('journal-tab-revives').click();
+  const revives = page.getByTestId('journal-events-revives');
+  await expect(revives).toContainText('Medic Echo');
+  await expect(revives).toContainText('Patient Foxtrot');
+  expect(await page.getByTestId('journal-page').innerText()).not.toMatch(
+    /private-scoreboard-player|private-killer-alpha|private-damage|76561198000000001/
+  );
+
+  await page.getByTestId(`journal-session-${GORODOK_SESSION_ID}`).click();
+  await expect(matchPanel.locator('h2')).toHaveText('Gorodok Invasion v1');
+  await page.getByTestId('journal-tab-kills').click();
+  await expect(page.getByTestId('journal-events-kills')).toContainText('Gorodok Killer');
+  await expect(page.getByTestId('journal-events-kills')).not.toContainText('Killer Alpha');
+  await expect.poll(() => sessionRequests).toContain(GORODOK_SESSION_ID);
+  expect(await page.getByTestId('journal-page').innerText()).not.toMatch(
+    /private-gorodok-player|private-gorodok-attacker/
+  );
+  expect(sessionRequests.filter((sessionId) => sessionId === NARVA_SESSION_ID)).toHaveLength(1);
+  expect(sessionRequests.filter((sessionId) => sessionId === GORODOK_SESSION_ID)).toHaveLength(1);
 });
 
-test('keeps server activity journal discoverable before activity data arrives', async ({ page }) => {
+test('restores selected server, session and category from the journal URL', async ({ page }) => {
+  await page.clock.setFixedTime('2026-07-06T12:02:00.000Z');
+  await mockAutoseedApi(page, undefined, singleJournalServerRuntimeConfig, {
+    squadjs2Activity: buildActivitySnapshot(),
+    squadjs2ActivitySessions: {
+      [NARVA_SESSION_ID]: buildActivitySessionDetail(),
+      [GORODOK_SESSION_ID]: buildActivitySessionDetail(GORODOK_SESSION_ID)
+    }
+  });
+
+  await page.goto(
+    `/#journal?server=squadjs2&session=${GORODOK_SESSION_ID}&tab=vehicles`
+  );
+
+  await expect(page.getByTestId('journal-server-2')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId(`journal-session-${GORODOK_SESSION_ID}`)).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  );
+  await expect(page.getByTestId('journal-tab-vehicles')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByTestId('journal-events-vehicles')).toContainText('Gorodok LAT');
+  await expect(page.getByTestId('journal-events-vehicles')).toContainText('BTR82A');
+  await expect(page.getByTestId('journal-page')).not.toContainText('Vehicle Hunter');
+});
+
+test('keeps the completed-game journal discoverable before session data arrives', async ({ page }) => {
   await page.clock.setFixedTime('2026-07-06T12:02:00.000Z');
   await mockAutoseedApi(page);
 
   await page.goto('/#journal');
 
-  const activityPanel = page.getByTestId('journal-server-2').getByTestId('server-activity-panel');
-  await expect(activityPanel).toBeVisible();
-  await expect(activityPanel).toContainText('Журнал сервера');
-  await expect(activityPanel).toContainText('Топ пока пуст.');
-  await expect(activityPanel).toContainText('Истории игр пока нет.');
-  await expect(activityPanel).toContainText('Событий пока нет.');
-  await expect(activityPanel).not.toContainText('snapshot');
-  await expect(activityPanel).not.toContainText('exporter');
-  await expect(activityPanel).not.toContainText('endpoint');
+  const workspace = page.getByTestId('journal-workspace');
+  await expect(workspace).toBeVisible();
+  await expect(workspace).toContainText('Завершённых матчей ещё нет');
+  await expect(workspace).toContainText('Выберите завершённый матч');
+  await expect(workspace).toContainText('Табы и журнал никогда не показываются до окончания игры');
+  await expect(workspace).not.toContainText('snapshot');
+  await expect(workspace).not.toContainText('exporter');
+  await expect(workspace).not.toContainText('endpoint');
 });
 
 test('shows the balancer and completed-game journal on separate routes', async ({ page }) => {
   await page.clock.setFixedTime('2026-07-06T12:02:00.000Z');
   await mockAutoseedApi(page, undefined, runtimeConfig, {
     squadjs2Activity: buildActivitySnapshot(),
+    squadjs2ActivitySessions: {
+      [NARVA_SESSION_ID]: buildActivitySessionDetail(),
+      [GORODOK_SESSION_ID]: buildActivitySessionDetail(GORODOK_SESSION_ID)
+    },
     squadjs2TeamBalancer: buildTeamBalancerProposalSnapshot()
   });
 
@@ -1418,15 +1697,15 @@ test('shows the balancer and completed-game journal on separate routes', async (
   await expect(
     balancePage.getByTestId('balance-server-2').getByTestId('team-balancer-history-panel')
   ).toContainText('Vanguard Alpha');
-  await expect(balancePage.getByTestId('server-activity-panel')).toHaveCount(0);
+  await expect(balancePage.getByTestId('journal-workspace')).toHaveCount(0);
 
   await page.getByTestId('journal-nav-link').click();
   const journalPage = page.getByTestId('journal-page');
   await expect(journalPage).toBeVisible();
-  await expect(journalPage).toContainText('Только данные завершённых игр');
-  await expect(
-    journalPage.getByTestId('journal-server-2').getByTestId('server-activity-panel')
-  ).toContainText('Narva RAAS v2');
+  await expect(journalPage).toContainText('Только завершённые матчи');
+  await expect(page.getByTestId('journal-server-2')).toContainText('2 матчей');
+  await page.getByTestId('journal-server-2').click();
+  await expect(journalPage.getByTestId('journal-workspace')).toContainText('Narva RAAS v2');
   await expect(journalPage.getByTestId('team-balancer-history-panel')).toHaveCount(0);
 });
 

@@ -37,6 +37,7 @@ import {
   savePermissions,
   saveTestSequenceDelayMs
 } from './lib/storage';
+import { JournalWorkspace } from './journal/JournalWorkspace';
 import type {
   AppConfig,
   AppMode,
@@ -374,16 +375,6 @@ function formatBalancerHistoryModeSummaries(
   });
 }
 
-function formatKillfeedType(value: string): string {
-  const labels: Record<string, string> = {
-    kill: 'Убийство',
-    wound: 'Ранение',
-    teamkill: 'Тимкилл'
-  };
-  const type = value.trim().toLowerCase();
-  return labels[type] || value;
-}
-
 function formatRaffleSource(value: string): string {
   return value === 'auto' ? 'запущен автоматически' : 'запущен администратором';
 }
@@ -456,10 +447,10 @@ function getSafeHttpUrl(value?: string | null): string | null {
 
 function getRouteFromHash(): AppRoute {
   if (typeof window === 'undefined') return 'home';
-  if (window.location.hash === '#leaderboards') return 'leaderboards';
-  if (window.location.hash === '#winners') return 'winners';
-  if (window.location.hash === '#balance') return 'balance';
-  return window.location.hash === '#journal' ? 'journal' : 'home';
+  if (window.location.hash.startsWith('#leaderboards')) return 'leaderboards';
+  if (window.location.hash.startsWith('#winners')) return 'winners';
+  if (window.location.hash.startsWith('#balance')) return 'balance';
+  return window.location.hash.startsWith('#journal') ? 'journal' : 'home';
 }
 
 function normalizeDelaySeconds(value: number): number {
@@ -1844,180 +1835,6 @@ function TeamBalancerPanel({
   );
 }
 
-function ServerActivityPanel({ server }: ServerActivityPanelProps) {
-  const activity = server.activity;
-  const topWindow = activity?.topWindow || null;
-  const topEntries = topWindow?.entries.slice(0, 10) || [];
-  const recentRounds = activity?.recentRounds.slice(0, 10) || [];
-  const tabRounds = recentRounds.filter((round) => (round.scoreboard?.teams.length || 0) > 0);
-  const killfeedEvents = activity?.killfeed?.events.slice(0, 10) || [];
-  return (
-    <section className="server-activity-panel" data-testid="server-activity-panel">
-      <div className="server-activity-head">
-        <div>
-          <span className="section-eyebrow">История</span>
-          <h3>Журнал сервера</h3>
-        </div>
-      </div>
-
-      <div className="server-activity-meta">
-        <div>
-          <span>Срез топа</span>
-          <strong>{topWindow ? formatGameCount(topWindow.roundCount) : '—'}</strong>
-        </div>
-        <div>
-          <span>Допуск в топ</span>
-          <strong>{topWindow ? formatGameCount(topWindow.requiredParticipation) : '—'}</strong>
-        </div>
-        <div>
-          <span>Игры</span>
-          <strong>{recentRounds.length}</strong>
-        </div>
-        <div>
-          <span>Табы</span>
-          <strong>{tabRounds.length}</strong>
-        </div>
-        <div>
-          <span>Килфид</span>
-          <strong>{killfeedEvents.length}</strong>
-        </div>
-      </div>
-
-      <div className="server-activity-grid">
-        <div className="server-activity-list">
-          <div className="server-activity-list-head">
-            <span>Топ 10 игр</span>
-            <strong>{topEntries[0]?.kills ?? '—'}</strong>
-          </div>
-          {topEntries.length ? (
-            topEntries.map((entry) => (
-              <div className="server-activity-row" key={`${entry.rank}:${entry.name}`}>
-                <span>#{entry.rank}</span>
-                <strong>{entry.name}</strong>
-                <p>
-                  {entry.kills} убийств · {formatGameCount(entry.roundsPlayed)}
-                </p>
-              </div>
-            ))
-          ) : (
-            <div className="server-activity-empty">Топ пока пуст.</div>
-          )}
-        </div>
-
-        <div className="server-activity-list server-scoreboard-list">
-          <div className="server-activity-list-head">
-            <span>Итоговые табы</span>
-            <strong>{tabRounds.length}</strong>
-          </div>
-          {tabRounds.length ? (
-            tabRounds.map((round) => (
-              <details
-                className="server-scoreboard"
-                data-testid="server-scoreboard"
-                key={`${round.endedAt}:${round.layer}:scoreboard`}
-              >
-                <summary>
-                  <span>{formatCompactTimestamp(round.endedAt || undefined)}</span>
-                  <strong>{round.layer || 'Раунд'}</strong>
-                  <p>{round.scoreboard?.teams.length || 0} стороны · {round.playerCount} игроков</p>
-                </summary>
-                <div className="server-scoreboard-teams">
-                  {round.scoreboard?.teams.map((team) => (
-                    <section className="server-scoreboard-team" key={`${round.endedAt}:${team.teamID}`}>
-                      <header>
-                        <div>
-                          <strong>{team.name}</strong>
-                          <span>{team.result === 'winner' ? 'Победа' : team.result === 'loser' ? 'Поражение' : 'Итог'}</span>
-                        </div>
-                        <p>
-                          {team.totals.kills}/{team.totals.deaths} · {team.totals.revives} поднятий · {team.totals.knockdowns} ноков
-                        </p>
-                      </header>
-                      <div className="server-scoreboard-table-wrap">
-                        <table className="server-scoreboard-table">
-                          <thead>
-                            <tr>
-                              <th>Игрок</th>
-                              <th>Отряд / роль</th>
-                              <th>У</th>
-                              <th>С</th>
-                              <th>П</th>
-                              <th>Н</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {team.players.map((player, index) => (
-                              <tr key={`${player.name}:${index}`}>
-                                <td>{player.name}</td>
-                                <td>{[player.squad, player.role].filter(Boolean).join(' · ') || '—'}</td>
-                                <td>{player.kills}</td>
-                                <td>{player.deaths}</td>
-                                <td>{player.revives}</td>
-                                <td>{player.knockdowns}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </section>
-                  ))}
-                </div>
-              </details>
-            ))
-          ) : (
-            <div className="server-activity-empty">Итоговые табы пока не поступили.</div>
-          )}
-        </div>
-
-        <div className="server-activity-list">
-          <div className="server-activity-list-head">
-            <span>Последние игры</span>
-            <strong>{recentRounds[0]?.totals.kills ?? '—'}</strong>
-          </div>
-          {recentRounds.length ? (
-            recentRounds.map((round) => (
-              <div className="server-activity-row" key={`${round.endedAt}:${round.layer}`}>
-                <span>{formatCompactTimestamp(round.endedAt || undefined)}</span>
-                <strong>{round.layer || 'Раунд'}</strong>
-                <p>
-                  {round.playerCount} игроков · {round.totals.kills} убийств
-                </p>
-              </div>
-            ))
-          ) : (
-            <div className="server-activity-empty">Истории игр пока нет.</div>
-          )}
-        </div>
-
-        <div className="server-activity-list">
-          <div className="server-activity-list-head">
-            <span>Килфид</span>
-            <strong>{killfeedEvents[0]?.count ?? '—'}</strong>
-          </div>
-          {killfeedEvents.length ? (
-            killfeedEvents.map((event, index) => (
-              <div
-                className="server-activity-row"
-                key={`${event.type}:${event.attackerName}:${event.victimName}:${index}`}
-              >
-                <span>{formatKillfeedType(event.type)}</span>
-                <strong>{event.attackerName}</strong>
-                <p>
-                  {event.victimName}
-                  {event.weapon ? ` · ${event.weapon}` : ''}
-                  {event.damage ? ` · ${event.damage} урона` : event.count > 1 ? ` x${event.count}` : ''}
-                </p>
-              </div>
-            ))
-          ) : (
-            <div className="server-activity-empty">Событий пока нет.</div>
-          )}
-        </div>
-      </div>
-    </section>
-  );
-}
-
 function TeamBalancerHistoryPanel({ server }: ServerActivityPanelProps) {
   const balanceHistory = server.activity?.teamBalancerHistory.slice(-10).reverse() || [];
 
@@ -2118,38 +1935,23 @@ function JournalPage({ snapshot, route, vipShopUrl }: ServerHistoryPageProps) {
   return (
     <div className="shell modern-shell" style={BRAND_STYLE} data-testid="journal-page">
       <AppTopbar currentRoute={route} vipShopUrl={vipShopUrl} />
-      <section className="section-shell">
+      <section className="section-shell journal-page-intro">
         <div className="section-head">
           <div>
-            <span className="section-eyebrow">История</span>
-            <h1>Журнал сервера</h1>
+            <span className="section-eyebrow">После матча</span>
+            <h1>Журнал матчей</h1>
           </div>
-          <p>Только данные завершённых игр: последние 10 раундов, итоговый топ и килфид.</p>
+          <p>
+            Выберите сервер и матч: табы, убийства, урон, техника и поднятия не
+            публикуются до завершения игры.
+          </p>
+        </div>
+        <div className="journal-privacy-note">
+          <span aria-hidden="true">●</span>
+          Только завершённые матчи · последние 10 записей на сервер
         </div>
       </section>
-
-      {snapshot.servers.length ? (
-        snapshot.servers.map((server) => (
-          <section
-            className="section-shell"
-            key={getServerSelectionKey(server)}
-            data-testid={`journal-server-${server.id}`}
-          >
-            <div className="section-head">
-              <div>
-                <span className="section-eyebrow">{server.online ? 'В сети' : 'Оффлайн'}</span>
-                <h2>{server.name}</h2>
-              </div>
-              <p>Записи появляются только после завершения раунда.</p>
-            </div>
-            <ServerActivityPanel server={server} />
-          </section>
-        ))
-      ) : (
-        <section className="section-shell">
-          <div className="server-activity-empty">Данные о серверах пока не поступили.</div>
-        </section>
-      )}
+      <JournalWorkspace servers={snapshot.servers} />
     </div>
   );
 }
