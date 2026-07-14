@@ -646,7 +646,9 @@ input {
   padding: 12px 14px;
   border: 1px solid rgba(103, 215, 255, 0.16);
   border-radius: 13px;
-  background: linear-gradient(90deg, rgba(103, 215, 255, 0.065), rgba(255, 255, 255, 0.018));
+  background:
+    linear-gradient(90deg, rgba(103, 215, 255, 0.1), rgba(255, 255, 255, 0.03)),
+    rgba(9, 16, 23, 0.91);
 }
 
 .journal-timeline-copy {
@@ -664,7 +666,67 @@ input {
   line-height: 1.35;
 }
 
-.journal-timeline label {
+.journal-timeline-control {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.journal-timeline-intensity {
+  display: grid;
+  align-items: end;
+  gap: 2px;
+  height: 52px;
+  padding: 5px;
+  border: 1px solid rgba(103, 215, 255, 0.12);
+  border-radius: 9px;
+  background:
+    linear-gradient(180deg, rgba(103, 215, 255, 0.03), rgba(3, 7, 11, 0.34)),
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent calc(50% - 1px),
+      rgba(169, 197, 214, 0.08) calc(50% - 1px),
+      rgba(169, 197, 214, 0.08) 50%
+    );
+}
+
+.journal-timeline-bar {
+  display: flex;
+  align-items: flex-end;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 3px 3px 1px 1px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.journal-timeline-bar span {
+  display: block;
+  width: 100%;
+  min-height: 2px;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(255, 211, 108, 0.78), rgba(103, 215, 255, 0.42));
+  box-shadow: 0 0 12px rgba(103, 215, 255, 0.12);
+  opacity: 0.66;
+  transition: height 120ms ease, opacity 120ms ease, filter 120ms ease;
+}
+
+.journal-timeline-bar:hover span,
+.journal-timeline-bar:focus-visible span,
+.journal-timeline-bar.is-selected span {
+  opacity: 1;
+  filter: brightness(1.22);
+}
+
+.journal-timeline-bar.is-selected {
+  box-shadow: 0 0 0 1px rgba(103, 215, 255, 0.58);
+}
+
+.journal-timeline-control label {
   min-width: 0;
 }
 
@@ -857,6 +919,23 @@ input {
 .journal-event-list {
   display: grid;
   gap: 7px;
+  max-height: min(620px, 68dvh);
+  padding-right: 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+}
+
+.journal-event-list::-webkit-scrollbar {
+  width: 9px;
+}
+
+.journal-event-list::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: rgba(169, 197, 214, 0.42);
+  background-clip: padding-box;
 }
 
 .journal-event-row {
@@ -1024,7 +1103,8 @@ input {
 .journal-tab:focus-visible,
 .journal-more-button:focus-visible,
 .journal-pagination-button:focus-visible,
-.journal-timeline input:focus-visible {
+.journal-timeline input:focus-visible,
+.journal-timeline-bar:focus-visible {
   outline: 2px solid rgba(103, 215, 255, 0.42);
   outline-offset: 2px;
 }

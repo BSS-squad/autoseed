@@ -8,6 +8,14 @@ export type Timeline = {
   durationMinutes: number;
 };
 
+export type TimelineIntensityBucket = {
+  startAt: number;
+  endAt: number;
+  eventCount: number;
+  eventsPerSecond: number;
+  relativeIntensity: number;
+};
+
 function parseEventTime(value: string | null | undefined): number | null {
   if (!value) return null;
   const timestamp = Date.parse(value);
@@ -58,6 +66,45 @@ export function buildTimeline(
     endAt,
     durationMinutes: Math.max(0, Math.ceil((endAt - startAt) / 60_000))
   };
+}
+
+export function buildTimelineIntensity(
+  events: Array<{ occurredAt: string | null | undefined }>,
+  timeline: Timeline,
+  preferredBucketCount = 60
+): TimelineIntensityBucket[] {
+  const durationMs = Math.max(1_000, timeline.endAt - timeline.startAt);
+  const durationSeconds = Math.max(1, Math.ceil(durationMs / 1_000));
+  const bucketCount = Math.min(
+    durationSeconds,
+    Math.max(1, Math.floor(preferredBucketCount))
+  );
+  const bucketDurationMs = durationMs / bucketCount;
+  const eventCounts = Array.from({ length: bucketCount }, () => 0);
+
+  for (const event of events) {
+    const timestamp = parseEventTime(event.occurredAt);
+    if (timestamp === null || timestamp < timeline.startAt || timestamp > timeline.endAt) continue;
+    const position = (timestamp - timeline.startAt) / durationMs;
+    const bucketIndex = Math.min(bucketCount - 1, Math.floor(position * bucketCount));
+    eventCounts[bucketIndex] += 1;
+  }
+
+  const rates = eventCounts.map((count) => count / (bucketDurationMs / 1_000));
+  const peakRate = Math.max(...rates, 0);
+
+  return eventCounts.map((eventCount, index) => {
+    const startAt = timeline.startAt + index * bucketDurationMs;
+    const endAt = Math.min(timeline.endAt, startAt + bucketDurationMs);
+    const eventsPerSecond = rates[index];
+    return {
+      startAt,
+      endAt,
+      eventCount,
+      eventsPerSecond,
+      relativeIntensity: peakRate > 0 ? eventsPerSecond / peakRate : 0
+    };
+  });
 }
 
 export function findTimelineEventIndex(

@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   buildTimeline,
+  buildTimelineIntensity,
   findTimelineEventIndex,
   getPageCount,
   getPageForEventIndex,
@@ -34,4 +35,25 @@ test('finds the first event at the selected timeline minute', () => {
   assert.equal(findTimelineEventIndex(events, timeline!, 2), 1);
   assert.equal(findTimelineEventIndex(events, timeline!, 6), 2);
   assert.equal(findTimelineEventIndex(events, timeline!, 7), 2);
+});
+
+test('builds a compact intensity diagram from per-second events', () => {
+  const events = [
+    { occurredAt: '2026-07-06T10:00:00.000Z' },
+    { occurredAt: '2026-07-06T10:00:00.000Z' },
+    { occurredAt: '2026-07-06T10:00:01.000Z' },
+    { occurredAt: '2026-07-06T10:00:04.000Z' }
+  ];
+  const timeline = buildTimeline(events);
+  const intensity = buildTimelineIntensity(events, timeline!, 4);
+
+  assert.equal(intensity.length, 4);
+  assert.deepEqual(
+    intensity.map((bucket) => bucket.eventCount),
+    [2, 1, 0, 1]
+  );
+  assert.equal(intensity[0]?.eventsPerSecond, 2);
+  assert.equal(intensity[0]?.relativeIntensity, 1);
+  assert.equal(intensity[1]?.relativeIntensity, 0.5);
+  assert.equal(intensity[2]?.relativeIntensity, 0);
 });
