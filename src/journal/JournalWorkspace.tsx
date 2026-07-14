@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { fetchActivitySession } from '../lib/snapshot';
 import {
   buildTimeline,
+  buildTimelineIntensity,
   EVENT_PAGE_SIZE_OPTIONS,
   findTimelineEventIndex,
   getPageCount,
@@ -50,7 +51,7 @@ const EMPTY_EVENTS: ExporterActivitySessionEventsSnapshot = {
   vehicles: []
 };
 
-const DEFAULT_EVENT_PAGE_SIZE: EventPageSize = 100;
+const DEFAULT_EVENT_PAGE_SIZE: EventPageSize = 10;
 
 function classNames(...values: Array<string | false | null | undefined>): string {
   return values.filter(Boolean).join(' ');
@@ -456,11 +457,20 @@ function EventJournal({
   const pageCount = getPageCount(filteredEvents.length, pageSize);
   const visibleEvents = filteredEvents.slice(pageRange.start, pageRange.end);
   const timeline = buildTimeline(filteredEvents);
+  const timelineIntensity = useMemo(
+    () => (timeline ? buildTimelineIntensity(filteredEvents, timeline) : []),
+    [filteredEvents, timeline]
+  );
   const [timelineMinute, setTimelineMinute] = useState(0);
   const [pendingEventIndex, setPendingEventIndex] = useState<number | null>(null);
   const eventRefs = useRef(new Map<number, HTMLElement>());
+  const eventListRef = useRef<HTMLDivElement | null>(null);
+  const previousPageStartRef = useRef(pageRange.start);
   const selectedTimelineAt = timeline
-    ? timeline.startAt + Math.min(timelineMinute, timeline.durationMinutes) * 60_000
+    ? Math.min(
+        timeline.endAt,
+        timeline.startAt + Math.min(timelineMinute, timeline.durationMinutes) * 60_000
+      )
     : null;
 
   useEffect(() => {
@@ -477,9 +487,30 @@ function EventJournal({
     if (pendingEventIndex === null) return;
     const row = eventRefs.current.get(pendingEventIndex);
     if (!row) return;
-    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const eventList = eventListRef.current;
+    if (eventList) {
+      const rowBounds = row.getBoundingClientRect();
+      const listBounds = eventList.getBoundingClientRect();
+      eventList.scrollTo({
+        top:
+          eventList.scrollTop +
+          rowBounds.top -
+          listBounds.top -
+          Math.max(0, (eventList.clientHeight - row.clientHeight) / 2),
+        behavior: 'smooth'
+      });
+    } else {
+      row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
     setPendingEventIndex(null);
   }, [pageRange.start, pendingEventIndex, visibleEvents.length]);
+
+  useEffect(() => {
+    if (previousPageStartRef.current === pageRange.start) return;
+    previousPageStartRef.current = pageRange.start;
+    if (pendingEventIndex !== null) return;
+    eventListRef.current?.scrollTo({ top: 0 });
+  }, [pageRange.start]);
 
   const selectedCountLabel = filteredEvents.length
     ? `Показано ${pageRange.start + 1}–${pageRange.end} из ${filteredEvents.length}`
@@ -536,24 +567,63 @@ function EventJournal({
       </div>
 
       {timeline && timeline.durationMinutes > 0 ? (
-        <section className="journal-timeline" aria-label="Переход по времени матча">
+        <section
+          className="journal-timeline"
+          aria-label="Переход по времени матча"
+          data-testid="journal-timeline-panel"
+        >
           <div className="journal-timeline-copy">
             <strong>Шкала времени</strong>
-            <span>Перетащите ползунок, чтобы перейти к нужной минуте.</span>
+            <span>Пики показывают плотность событий; выберите момент или перетащите ползунок.</span>
           </div>
-          <label>
-            <span className="sr-only">Минута события</span>
-            <input
-              aria-label="Минута события"
-              data-testid="journal-timeline"
-              type="range"
-              min="0"
-              max={timeline.durationMinutes}
-              step="1"
-              value={Math.min(timelineMinute, timeline.durationMinutes)}
-              onChange={(event) => handleTimelineChange(Number(event.target.value))}
-            />
-          </label>
+          <div className="journal-timeline-control">
+            <div
+              className="journal-timeline-intensity"
+              aria-label="Плотность событий по времени"
+              data-testid="journal-timeline-intensity"
+              style={{ gridTemplateColumns: `repeat(${timelineIntensity.length}, minmax(2px, 1fr))` }}
+            >
+              {timelineIntensity.map((bucket, index) => {
+                const bucketMinute = Math.min(
+                  timeline.durationMinutes,
+                  Math.max(0, Math.round((bucket.startAt - timeline.startAt) / 60_000))
+                );
+                const selected =
+                  selectedTimelineAt !== null &&
+                  selectedTimelineAt >= bucket.startAt &&
+                  (selectedTimelineAt < bucket.endAt || index === timelineIntensity.length - 1);
+                const intensity = bucket.eventCount ? Math.max(0.12, bucket.relativeIntensity) : 0;
+                const label = `${formatTimelineTime(bucket.startAt)}–${formatTimelineTime(bucket.endAt)}: ${bucket.eventCount} событий, ${formatNumber(bucket.eventsPerSecond)} в секунду`;
+
+                return (
+                  <button
+                    className={classNames('journal-timeline-bar', selected && 'is-selected')}
+                    type="button"
+                    key={`${bucket.startAt}:${index}`}
+                    aria-label={label}
+                    data-testid={`journal-timeline-bucket-${index}`}
+                    title={label}
+                    onClick={() => handleTimelineChange(bucketMinute)}
+                  >
+                    <span aria-hidden="true" style={{ height: `${intensity * 100}%` }} />
+                  </button>
+                );
+              })}
+            </div>
+            <label>
+              <span className="sr-only">Минута события</span>
+              <input
+                aria-label="Минута события"
+                data-testid="journal-timeline"
+                type="range"
+                min="0"
+                max={timeline.durationMinutes}
+                step="1"
+                value={Math.min(timelineMinute, timeline.durationMinutes)}
+                onChange={(event) => handleTimelineChange(Number(event.target.value))}
+              />
+            </label>
+          </div>
           <div className="journal-timeline-scale" aria-live="polite">
             <time dateTime={new Date(timeline.startAt).toISOString()}>{formatTimelineTime(timeline.startAt)}</time>
             <strong>{selectedTimelineAt ? formatTimelineTime(selectedTimelineAt) : '—'}</strong>
@@ -563,7 +633,7 @@ function EventJournal({
       ) : null}
 
       {visibleEvents.length ? (
-        <div className="journal-event-list">
+        <div className="journal-event-list" ref={eventListRef}>
           {visibleEvents.map((event, index) => (
             <EventRow
               event={event}

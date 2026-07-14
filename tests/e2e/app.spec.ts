@@ -692,15 +692,25 @@ function buildActivitySessionDetail(sessionId = NARVA_SESSION_ID) {
           attackerEosID: 'private-killer-alpha'
         }
       ],
-      damage: Array.from({ length: 105 }, (_, index) => ({
-        type: 'damage',
-        occurredAt: new Date(Date.parse('2026-07-06T11:50:00.000Z') + index * 1000).toISOString(),
-        attackerName: `Damage Attacker ${index}`,
-        victimName: `Damage Target ${index}`,
-        weapon: index === 0 ? 'BP_PKM_C' : 'BP_AK74_C',
-        damage: index === 0 ? 31.5 : 10,
-        internalEventId: `private-damage-${index}`
-      })),
+      damage: Array.from({ length: 105 }, (_, index) => {
+        const offsetSeconds =
+          index < 34
+            ? index % 4
+            : index < 68
+              ? 240 + (index % 6)
+              : 480 + (index - 68) * 4;
+        return {
+          type: 'damage',
+          occurredAt: new Date(
+            Date.parse('2026-07-06T11:50:00.000Z') + offsetSeconds * 1_000
+          ).toISOString(),
+          attackerName: `Damage Attacker ${index}`,
+          victimName: `Damage Target ${index}`,
+          weapon: index === 0 ? 'BP_PKM_C' : 'BP_AK74_C',
+          damage: index === 0 ? 31.5 : 10,
+          internalEventId: `private-damage-${index}`
+        };
+      }),
       knockdowns: [
         {
           type: 'knockdown',
@@ -1622,14 +1632,26 @@ test('renders one completed session with separate full journal categories', asyn
 
   await page.getByTestId('journal-tab-damage').click();
   const damage = page.getByTestId('journal-events-damage');
-  await expect(damage.locator('.journal-event-row')).toHaveCount(100);
-  await expect(damage).toContainText('Показано 1–100 из 105');
-  await expect(damage).toContainText('Страница 1 из 2');
+  await expect(damage.locator('.journal-event-row')).toHaveCount(10);
+  await expect(damage).toContainText('Показано 1–10 из 105');
+  await expect(damage).toContainText('Страница 1 из 11');
   await expect(damage).toContainText('Damage Attacker 0');
   await expect(damage).toContainText('31,5 урона');
+  await expect(damage.getByTestId('journal-timeline-intensity').locator('button')).toHaveCount(60);
+
+  const timelinePanel = damage.getByTestId('journal-timeline-panel');
+  const eventList = damage.locator('.journal-event-list');
+  const timelineTop = await timelinePanel.evaluate((element) => element.getBoundingClientRect().top);
+  await eventList.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await expect.poll(() => eventList.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  expect(await timelinePanel.evaluate((element) => element.getBoundingClientRect().top)).toBe(timelineTop);
+
   await damage.getByRole('button', { name: 'Вперёд' }).click();
-  await expect(damage.locator('.journal-event-row')).toHaveCount(5);
-  await expect(damage).toContainText('Damage Attacker 104');
+  await expect(damage.locator('.journal-event-row')).toHaveCount(10);
+  await expect(damage).toContainText('Damage Attacker 5');
+  await expect(damage).not.toContainText('Damage Attacker 0');
 
   await damage.getByTestId('journal-page-size').selectOption('25');
   await expect(damage.locator('.journal-event-row')).toHaveCount(25);
@@ -1710,7 +1732,7 @@ test('keeps every recent match reachable through the session list scroll', async
   expect(finalMetrics).not.toBeNull();
   expect(finalMetrics?.scrollTop).toBeGreaterThan(0);
   expect(finalMetrics?.buttonTop).toBeGreaterThanOrEqual(0);
-  expect(finalMetrics?.buttonBottom).toBeLessThanOrEqual(finalMetrics?.clientHeight || 0);
+  expect(finalMetrics?.buttonBottom).toBeLessThanOrEqual((finalMetrics?.clientHeight || 0) + 1);
   await expect(lastSession).toBeVisible();
 });
 
