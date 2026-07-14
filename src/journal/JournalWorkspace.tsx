@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { fetchActivitySession } from '../lib/snapshot';
+import { SCOREBOARD_METRICS, sortScoreboardPlayers } from './scoreboard';
 import type {
   ExporterActivityEventCountsSnapshot,
   ExporterActivityKillfeedEventSnapshot,
   ExporterActivityRecentRoundSnapshot,
-  ExporterActivityScoreboardPlayerSnapshot,
   ExporterActivitySessionEventsSnapshot,
   ExporterActivitySessionResponse,
   ExporterActivityTopWindowSnapshot,
@@ -17,8 +17,6 @@ type JournalWorkspaceProps = {
 };
 
 type JournalTab = 'scoreboard' | 'kills' | 'damage' | 'vehicles' | 'revives';
-type ScoreboardSort = 'kills' | 'deaths' | 'revives' | 'knockdowns' | 'name';
-
 type DetailState = {
   key: string;
   status: 'idle' | 'loading' | 'ready' | 'error';
@@ -286,17 +284,6 @@ function getEventLabel(event: ExporterActivityKillfeedEventSnapshot): string {
   return event.type.toLowerCase() === 'teamkill' ? 'Тимкилл' : 'Убийство';
 }
 
-function sortScoreboardPlayers(
-  players: ExporterActivityScoreboardPlayerSnapshot[],
-  sort: ScoreboardSort
-): ExporterActivityScoreboardPlayerSnapshot[] {
-  return players.slice().sort((left, right) => {
-    if (sort === 'name') return left.name.localeCompare(right.name, 'ru');
-    const difference = Number(right[sort]) - Number(left[sort]);
-    return difference || right.kills - left.kills || left.name.localeCompare(right.name, 'ru');
-  });
-}
-
 function SessionTopSummary({ topWindow }: { topWindow: ExporterActivityTopWindowSnapshot | null }) {
   if (!topWindow?.entries.length) return null;
   return (
@@ -318,15 +305,7 @@ function SessionTopSummary({ topWindow }: { topWindow: ExporterActivityTopWindow
   );
 }
 
-function ScoreboardView({
-  response,
-  sort,
-  onSortChange
-}: {
-  response: ExporterActivitySessionResponse;
-  sort: ScoreboardSort;
-  onSortChange: (value: ScoreboardSort) => void;
-}) {
+function ScoreboardView({ response }: { response: ExporterActivitySessionResponse }) {
   const teams = response.session.scoreboard?.teams || [];
   if (!teams.length) {
     return (
@@ -342,21 +321,8 @@ function ScoreboardView({
       <div className="journal-toolbar journal-scoreboard-toolbar">
         <div>
           <strong>Итоговая таблица</strong>
-          <span>Данные за выбранный завершённый матч</span>
+          <span>По убийствам, затем по меньшему числу смертей и поднятиям</span>
         </div>
-        <label>
-          <span>Сортировка</span>
-          <select
-            value={sort}
-            onChange={(event) => onSortChange(event.target.value as ScoreboardSort)}
-          >
-            <option value="kills">По убийствам</option>
-            <option value="deaths">По смертям</option>
-            <option value="revives">По поднятиям</option>
-            <option value="knockdowns">По нокаутам</option>
-            <option value="name">По имени</option>
-          </select>
-        </label>
       </div>
 
       <div className="journal-scoreboard-teams">
@@ -373,8 +339,8 @@ function ScoreboardView({
                   <h3>{team.name}</h3>
                 </div>
                 <p>
-                  {team.totals.kills} убийств · {team.totals.deaths || 0} смертей ·{' '}
-                  {team.totals.revives || 0} поднятий
+                  {team.totals.revives || 0} поднятий · {team.totals.knockdowns} нокаутов ·{' '}
+                  {team.totals.kills} убийств · {team.totals.deaths || 0} смертей
                 </p>
               </header>
               {unknown ? (
@@ -388,21 +354,19 @@ function ScoreboardView({
                     <tr>
                       <th>Игрок</th>
                       <th>Отряд / роль</th>
-                      <th>Убийства</th>
-                      <th>Смерти</th>
-                      <th>Поднятия</th>
-                      <th>Нокауты</th>
+                      {SCOREBOARD_METRICS.map((metric) => (
+                        <th key={metric.key}>{metric.label}</th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {sortScoreboardPlayers(team.players, sort).map((player, index) => (
+                    {sortScoreboardPlayers(team.players).map((player, index) => (
                       <tr key={`${player.name}:${index}`}>
                         <td>{player.name}</td>
                         <td>{[player.squad, player.role].filter(Boolean).join(' · ') || '—'}</td>
-                        <td>{player.kills}</td>
-                        <td>{player.deaths}</td>
-                        <td>{player.revives}</td>
-                        <td>{player.knockdowns}</td>
+                        {SCOREBOARD_METRICS.map((metric) => (
+                          <td key={metric.key}>{player[metric.key]}</td>
+                        ))}
                       </tr>
                     ))}
                   </tbody>
@@ -525,7 +489,6 @@ export function JournalWorkspace({ servers }: JournalWorkspaceProps) {
   });
   const [search, setSearch] = useState('');
   const [visibleLimit, setVisibleLimit] = useState(EVENT_PAGE_SIZE);
-  const [scoreboardSort, setScoreboardSort] = useState<ScoreboardSort>('kills');
 
   const selectedServer = useMemo(() => {
     const requestedCode = selectedServerCode.trim();
@@ -740,10 +703,10 @@ export function JournalWorkspace({ servers }: JournalWorkspaceProps) {
 
               <div className="journal-match-metrics">
                 <div><span>Игроков</span><strong>{selectedSession.playerCount}</strong></div>
-                <div><span>Убийств</span><strong>{selectedSession.totals.kills}</strong></div>
-                <div><span>Смертей</span><strong>{selectedSession.totals.deaths || 0}</strong></div>
                 <div><span>Поднятий</span><strong>{selectedSession.totals.revives || 0}</strong></div>
                 <div><span>Нокаутов</span><strong>{selectedSession.totals.knockdowns}</strong></div>
+                <div><span>Убийств</span><strong>{selectedSession.totals.kills}</strong></div>
+                <div><span>Смертей</span><strong>{selectedSession.totals.deaths || 0}</strong></div>
               </div>
 
               {response && !response.session.journalAvailable ? (
@@ -783,11 +746,7 @@ export function JournalWorkspace({ servers }: JournalWorkspaceProps) {
                     <p>{activeDetail?.error || 'Сервер ещё не подготовил архив выбранного матча.'}</p>
                   </div>
                 ) : tab === 'scoreboard' ? (
-                  <ScoreboardView
-                    response={response}
-                    sort={scoreboardSort}
-                    onSortChange={setScoreboardSort}
-                  />
+                  <ScoreboardView response={response} />
                 ) : (
                   <EventJournal
                     events={response.events || EMPTY_EVENTS}

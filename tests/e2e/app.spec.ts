@@ -1586,6 +1586,11 @@ test('renders one completed session with separate full journal categories', asyn
   await expect(page.getByTestId('journal-scoreboard')).toContainText('Winner Player');
   await expect(page.getByTestId('journal-scoreboard')).toContainText('Orange · Rifleman');
   await expect(page.getByTestId('journal-scoreboard')).toContainText('Победа');
+  const scoreboardHeaders = ['Игрок', 'Отряд / роль', 'Поднятия', 'Нокауты', 'Убийства', 'Смерти'];
+  await expect(page.getByTestId('journal-scoreboard').locator('thead th')).toHaveText([
+    ...scoreboardHeaders,
+    ...scoreboardHeaders
+  ]);
   await expect.poll(() => sessionRequests).toContain(NARVA_SESSION_ID);
   await expect(page).toHaveURL(
     new RegExp(`#journal\\?server=squadjs2&session=${NARVA_SESSION_ID}&tab=scoreboard$`)
