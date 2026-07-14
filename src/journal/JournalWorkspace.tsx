@@ -1,6 +1,15 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { fetchActivitySession } from '../lib/snapshot';
+import {
+  buildTimeline,
+  EVENT_PAGE_SIZE_OPTIONS,
+  findTimelineEventIndex,
+  getPageCount,
+  getPageForEventIndex,
+  getPageRange,
+  type EventPageSize
+} from './event-navigation';
 import { SCOREBOARD_METRICS, sortScoreboardPlayers } from './scoreboard';
 import type {
   ExporterActivityEventCountsSnapshot,
@@ -41,7 +50,7 @@ const EMPTY_EVENTS: ExporterActivitySessionEventsSnapshot = {
   vehicles: []
 };
 
-const EVENT_PAGE_SIZE = 100;
+const DEFAULT_EVENT_PAGE_SIZE: EventPageSize = 100;
 
 function classNames(...values: Array<string | false | null | undefined>): string {
   return values.filter(Boolean).join(' ');
@@ -129,6 +138,14 @@ function formatEventTime(value: string | null): string {
     minute: '2-digit',
     second: '2-digit'
   }).format(date);
+}
+
+function formatTimelineTime(value: number): string {
+  return new Intl.DateTimeFormat('ru-RU', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  }).format(new Date(value));
 }
 
 function formatNumber(value: number | null | undefined): string {
@@ -380,7 +397,13 @@ function ScoreboardView({ response }: { response: ExporterActivitySessionRespons
   );
 }
 
-function EventRow({ event }: { event: ExporterActivityKillfeedEventSnapshot }) {
+function EventRow({
+  event,
+  eventRef
+}: {
+  event: ExporterActivityKillfeedEventSnapshot;
+  eventRef?: (element: HTMLElement | null) => void;
+}) {
   const tone = getEventTone(event);
   const actor = event.attackerName || 'Источник не определён';
   const target = event.vehicleName || event.victimName || 'Цель не определена';
@@ -391,7 +414,11 @@ function EventRow({ event }: { event: ExporterActivityKillfeedEventSnapshot }) {
       : null;
 
   return (
-    <article className={classNames('journal-event-row', `tone-${tone}`)}>
+    <article
+      className={classNames('journal-event-row', `tone-${tone}`)}
+      ref={eventRef}
+      tabIndex={-1}
+    >
       <time dateTime={event.occurredAt || undefined}>{formatEventTime(event.occurredAt)}</time>
       <span className="journal-event-kind">{getEventLabel(event)}</span>
       <div className="journal-event-main">
@@ -408,20 +435,64 @@ function EventJournal({
   events,
   tab,
   search,
-  visibleLimit,
+  page,
+  pageSize,
   onSearchChange,
-  onShowMore
+  onPageChange,
+  onPageSizeChange
 }: {
   events: ExporterActivitySessionEventsSnapshot;
   tab: JournalTab;
   search: string;
-  visibleLimit: number;
+  page: number;
+  pageSize: EventPageSize;
   onSearchChange: (value: string) => void;
-  onShowMore: () => void;
+  onPageChange: (value: number) => void;
+  onPageSizeChange: (value: EventPageSize) => void;
 }) {
-  const allEvents = getTabEvents(events, tab);
+  const allEvents = useMemo(() => getTabEvents(events, tab), [events, tab]);
   const filteredEvents = allEvents.filter((event) => matchesSearch(event, search));
-  const visibleEvents = filteredEvents.slice(0, visibleLimit);
+  const pageRange = getPageRange(filteredEvents.length, page, pageSize);
+  const pageCount = getPageCount(filteredEvents.length, pageSize);
+  const visibleEvents = filteredEvents.slice(pageRange.start, pageRange.end);
+  const timeline = buildTimeline(filteredEvents);
+  const [timelineMinute, setTimelineMinute] = useState(0);
+  const [pendingEventIndex, setPendingEventIndex] = useState<number | null>(null);
+  const eventRefs = useRef(new Map<number, HTMLElement>());
+  const selectedTimelineAt = timeline
+    ? timeline.startAt + Math.min(timelineMinute, timeline.durationMinutes) * 60_000
+    : null;
+
+  useEffect(() => {
+    setTimelineMinute(0);
+    setPendingEventIndex(null);
+  }, [events, tab]);
+
+  useEffect(() => {
+    if (!timeline) return;
+    setTimelineMinute((value) => Math.min(value, timeline.durationMinutes));
+  }, [timeline?.durationMinutes]);
+
+  useEffect(() => {
+    if (pendingEventIndex === null) return;
+    const row = eventRefs.current.get(pendingEventIndex);
+    if (!row) return;
+    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setPendingEventIndex(null);
+  }, [pageRange.start, pendingEventIndex, visibleEvents.length]);
+
+  const selectedCountLabel = filteredEvents.length
+    ? `Показано ${pageRange.start + 1}–${pageRange.end} из ${filteredEvents.length}`
+    : 'Событий не найдено';
+
+  const handleTimelineChange = (value: number) => {
+    if (!timeline) return;
+    setTimelineMinute(value);
+    const eventIndex = findTimelineEventIndex(filteredEvents, timeline, value);
+    if (eventIndex === null) return;
+    setPendingEventIndex(eventIndex);
+    onPageChange(getPageForEventIndex(eventIndex, filteredEvents.length, pageSize));
+  };
 
   return (
     <div className="journal-events" data-testid={`journal-events-${tab}`}>
@@ -429,20 +500,67 @@ function EventJournal({
         <div>
           <strong>Полный журнал сессии</strong>
           <span>
-            Показано {visibleEvents.length} из {filteredEvents.length}
+            {selectedCountLabel}
+            {pageSize === 'all' && filteredEvents.length ? ' · целиком' : ''}
             {search ? ` · всего ${allEvents.length}` : ''}
           </span>
         </div>
-        <label className="journal-search">
-          <span>Поиск</span>
-          <input
-            type="search"
-            value={search}
-            onChange={(event) => onSearchChange(event.target.value)}
-            placeholder="Игрок, цель или оружие"
-          />
-        </label>
+        <div className="journal-toolbar-controls">
+          <label className="journal-search">
+            <span>Поиск</span>
+            <input
+              type="search"
+              value={search}
+              onChange={(event) => onSearchChange(event.target.value)}
+              placeholder="Игрок, цель или оружие"
+            />
+          </label>
+          <label className="journal-page-size">
+            <span>Событий на странице</span>
+            <select
+              aria-label="Событий на странице"
+              data-testid="journal-page-size"
+              value={String(pageSize)}
+              onChange={(event) => {
+                const next = event.target.value;
+                onPageSizeChange(next === 'all' ? 'all' : Number(next) as EventPageSize);
+              }}
+            >
+              {EVENT_PAGE_SIZE_OPTIONS.map((option) => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+              <option value="all">Целиком</option>
+            </select>
+          </label>
+        </div>
       </div>
+
+      {timeline && timeline.durationMinutes > 0 ? (
+        <section className="journal-timeline" aria-label="Переход по времени матча">
+          <div className="journal-timeline-copy">
+            <strong>Шкала времени</strong>
+            <span>Перетащите ползунок, чтобы перейти к нужной минуте.</span>
+          </div>
+          <label>
+            <span className="sr-only">Минута события</span>
+            <input
+              aria-label="Минута события"
+              data-testid="journal-timeline"
+              type="range"
+              min="0"
+              max={timeline.durationMinutes}
+              step="1"
+              value={Math.min(timelineMinute, timeline.durationMinutes)}
+              onChange={(event) => handleTimelineChange(Number(event.target.value))}
+            />
+          </label>
+          <div className="journal-timeline-scale" aria-live="polite">
+            <time dateTime={new Date(timeline.startAt).toISOString()}>{formatTimelineTime(timeline.startAt)}</time>
+            <strong>{selectedTimelineAt ? formatTimelineTime(selectedTimelineAt) : '—'}</strong>
+            <time dateTime={new Date(timeline.endAt).toISOString()}>{formatTimelineTime(timeline.endAt)}</time>
+          </div>
+        </section>
+      ) : null}
 
       {visibleEvents.length ? (
         <div className="journal-event-list">
@@ -450,6 +568,11 @@ function EventJournal({
             <EventRow
               event={event}
               key={`${event.type}:${event.occurredAt || 'no-time'}:${event.attackerName || ''}:${event.victimName || event.vehicleName || ''}:${index}`}
+              eventRef={(element) => {
+                const eventIndex = pageRange.start + index;
+                if (element) eventRefs.current.set(eventIndex, element);
+                else eventRefs.current.delete(eventIndex);
+              }}
             />
           ))}
         </div>
@@ -466,10 +589,26 @@ function EventJournal({
         </div>
       )}
 
-      {visibleEvents.length < filteredEvents.length ? (
-        <button className="journal-more-button" type="button" onClick={onShowMore}>
-          Показать ещё {Math.min(EVENT_PAGE_SIZE, filteredEvents.length - visibleEvents.length)}
-        </button>
+      {pageSize !== 'all' && filteredEvents.length > 0 ? (
+        <nav className="journal-pagination" aria-label="Страницы журнала">
+          <button
+            className="journal-pagination-button"
+            type="button"
+            onClick={() => onPageChange(pageRange.page - 1)}
+            disabled={pageRange.page <= 1}
+          >
+            Назад
+          </button>
+          <span>Страница {pageRange.page} из {pageCount}</span>
+          <button
+            className="journal-pagination-button"
+            type="button"
+            onClick={() => onPageChange(pageRange.page + 1)}
+            disabled={pageRange.page >= pageCount}
+          >
+            Вперёд
+          </button>
+        </nav>
       ) : null}
     </div>
   );
@@ -488,7 +627,8 @@ export function JournalWorkspace({ servers }: JournalWorkspaceProps) {
     error: null
   });
   const [search, setSearch] = useState('');
-  const [visibleLimit, setVisibleLimit] = useState(EVENT_PAGE_SIZE);
+  const [eventPage, setEventPage] = useState(1);
+  const [eventPageSize, setEventPageSize] = useState<EventPageSize>(DEFAULT_EVENT_PAGE_SIZE);
 
   const selectedServer = useMemo(() => {
     const requestedCode = selectedServerCode.trim();
@@ -535,7 +675,7 @@ export function JournalWorkspace({ servers }: JournalWorkspaceProps) {
 
   useEffect(() => {
     setSearch('');
-    setVisibleLimit(EVENT_PAGE_SIZE);
+    setEventPage(1);
   }, [selectedServer?.code, selectedSession?.sessionId, tab]);
 
   useEffect(() => {
@@ -752,9 +892,17 @@ export function JournalWorkspace({ servers }: JournalWorkspaceProps) {
                     events={response.events || EMPTY_EVENTS}
                     tab={tab}
                     search={search}
-                    visibleLimit={visibleLimit}
-                    onSearchChange={setSearch}
-                    onShowMore={() => setVisibleLimit((value) => value + EVENT_PAGE_SIZE)}
+                    page={eventPage}
+                    pageSize={eventPageSize}
+                    onSearchChange={(value) => {
+                      setSearch(value);
+                      setEventPage(1);
+                    }}
+                    onPageChange={setEventPage}
+                    onPageSizeChange={(value) => {
+                      setEventPageSize(value);
+                      setEventPage(1);
+                    }}
                   />
                 )}
               </div>
