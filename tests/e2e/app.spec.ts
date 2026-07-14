@@ -1607,12 +1607,20 @@ test('renders one completed session with separate full journal categories', asyn
   await page.getByTestId('journal-tab-damage').click();
   const damage = page.getByTestId('journal-events-damage');
   await expect(damage.locator('.journal-event-row')).toHaveCount(100);
-  await expect(damage).toContainText('Показано 100 из 105');
+  await expect(damage).toContainText('Показано 1–100 из 105');
+  await expect(damage).toContainText('Страница 1 из 2');
   await expect(damage).toContainText('Damage Attacker 0');
   await expect(damage).toContainText('31,5 урона');
-  await damage.getByRole('button', { name: 'Показать ещё 5' }).click();
-  await expect(damage.locator('.journal-event-row')).toHaveCount(105);
+  await damage.getByRole('button', { name: 'Вперёд' }).click();
+  await expect(damage.locator('.journal-event-row')).toHaveCount(5);
   await expect(damage).toContainText('Damage Attacker 104');
+
+  await damage.getByTestId('journal-page-size').selectOption('25');
+  await expect(damage.locator('.journal-event-row')).toHaveCount(25);
+  await expect(damage).toContainText('Показано 1–25 из 105');
+  await damage.getByTestId('journal-page-size').selectOption('all');
+  await expect(damage.locator('.journal-event-row')).toHaveCount(105);
+  await expect(damage).toContainText('Показано 1–105 из 105 · целиком');
 
   await page.getByTestId('journal-tab-vehicles').click();
   const vehicles = page.getByTestId('journal-events-vehicles');
