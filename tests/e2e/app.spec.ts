@@ -546,6 +546,22 @@ function buildActivitySnapshot() {
   };
 }
 
+function buildActivitySnapshotWithTenSessions() {
+  const activity = buildActivitySnapshot();
+  const originalSessions = activity.sessions;
+  const sessions = Array.from({ length: 10 }, (_, index) => {
+    const original = originalSessions[index] || originalSessions[0];
+    return {
+      ...original,
+      sessionId: index === 0 ? NARVA_SESSION_ID : `session-scroll-${index + 1}`,
+      endedAt: new Date(Date.parse('2026-07-06T12:00:00.000Z') - index * 60 * 60 * 1000).toISOString(),
+      layer: `Карта для прокрутки ${index + 1}`
+    };
+  });
+
+  return { ...activity, sessions, recentRounds: sessions };
+}
+
 function buildActivitySessionDetail(sessionId = NARVA_SESSION_ID) {
   if (sessionId === GORODOK_SESSION_ID) {
     return {
@@ -1648,6 +1664,54 @@ test('renders one completed session with separate full journal categories', asyn
   );
   expect(sessionRequests.filter((sessionId) => sessionId === NARVA_SESSION_ID)).toHaveLength(1);
   expect(sessionRequests.filter((sessionId) => sessionId === GORODOK_SESSION_ID)).toHaveLength(1);
+});
+
+test('keeps every recent match reachable through the session list scroll', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 720 });
+  await mockAutoseedApi(page, undefined, singleJournalServerRuntimeConfig, {
+    squadjs2Activity: buildActivitySnapshotWithTenSessions(),
+    squadjs2ActivitySessions: {
+      [NARVA_SESSION_ID]: buildActivitySessionDetail()
+    }
+  });
+
+  await page.goto('/#journal');
+
+  const sessionList = page.locator('.journal-session-list');
+  const lastSession = page.getByTestId('journal-session-session-scroll-10');
+  await expect(sessionList.locator('.journal-session-button')).toHaveCount(10);
+  await expect(lastSession).not.toBeInViewport();
+
+  const scrollMetrics = await sessionList.evaluate((element) => ({
+    clientHeight: element.clientHeight,
+    overflowY: getComputedStyle(element).overflowY,
+    scrollHeight: element.scrollHeight
+  }));
+  expect(scrollMetrics.overflowY).toMatch(/auto|scroll/);
+  expect(scrollMetrics.scrollHeight).toBeGreaterThan(scrollMetrics.clientHeight);
+
+  await sessionList.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  const finalMetrics = await sessionList.evaluate((element) => {
+    const lastButton = element.querySelector<HTMLElement>(
+      '[data-testid="journal-session-session-scroll-10"]'
+    );
+    if (!lastButton) return null;
+    const listBounds = element.getBoundingClientRect();
+    const buttonBounds = lastButton.getBoundingClientRect();
+    return {
+      scrollTop: element.scrollTop,
+      buttonTop: buttonBounds.top - listBounds.top,
+      buttonBottom: buttonBounds.bottom - listBounds.top,
+      clientHeight: element.clientHeight
+    };
+  });
+  expect(finalMetrics).not.toBeNull();
+  expect(finalMetrics?.scrollTop).toBeGreaterThan(0);
+  expect(finalMetrics?.buttonTop).toBeGreaterThanOrEqual(0);
+  expect(finalMetrics?.buttonBottom).toBeLessThanOrEqual(finalMetrics?.clientHeight || 0);
+  await expect(lastSession).toBeVisible();
 });
 
 test('restores selected server, session and category from the journal URL', async ({ page }) => {

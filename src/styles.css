@@ -236,6 +236,7 @@ input {
   position: sticky;
   top: 14px;
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 12px;
   max-height: calc(100vh - 28px);
   padding: 14px;
@@ -270,7 +271,20 @@ input {
   padding-right: 3px;
   overflow: auto;
   list-style: none;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   scrollbar-width: thin;
+}
+
+.journal-session-list::-webkit-scrollbar {
+  width: 9px;
+}
+
+.journal-session-list::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: rgba(169, 197, 214, 0.42);
+  background-clip: padding-box;
 }
 
 .journal-session-item {
@@ -3826,21 +3840,17 @@ input {
 
   .journal-session-sidebar {
     position: static;
-    max-height: none;
-    overflow: visible;
+    max-height: min(680px, calc(100dvh - 32px));
   }
 
   .journal-session-list {
-    grid-template-columns: none;
-    grid-auto-flow: column;
-    grid-auto-columns: minmax(245px, 70vw);
-    padding: 0 0 4px;
-    overflow-x: auto;
-    scroll-snap-type: x proximity;
-  }
-
-  .journal-session-item {
-    scroll-snap-align: start;
+    grid-template-columns: minmax(0, 1fr);
+    grid-auto-flow: row;
+    grid-auto-columns: auto;
+    padding: 0 3px 0 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scroll-snap-type: none;
   }
 
   .journal-top-list {
@@ -4065,10 +4075,6 @@ input {
 
   .journal-server-switcher {
     grid-auto-columns: minmax(230px, 84vw);
-  }
-
-  .journal-session-list {
-    grid-auto-columns: minmax(230px, 82vw);
   }
 
   .journal-match-hero,
