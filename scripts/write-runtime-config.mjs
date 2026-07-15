@@ -6,6 +6,13 @@ const publicDir = path.join(rootDir, 'public');
 const outputPath = path.join(publicDir, 'runtime-config.json');
 const examplePath = path.join(publicDir, 'runtime-config.example.json');
 const rawConfig = process.env.AUTOSEED_RUNTIME_CONFIG_JSON;
+const productionMode = process.env.AUTOSEED_RUNTIME_CONFIG_MODE === 'production';
+const allowedExporterOrigins = new Set(
+  String(process.env.AUTOSEED_ALLOWED_EXPORTER_ORIGINS || '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)
+);
 
 const allowedPolicyKeys = new Set([
   'timezone',
@@ -45,7 +52,7 @@ function assertFiniteNumber(value, location) {
   }
 }
 
-function assertPublicUrl(value, location) {
+function assertPublicUrl(value, location, { allowedOrigins } = {}) {
   assertNonEmptyString(value, location);
 
   let url;
@@ -63,6 +70,14 @@ function assertPublicUrl(value, location) {
     url.hash
   ) {
     throw new Error(`Public runtime config has unsafe ${location}.`);
+  }
+
+  if (productionMode && url.protocol !== 'https:') {
+    throw new Error(`Production runtime config requires HTTPS at ${location}.`);
+  }
+
+  if (productionMode && allowedOrigins && !allowedOrigins.has(url.origin)) {
+    throw new Error(`Production runtime config has an unapproved origin at ${location}.`);
   }
 }
 
@@ -125,11 +140,16 @@ function assertRuntimeConfig(config) {
   if (!Array.isArray(config.exporters) || config.exporters.length === 0) {
     throw new Error('Public runtime config must contain at least one exporter.');
   }
+  if (productionMode && allowedExporterOrigins.size === 0) {
+    throw new Error('Production runtime config has no approved exporter origins.');
+  }
   for (const exporter of config.exporters) {
     assertPlainObject(exporter, 'exporter');
     assertAllowedKeys(exporter, new Set(['name', 'baseUrl']), 'exporter');
     assertNonEmptyString(exporter.name, 'exporter.name');
-    assertPublicUrl(exporter.baseUrl, 'exporter.baseUrl');
+    assertPublicUrl(exporter.baseUrl, 'exporter.baseUrl', {
+      allowedOrigins: allowedExporterOrigins
+    });
   }
 }
 

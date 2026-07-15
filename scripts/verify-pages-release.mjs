@@ -3,8 +3,20 @@ const expectedSha = process.env.EXPECTED_RELEASE_SHA;
 const maxAgeMs = Number(process.env.EXPORTER_MAX_AGE_MS || 120_000);
 const maxFutureSkewMs = Number(process.env.EXPORTER_MAX_FUTURE_SKEW_MS || 30_000);
 const requestTimeoutMs = Number(process.env.SMOKE_REQUEST_TIMEOUT_MS || 15_000);
+const allowedExporterOrigins = new Set(
+  String(process.env.ALLOWED_EXPORTER_ORIGINS || '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)
+);
 
-if (!pageUrl || !expectedSha || !Number.isFinite(maxAgeMs) || !Number.isFinite(maxFutureSkewMs)) {
+if (
+  !pageUrl ||
+  !expectedSha ||
+  !Number.isFinite(maxAgeMs) ||
+  !Number.isFinite(maxFutureSkewMs) ||
+  allowedExporterOrigins.size === 0
+) {
   throw new Error('Pages smoke configuration is invalid.');
 }
 
@@ -67,7 +79,7 @@ function assertExporterConfig(exporter) {
   }
 
   if (
-    !['http:', 'https:'].includes(baseUrl.protocol) ||
+    baseUrl.protocol !== 'https:' ||
     baseUrl.username ||
     baseUrl.password ||
     baseUrl.search ||
@@ -75,12 +87,23 @@ function assertExporterConfig(exporter) {
   ) {
     throw new Error(`Exporter ${exporter.name} has an unsafe URL.`);
   }
+
+  if (!allowedExporterOrigins.has(baseUrl.origin)) {
+    throw new Error(`Exporter ${exporter.name} has an unapproved origin.`);
+  }
 }
 
-const release = await fetchJson(new URL('release.json', basePageUrl), 'Release manifest');
-if (release?.sha !== expectedSha) {
-  throw new Error('Pages serves a different release than the deployed commit.');
+async function waitForExpectedRelease(attempts = 6) {
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const release = await fetchJson(new URL('release.json', basePageUrl), 'Release manifest', 2);
+    if (release?.sha === expectedSha) return;
+    if (attempt < attempts) await sleep(attempt * 3_000);
+  }
+
+  throw new Error('Pages still serves a different release than the deployed commit.');
 }
+
+await waitForExpectedRelease();
 
 const config = await fetchJson(new URL('runtime-config.json', basePageUrl), 'Runtime config');
 if (!Array.isArray(config?.exporters) || config.exporters.length === 0) {

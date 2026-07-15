@@ -7,13 +7,14 @@ import test from 'node:test';
 
 const generatorPath = path.resolve('scripts/write-runtime-config.mjs');
 
-function runGenerator(config: unknown) {
+function runGenerator(config: unknown, extraEnvironment: NodeJS.ProcessEnv = {}) {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autoseed-runtime-config-'));
   const result = spawnSync(process.execPath, [generatorPath], {
     cwd: tempDir,
     encoding: 'utf8',
     env: {
       ...process.env,
+      ...extraEnvironment,
       AUTOSEED_RUNTIME_CONFIG_JSON: JSON.stringify(config)
     }
   });
@@ -83,4 +84,46 @@ test('runtime config generator rejects exporter URLs with credentials', (t) => {
 
   assert.notEqual(result.status, 0);
   assert.equal(fs.existsSync(result.outputPath), false);
+});
+
+test('production runtime config accepts only HTTPS exporters from approved origins', (t) => {
+  const environment = {
+    AUTOSEED_RUNTIME_CONFIG_MODE: 'production',
+    AUTOSEED_ALLOWED_EXPORTER_ORIGINS: 'https://api.squad.leo-land.ru'
+  };
+  const approved = runGenerator(
+    {
+      app: { title: 'BSS AutoConnect' },
+      exporters: [
+        {
+          name: 'squadjs1',
+          baseUrl: 'https://api.squad.leo-land.ru/squadjs1/v1/autoseed'
+        }
+      ]
+    },
+    environment
+  );
+  const privateOrigin = runGenerator(
+    {
+      app: { title: 'BSS AutoConnect' },
+      exporters: [{ name: 'squadjs1', baseUrl: 'http://127.0.0.1/autoseed' }]
+    },
+    environment
+  );
+  const unapprovedOrigin = runGenerator(
+    {
+      app: { title: 'BSS AutoConnect' },
+      exporters: [{ name: 'squadjs1', baseUrl: 'https://example.test/autoseed' }]
+    },
+    environment
+  );
+  t.after(() => {
+    for (const result of [approved, privateOrigin, unapprovedOrigin]) {
+      fs.rmSync(result.tempDir, { recursive: true, force: true });
+    }
+  });
+
+  assert.equal(approved.status, 0, approved.stderr);
+  assert.notEqual(privateOrigin.status, 0);
+  assert.notEqual(unapprovedOrigin.status, 0);
 });
