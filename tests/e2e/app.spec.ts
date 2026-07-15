@@ -9,13 +9,8 @@ const runtimeConfig = {
     debugLogLimit: 80
   },
   policy: {
-    timezone: 'Europe/Moscow',
-    nightWindowStart: '23:00',
-    nightWindowEnd: '08:00',
-    nightPreferredServerId: 2,
     maxSeedPlayers: 80,
     priorityOrder: [1, 2, 3],
-    switchDelta: 10,
     cooldownMs: 600000,
     periodicReconnectMs: 600000
   },
@@ -697,6 +692,59 @@ test('renders the localized control room from exporter snapshots', async ({ page
   await expect(page.getByTestId('active-server-board')).toContainText('вход по запросу');
   await expect(page.getByText('Как запустить')).toBeVisible();
   await expect(page.getByText('Выбор сервера')).toBeVisible();
+});
+
+test('always prefers Mix before Spec Ops and Invasion when every seed server is suitable', async ({
+  page
+}) => {
+  await mockAutoseedApi(page);
+
+  await page.unroute('**/runtime-config.json');
+  await page.unroute('**/mock/squadjs1/snapshot');
+  await page.route('**/runtime-config.json', (route) =>
+    fulfillJson(route, {
+      ...runtimeConfig,
+      exporters: [
+        ...runtimeConfig.exporters,
+        {
+          name: 'squadjs3',
+          baseUrl: 'http://127.0.0.1:4173/mock/squadjs3'
+        }
+      ]
+    })
+  );
+  await page.route('**/mock/squadjs1/snapshot', (route) =>
+    fulfillJson(
+      route,
+      buildSnapshot({
+        id: 1,
+        code: 'squadjs1',
+        name: '[RU] BSS Mix',
+        playerCount: 0,
+        maxPlayers: 100,
+        queueLength: 0,
+        online: true
+      })
+    )
+  );
+  await page.route('**/mock/squadjs3/snapshot', (route) =>
+    fulfillJson(
+      route,
+      buildSnapshot({
+        id: 3,
+        code: 'squadjs3',
+        name: '[RU] BSS Invasion',
+        playerCount: 0,
+        maxPlayers: 100,
+        queueLength: 0,
+        online: true
+      })
+    )
+  );
+
+  await page.goto('/');
+
+  await expect(page.getByTestId('overview-target')).toContainText('[RU] BSS Mix');
 });
 
 test('uses player-friendly language on the home page', async ({ page }) => {

@@ -14,10 +14,8 @@
 - policy живёт только во frontend runtime-config;
 - страница победителей доступна по GitHub Pages hash-route `/#winners`;
 - текущая BSS policy:
-  - ночью `nightPreferredServerId=2`
-  - днём приоритет `1 -> 2 -> 3` (`Mix -> Spec Ops -> Invasion`)
+  - в любое время приоритет `1 -> 2 -> 3` (`Mix -> Spec Ops -> Invasion`)
   - лимит `maxSeedPlayers=80`
-  - `switchDelta=10`
 
 ## 1. Frontend: GitHub Pages
 
@@ -32,13 +30,8 @@
     "debugLogLimit": 80
   },
   "policy": {
-    "timezone": "Europe/Moscow",
-    "nightWindowStart": "23:00",
-    "nightWindowEnd": "08:00",
-    "nightPreferredServerId": 2,
     "maxSeedPlayers": 80,
     "priorityOrder": [1, 2, 3],
-    "switchDelta": 10,
     "cooldownMs": 600000
   },
   "exporters": [
@@ -120,9 +113,7 @@
 
 - `exporters[].baseUrl`
 - `policy.priorityOrder`
-- `policy.nightPreferredServerId`
 - `policy.maxSeedPlayers`
-- `policy.switchDelta`
 - `policy.cooldownMs`
 
 ### Меняется на каждом сервере SquadJS
@@ -137,7 +128,7 @@
 
 На текущий момент для BSS публичные connect-адреса такие:
 
-- `squadjs1` / `[RU] МирДружбаЖвачка ★ BSS ★ [КЛАССИКА]` -> `80.242.59.123:7800`
+- `squadjs1` / `[RU] МирДружбаЖвачка ★ BSS ★ [МИКС]` -> `80.242.59.123:7800`
 - `squadjs2` / `[RU] МирДружбаЖвачка ★ BSS ★ [SPEC OPS]` -> `80.242.59.123:7801`
 
 При этом в SquadJS-конфигах `queryPort` остаётся `7810` и `7811`. Это нормально: exporter больше не должен использовать `queryPort` или `steam://connect` как fallback. Единственный допустимый источник `joinLink` для автоконнектора теперь это lobby link из `Squadbrowser API`.
@@ -212,13 +203,8 @@ networks:
     "debugLogLimit": 80
   },
   "policy": {
-    "timezone": "Europe/Moscow",
-    "nightWindowStart": "23:00",
-    "nightWindowEnd": "08:00",
-    "nightPreferredServerId": 2,
     "maxSeedPlayers": 80,
     "priorityOrder": [1, 2, 3],
-    "switchDelta": 10,
     "cooldownMs": 600000
   },
   "exporters": [

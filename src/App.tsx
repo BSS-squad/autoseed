@@ -1422,7 +1422,7 @@ export default function App({ config }: AppProps) {
         appendLog(
           `Данные ${source === 'manual' ? 'получены' : 'обновлены'}: выбранный сервер=${
             nextRedirectPlan[0]?.name || nextSelection.targetServer?.name || 'нет'
-          }, режим=${testModeEnabled ? 'тест' : nextSelection.nightMode ? 'ночь' : 'день'}`
+          }, режим=${testModeEnabled ? 'тест' : 'обычный'}`
         );
 
         if (!enabledRef.current) return;

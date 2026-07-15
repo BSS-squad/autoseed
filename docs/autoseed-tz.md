@@ -194,31 +194,22 @@ Frontend на GitHub Pages должен:
 
 Логика выбора сервера остаётся:
 
-1. Ночной режим.
-2. Приоритет `1 -> 2 -> 3` (`Mix -> Spec Ops -> Invasion`).
-3. Лимит `< 80`.
-4. `switchDelta > 10`.
-5. Fallback на самый населённый подходящий seed-сервер.
+1. Приоритет `1 -> 2 -> 3` (`Mix -> Spec Ops -> Invasion`) в любое время.
+2. Лимит `< 80`.
+3. Fallback на самый населённый подходящий seed-сервер, если подходящих серверов нет в policy.
 
 ### Формализация
 
-1. Если локальное время политики попадает в диапазон `23:00–08:00`, целевым считается `nightPreferredServerId` из frontend runtime-config.
-2. В дневном режиме рассматриваются только серверы, где `online === true` и `isSeedCandidate === true`.
-3. Исключаются серверы с `playerCount >= maxSeedPlayers`.
-4. Сначала проверяется порядок `1 -> 2 -> 3` (`Mix -> Spec Ops -> Invasion`).
-5. Если другой кандидат опережает приоритетный сервер более чем на `switchDelta`, выбирается более населённый сервер.
-6. Если приоритетного победителя нет, выбирается наиболее населённый подходящий seed-сервер.
-7. Если кандидатов нет, redirect не выполняется.
+1. Рассматриваются только серверы, где `online === true` и `isSeedCandidate === true`.
+2. Исключаются серверы с `playerCount >= maxSeedPlayers`.
+3. Сначала проверяется порядок `1 -> 2 -> 3` (`Mix -> Spec Ops -> Invasion`).
+4. Если ни один сервер из policy не подходит, выбирается наиболее населённый подходящий seed-сервер.
+5. Если кандидатов нет, redirect не выполняется.
 
 ### Актуальная policy BSS
 
-- `timezone`: `Europe/Moscow`
-- `nightWindowStart`: `23:00`
-- `nightWindowEnd`: `08:00`
-- `nightPreferredServerId`: `2`
-- `priorityOrder`: `1 -> 2 -> 3` (`Mix -> Spec Ops -> Invasion`)
+- `priorityOrder`: `1 -> 2 -> 3` (`Mix -> Spec Ops -> Invasion`) в любое время
 - `maxSeedPlayers`: `80`
-- `switchDelta`: `10`
 
 ## Правила redirect
 

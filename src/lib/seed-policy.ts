@@ -6,46 +6,11 @@ import type {
 } from '../types';
 
 export const DEFAULT_SEED_POLICY: SeedPolicy = {
-  timezone: 'Europe/Moscow',
-  nightWindowStart: '23:00',
-  nightWindowEnd: '08:00',
-  nightPreferredServerId: 2,
   maxSeedPlayers: 80,
   priorityOrder: [1, 2, 3],
-  switchDelta: 10,
   cooldownMs: 10 * 60 * 1000,
   periodicReconnectMs: 10 * 60 * 1000
 };
-
-function getMinutesInTimezone(timezone: string, date = new Date()): number {
-  const parts = new Intl.DateTimeFormat('en-GB', {
-    timeZone: timezone,
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false
-  }).formatToParts(date);
-
-  const hour = Number(parts.find((part) => part.type === 'hour')?.value || '0');
-  const minute = Number(parts.find((part) => part.type === 'minute')?.value || '0');
-  return hour * 60 + minute;
-}
-
-function parseTime(value: string): number {
-  const [hour, minute] = value.split(':').map((part) => Number(part));
-  return hour * 60 + minute;
-}
-
-function isNightWindow(policy: SeedPolicy, date = new Date()): boolean {
-  const current = getMinutesInTimezone(policy.timezone, date);
-  const start = parseTime(policy.nightWindowStart);
-  const end = parseTime(policy.nightWindowEnd);
-
-  if (start <= end) {
-    return current >= start && current < end;
-  }
-
-  return current >= start || current < end;
-}
 
 function isSuitableSeedCandidate(server: ExporterServerSnapshot): boolean {
   return server.online && server.isSeedCandidate;
@@ -69,12 +34,6 @@ export function determineTargetServer(
 
   if (!candidates.length) return null;
 
-  if (isNightWindow(policy)) {
-    const preferredNightServer =
-      candidates.find((server) => server.id === policy.nightPreferredServerId) || null;
-    if (preferredNightServer) return preferredNightServer;
-  }
-
   const priorityCandidate = policy.priorityOrder
     .map((serverId) => candidates.find((server) => server.id === serverId) || null)
     .find(Boolean) as ExporterServerSnapshot | undefined;
@@ -85,14 +44,6 @@ export function determineTargetServer(
 
   if (!priorityCandidate) {
     return strongest || null;
-  }
-
-  if (
-    strongest &&
-    strongest.id !== priorityCandidate.id &&
-    strongest.playerCount - priorityCandidate.playerCount > policy.switchDelta
-  ) {
-    return strongest;
   }
 
   return priorityCandidate;
@@ -106,15 +57,13 @@ export function buildSelectionState(
   if (!targetServer) {
     return {
       targetServer: null,
-      reason: 'no_suitable_server',
-      nightMode: isNightWindow(policy)
+      reason: 'no_suitable_server'
     };
   }
 
   return {
     targetServer,
-    reason: 'target_found',
-    nightMode: isNightWindow(policy)
+    reason: 'target_found'
   };
 }
 
