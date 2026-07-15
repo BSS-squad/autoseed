@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       deploy:
@@ -16,15 +19,18 @@ permissions:
   contents: read
 
 concurrency:
-  group: pages
-  cancel-in-progress: true
+  group: pages-${{ github.event.pull_request.number || github.ref_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   quality:
     if: github.repository == 'BSS-squad/autoseed'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
+    env:
+      VITE_BASE_PATH: /autoseed/
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
@@ -35,19 +41,18 @@ jobs:
       - run: npm run test:unit
       - run: npm run build
       - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e
+      - run: PLAYWRIGHT_SERVER=preview PLAYWRIGHT_BASE_PATH="$VITE_BASE_PATH" npm run test:e2e
 
-  build:
+  package:
     if: >-
       github.repository == 'BSS-squad/autoseed' &&
       github.ref_name == github.event.repository.default_branch &&
       (github.event_name == 'push' || inputs.deploy)
     needs: quality
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
-      pages: write
-      id-token: write
     env:
       AUTOSEED_RUNTIME_CONFIG_JSON: ${{ secrets.AUTOSEED_RUNTIME_CONFIG_JSON }}
       VITE_BASE_PATH: ${{ vars.VITE_BASE_PATH }}
@@ -59,6 +64,39 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      - name: Add release manifest
+        env:
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          fs.writeFileSync('dist/release.json', `${JSON.stringify({ sha: process.env.RELEASE_SHA })}\n`);
+          NODE
+      - run: npx playwright install --with-deps chromium
+      - run: PLAYWRIGHT_SERVER=preview PLAYWRIGHT_BASE_PATH="${VITE_BASE_PATH:-/}" npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pages-dist
+          path: ./dist
+          if-no-files-found: error
+          retention-days: 1
+
+  upload:
+    if: >-
+      github.repository == 'BSS-squad/autoseed' &&
+      github.ref_name == github.event.repository.default_branch &&
+      (github.event_name == 'push' || inputs.deploy)
+    needs: package
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          name: pages-dist
+          path: ./dist
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:
@@ -69,8 +107,9 @@ jobs:
       github.repository == 'BSS-squad/autoseed' &&
       github.ref_name == github.event.repository.default_branch &&
       (github.event_name == 'push' || inputs.deploy)
-    needs: build
+    needs: upload
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       pages: write
       id-token: write
@@ -90,45 +129,23 @@ jobs:
       (github.event_name == 'push' || inputs.deploy)
     needs: deploy
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
     env:
       PAGES_URL: ${{ needs.deploy.outputs.page_url }}
+      EXPECTED_RELEASE_SHA: ${{ github.sha }}
       EXPORTER_MAX_AGE_MS: 120000
+      EXPORTER_MAX_FUTURE_SKEW_MS: 30000
+      SMOKE_REQUEST_TIMEOUT_MS: 15000
     steps:
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: 22
-
       - name: Wait for Pages availability
-        run: curl --fail --location --retry 6 --retry-all-errors --retry-delay 5 "$PAGES_URL"
-
-      - name: Verify public runtime config and exporter freshness
-        run: |
-          node <<'NODE'
-          const pageUrl = process.env.PAGES_URL;
-          const maxAgeMs = Number(process.env.EXPORTER_MAX_AGE_MS);
-          if (!pageUrl || !Number.isFinite(maxAgeMs)) throw new Error('Smoke configuration is invalid.');
-
-          const basePageUrl = pageUrl.endsWith('/') ? pageUrl : `${pageUrl}/`;
-          const configResponse = await fetch(new URL('runtime-config.json', basePageUrl));
-          if (!configResponse.ok) throw new Error(`Runtime config request failed: ${configResponse.status}.`);
-          const config = await configResponse.json();
-          if (!Array.isArray(config?.exporters) || config.exporters.length === 0) {
-            throw new Error('Runtime config has no exporters.');
-          }
-
-          await Promise.all(config.exporters.map(async (exporter) => {
-            if (!exporter?.name || !exporter?.baseUrl) throw new Error('Runtime config exporter is invalid.');
-            const snapshotUrl = new URL('snapshot', `${String(exporter.baseUrl).replace(/\/+$/, '')}/`);
-            const response = await fetch(snapshotUrl, { signal: AbortSignal.timeout(15_000) });
-            if (!response.ok) throw new Error(`Exporter ${exporter.name} snapshot failed: ${response.status}.`);
-            const snapshot = await response.json();
-            const timestamp = Number(snapshot?.timestamp || Date.parse(snapshot?.generatedAt || ''));
-            if (!snapshot?.success || !Number.isFinite(timestamp) || Date.now() - timestamp > maxAgeMs) {
-              throw new Error(`Exporter ${exporter.name} snapshot is stale or invalid.`);
-            }
-          }));
-
-          console.log(`Pages smoke passed for ${config.exporters.length} exporters.`);
-          NODE
+        run: >-
+          curl --fail --location --retry 6 --retry-all-errors --retry-delay 5
+          --connect-timeout 10 --max-time 20 "$PAGES_URL"
+      - name: Verify deployed release and exporter freshness
+        run: node scripts/verify-pages-release.mjs
