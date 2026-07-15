@@ -323,6 +323,8 @@ test('keeps public activity fields and drops private ids from exporter snapshots
                 {
                   endedAt: '2026-07-06T12:00:00.000Z',
                   layer: 'Narva RAAS v2',
+                  layerSource: 'new_game',
+                  layerMissingReason: null,
                   winner: { team: '1', faction: 'Winner', tickets: 123 },
                   loser: { team: '2', faction: 'Loser', tickets: 20 },
                   playerCount: 80,
@@ -432,6 +434,8 @@ test('keeps public activity fields and drops private ids from exporter snapshots
   const activity = snapshot.servers[0]?.activity;
 
   assert.equal(activity?.recentRounds[0]?.layer, 'Narva RAAS v2');
+  assert.equal(activity?.recentRounds[0]?.layerSource, 'new_game');
+  assert.equal(activity?.recentRounds[0]?.layerMissingReason, null);
   assert.equal(activity?.recentRounds.length, 1);
   assert.equal(activity?.recentRounds[0]?.scoreboard?.teams.length, 2);
   assert.deepEqual(activity?.recentRounds[0]?.scoreboard?.teams[0]?.players[0], {
