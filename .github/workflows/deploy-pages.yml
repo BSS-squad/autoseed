@@ -5,16 +5,49 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      deploy:
+        description: 'Опубликовать Pages после проверок (только для main)'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
 
 jobs:
-  build:
+  quality:
     if: github.repository == 'BSS-squad/autoseed'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:unit
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+
+  build:
+    if: >-
+      github.repository == 'BSS-squad/autoseed' &&
+      github.ref_name == github.event.repository.default_branch &&
+      (github.event_name == 'push' || inputs.deploy)
+    needs: quality
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     env:
       AUTOSEED_RUNTIME_CONFIG_JSON: ${{ secrets.AUTOSEED_RUNTIME_CONFIG_JSON }}
       VITE_BASE_PATH: ${{ vars.VITE_BASE_PATH }}
@@ -32,11 +65,70 @@ jobs:
           path: ./dist
 
   deploy:
+    if: >-
+      github.repository == 'BSS-squad/autoseed' &&
+      github.ref_name == github.event.repository.default_branch &&
+      (github.event_name == 'push' || inputs.deploy)
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
         uses: actions/deploy-pages@v5
+
+  smoke:
+    if: >-
+      github.repository == 'BSS-squad/autoseed' &&
+      github.ref_name == github.event.repository.default_branch &&
+      (github.event_name == 'push' || inputs.deploy)
+    needs: deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      PAGES_URL: ${{ needs.deploy.outputs.page_url }}
+      EXPORTER_MAX_AGE_MS: 120000
+    steps:
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Wait for Pages availability
+        run: curl --fail --location --retry 6 --retry-all-errors --retry-delay 5 "$PAGES_URL"
+
+      - name: Verify public runtime config and exporter freshness
+        run: |
+          node <<'NODE'
+          const pageUrl = process.env.PAGES_URL;
+          const maxAgeMs = Number(process.env.EXPORTER_MAX_AGE_MS);
+          if (!pageUrl || !Number.isFinite(maxAgeMs)) throw new Error('Smoke configuration is invalid.');
+
+          const basePageUrl = pageUrl.endsWith('/') ? pageUrl : `${pageUrl}/`;
+          const configResponse = await fetch(new URL('runtime-config.json', basePageUrl));
+          if (!configResponse.ok) throw new Error(`Runtime config request failed: ${configResponse.status}.`);
+          const config = await configResponse.json();
+          if (!Array.isArray(config?.exporters) || config.exporters.length === 0) {
+            throw new Error('Runtime config has no exporters.');
+          }
+
+          await Promise.all(config.exporters.map(async (exporter) => {
+            if (!exporter?.name || !exporter?.baseUrl) throw new Error('Runtime config exporter is invalid.');
+            const snapshotUrl = new URL('snapshot', `${String(exporter.baseUrl).replace(/\/+$/, '')}/`);
+            const response = await fetch(snapshotUrl, { signal: AbortSignal.timeout(15_000) });
+            if (!response.ok) throw new Error(`Exporter ${exporter.name} snapshot failed: ${response.status}.`);
+            const snapshot = await response.json();
+            const timestamp = Number(snapshot?.timestamp || Date.parse(snapshot?.generatedAt || ''));
+            if (!snapshot?.success || !Number.isFinite(timestamp) || Date.now() - timestamp > maxAgeMs) {
+              throw new Error(`Exporter ${exporter.name} snapshot is stale or invalid.`);
+            }
+          }));
+
+          console.log(`Pages smoke passed for ${config.exporters.length} exporters.`);
+          NODE
