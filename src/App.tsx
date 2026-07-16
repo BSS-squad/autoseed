@@ -350,31 +350,6 @@ function formatBalancerHistoryStatus(entry: ExporterTeamBalancerHistoryEntrySnap
   return `${modeLabel} · ${formatBalancerStatusLabel(entry.status)}`;
 }
 
-function formatBalancerProposalModeLabel(value: TeamBalancerProposalMode | string | null | undefined): string {
-  const mode = String(value || '').trim().toLowerCase();
-  if (mode === 'squad') return 'Сквады';
-  if (mode === 'player') return 'Игроки';
-  return String(value || '').trim() || 'Режим';
-}
-
-function formatBalancerHistoryModeSummaries(
-  entry: ExporterTeamBalancerHistoryEntrySnapshot
-): string[] {
-  const modes = entry.proposalModes;
-  if (!modes) return [];
-
-  return (['squad', 'player'] as TeamBalancerProposalMode[]).flatMap((mode) => {
-    const proposal = modes[mode];
-    if (!proposal) return [];
-
-    const label = formatBalancerProposalModeLabel(proposal.proposalMode || mode);
-    const count = proposal.plannedPlayers
-      ? formatPlayerMoveCount(proposal.plannedPlayers)
-      : 'без перемещений';
-    return [`${label}: ${count}`];
-  });
-}
-
 function formatRaffleSource(value: string): string {
   return value === 'auto' ? 'запущен автоматически' : 'запущен администратором';
 }
@@ -1718,16 +1693,25 @@ function TeamBalancerPanel({
     [proposalMode, snapshot, visibleAssignmentTones]
   );
   const showModeSwitch = Boolean(snapshot && view.modes.length > 1);
+  const control = snapshot?.control || null;
+  const activeControlVote = control?.activeVote || null;
+  const controlVoteGate = activeControlVote?.voteGate || null;
+  const controlLabel = control
+    ? control.enabled
+      ? 'Автобаланс включён'
+      : 'Автобаланс выключен'
+    : 'Состояние управления не получено';
+  const voteTargetLabel = activeControlVote?.targetEnabled ? 'включить' : 'выключить';
 
   return (
     <section
       className={classNames('team-balancer-panel', `tone-${view.tone}`)}
       data-testid="team-balancer-panel"
-      aria-label="Dry-run баланс сторон"
+      aria-label="Предварительный расчёт баланса сторон"
     >
       <div className="team-balancer-head">
         <div>
-          <span className="section-eyebrow">Dry-run</span>
+          <span className="section-eyebrow">Предварительный расчёт</span>
           <h3>Баланс сторон</h3>
         </div>
         <span
@@ -1738,13 +1722,48 @@ function TeamBalancerPanel({
         </span>
       </div>
 
+      <div
+        className={classNames(
+          'team-balancer-control',
+          control?.enabled ? 'is-enabled' : 'is-disabled'
+        )}
+        data-testid="team-balancer-control"
+      >
+        <div>
+          <span>Управление</span>
+          <strong>{controlLabel}</strong>
+        </div>
+        {!control ? (
+          <p>Данные управления ещё не получены от сервера.</p>
+        ) : activeControlVote ? (
+          <p data-testid="team-balancer-control-vote">
+            Идёт голосование, чтобы {voteTargetLabel} автобаланс: за{' '}
+            {controlVoteGate?.yesVotes || 0}, против {controlVoteGate?.noVotes || 0}, нужно{' '}
+            {controlVoteGate?.requiredVotes || 0}. Голос: <code>!автобаланс за</code> или{' '}
+            <code>!автобаланс против</code>.
+          </p>
+        ) : (
+          <p>
+            Голосование запускается командами <code>!автобаланс вкл</code> и{' '}
+            <code>!автобаланс выкл</code>; один игрок может начать его не чаще раза в сутки.
+          </p>
+        )}
+        <small>
+          {!control
+            ? 'Команды появятся после обновления серверного плагина.'
+            : control.enabled
+              ? 'Перемещения выполняются только после завершения матча, во время выбора следующей карты.'
+              : 'Перемещения отключены. После включения они будут возможны только после завершения матча, во время выбора следующей карты.'}
+        </small>
+      </div>
+
       <div className="team-balancer-meta">
         <div>
           <span>Причина</span>
           <strong>{view.triggerLabel}</strong>
         </div>
         <div>
-          <span>Diff состава</span>
+          <span>Изменение состава</span>
           <strong>{view.assignmentSummary}</strong>
         </div>
         <div>
@@ -1793,7 +1812,7 @@ function TeamBalancerPanel({
         <div
           className="segmented-control team-balancer-modes"
           role="group"
-          aria-label="Режим dry-run предложений баланса"
+          aria-label="Режим предварительного расчёта баланса"
         >
           {view.modes.map((mode) => (
             <button
@@ -1836,47 +1855,61 @@ function TeamBalancerPanel({
 }
 
 function TeamBalancerHistoryPanel({ server }: ServerActivityPanelProps) {
-  const balanceHistory = server.activity?.teamBalancerHistory.slice(-10).reverse() || [];
+  const balanceHistory =
+    server.activity?.teamBalancerHistory
+      .filter((entry) =>
+        entry.trigger === 'ROUND_ENDED' &&
+        ['completed', 'failed', 'partial_failed'].includes(entry.execution?.status || '')
+      )
+      .slice(-10)
+      .reverse() || [];
 
   return (
     <section className="server-activity-panel" data-testid="team-balancer-history-panel">
       <div className="server-activity-head">
         <div>
           <span className="section-eyebrow">История</span>
-          <h3>Операции балансера</h3>
+          <h3>Межматчевые попытки балансировки</h3>
         </div>
       </div>
 
       <div className="server-activity-list">
         <div className="server-activity-list-head">
-          <span>Последние решения</span>
+          <span>Последние попытки исполнения</span>
           <strong>
-            {balanceHistory.length ? formatPlayerMoveCount(balanceHistory[0].plannedPlayers) : '—'}
+            {balanceHistory.length
+              ? `${balanceHistory[0].execution?.succeededPlayers || 0}/${balanceHistory[0].plannedPlayers}`
+              : '—'}
           </strong>
         </div>
         {balanceHistory.length ? (
           balanceHistory.map((entry) => {
             const move = entry.moves[0];
-            const actor = move?.squadName || entry.players[0]?.name || 'Состав';
-            const moveSummary = formatSideMoveSummary(move);
-            const modeSummaries = formatBalancerHistoryModeSummaries(entry);
+            const execution = entry.execution;
+            const succeededPlayers = execution?.succeededPlayers || 0;
+            const fullyCompleted = execution?.status === 'completed';
+            const moveSummary = fullyCompleted ? formatSideMoveSummary(move) : null;
+            const title = fullyCompleted
+              ? `Выполнено ${succeededPlayers} из ${entry.plannedPlayers}`
+              : execution?.status === 'partial_failed'
+                ? `Частично: ${succeededPlayers} из ${entry.plannedPlayers}`
+                : `Не выполнено: 0 из ${entry.plannedPlayers}`;
             return (
               <div className="server-activity-row" key={entry.decisionId || entry.createdAt}>
                 <span>{formatCompactTimestamp(entry.createdAt || undefined)}</span>
-                <strong>{actor}</strong>
+                <strong>{title}</strong>
                 <p>
-                  {formatBalancerHistoryStatus(entry)} ·{' '}
-                  {entry.plannedPlayers
-                    ? formatPlayerMoveCount(entry.plannedPlayers)
-                    : 'без перемещений'}
+                  {formatBalancerHistoryStatus(entry)}
                   {moveSummary ? ` · ${moveSummary}` : ''}
-                  {modeSummaries.length ? ` · ${modeSummaries.join(' · ')}` : ''}
                 </p>
               </div>
             );
           })
         ) : (
-          <div className="server-activity-empty">Нет операций.</div>
+          <div className="server-activity-empty">
+            Межматчевых попыток пока не было. Балансер может исполнять расчёт только после
+            завершения матча, во время выбора следующей карты.
+          </div>
         )}
       </div>
     </section>
@@ -1895,7 +1928,10 @@ function BalancePage({ snapshot, route, vipShopUrl }: ServerHistoryPageProps) {
             <span className="section-eyebrow">Серверы</span>
             <h1>Балансер</h1>
           </div>
-          <p>Текущее состояние и завершённая история решений по каждому серверу.</p>
+          <p>
+            Состояние голосования, предварительный расчёт и только реально выполненные
+            межматчевые перемещения.
+          </p>
         </div>
       </section>
 
@@ -1911,7 +1947,9 @@ function BalancePage({ snapshot, route, vipShopUrl }: ServerHistoryPageProps) {
                 <span className="section-eyebrow">{server.online ? 'В сети' : 'Оффлайн'}</span>
                 <h2>{server.name}</h2>
               </div>
-              <p>Текущая оценка состава и журнал уже завершённых операций.</p>
+              <p>
+                Расчёт состава не перемещает игроков: исполнение возможно только после матча.
+              </p>
             </div>
             <TeamBalancerPanel
               snapshot={server.teamBalancer}

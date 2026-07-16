@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { fetchActivitySession } from '../lib/snapshot';
+import { collapseTerminalVehicleEvents, fetchActivitySession } from '../lib/snapshot';
+import { formatDamageSource, formatVehicleName } from '../lib/vehicle-journal';
 import {
   buildTimeline,
   buildTimelineIntensity,
@@ -155,13 +156,7 @@ function formatNumber(value: number | null | undefined): string {
 }
 
 function formatWeapon(value: string | null): string {
-  if (!value) return 'оружие не записано';
-  return value
-    .replace(/^BP_/i, '')
-    .replace(/_C$/i, '')
-    .replace(/_/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+  return formatDamageSource(value);
 }
 
 function formatTeamName(
@@ -239,6 +234,7 @@ function groupLegacyEvents(
     else if (type === 'knockdown' || type === 'wound') grouped.knockdowns.push(event);
     else grouped.kills.push(event);
   }
+  grouped.vehicles = collapseTerminalVehicleEvents(grouped.vehicles);
 
   return grouped;
 }
@@ -261,13 +257,15 @@ function buildLegacyResponse(
   const inferredCounts = countEvents(events);
   const hasIndexCounts = Object.values(session.eventCounts).some((value) => value > 0);
   const hasEvents = Object.values(events).some((entries) => entries.length > 0);
+  const eventCounts = hasIndexCounts ? { ...session.eventCounts } : inferredCounts;
+  if (events.vehicles.length) eventCounts.vehicles = events.vehicles.length;
   return {
     generatedAt: server.activity?.generatedAt || null,
     session: {
       ...session,
       journalAvailable: session.journalAvailable || hasEvents,
       journalComplete: false,
-      eventCounts: hasIndexCounts ? session.eventCounts : inferredCounts
+      eventCounts
     },
     events
   };
@@ -299,7 +297,9 @@ function matchesSearch(event: ExporterActivityKillfeedEventSnapshot, search: str
     event.attackerName,
     event.victimName,
     event.vehicleName,
+    event.vehicleName ? formatVehicleName(event.vehicleName) : null,
     event.weapon,
+    event.weapon ? formatDamageSource(event.weapon) : null,
     event.type
   ].some((value) => String(value || '').toLocaleLowerCase('ru').includes(normalizedSearch));
 }
@@ -426,8 +426,11 @@ function EventRow({
   eventRef?: (element: HTMLElement | null) => void;
 }) {
   const tone = getEventTone(event);
-  const actor = event.attackerName || 'Источник не определён';
-  const target = event.vehicleName || event.victimName || 'Цель не определена';
+  const actor =
+    event.attackerName || (tone === 'vehicle' ? 'Источник не записан' : 'Неизвестный игрок');
+  const target = event.vehicleName
+    ? formatVehicleName(event.vehicleName)
+    : event.victimName || 'Цель не определена';
   const damage = typeof event.damage === 'number' ? `${formatNumber(event.damage)} урона` : null;
   const health =
     tone === 'vehicle' && typeof event.healthRemaining === 'number'

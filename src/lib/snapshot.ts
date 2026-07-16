@@ -32,6 +32,7 @@ import type {
   ExporterSnapshotTeamResponse,
   ExporterSquadSnapshot,
   ExporterTeamBalancerCohortSnapshot,
+  ExporterTeamBalancerControlSnapshot,
   ExporterTeamBalancerExecutionSnapshot,
   ExporterTeamBalancerHistoryEntrySnapshot,
   ExporterTeamBalancerMetricSnapshot,
@@ -46,6 +47,8 @@ import type {
   ExporterTeamSnapshot,
   TeamBalancerProposalMode
 } from '../types';
+
+const MAX_TERMINAL_VEHICLE_PAIR_DELTA_MS = 100;
 
 type ExporterSnapshotState = {
   name: string;
@@ -93,6 +96,13 @@ function toNumber(value: unknown, fallback = 0): number {
 }
 
 function toFiniteNumberOrNull(value: unknown): number | null {
+  if (
+    value === null ||
+    typeof value === 'undefined' ||
+    (typeof value === 'string' && !value.trim())
+  ) {
+    return null;
+  }
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
@@ -112,6 +122,70 @@ function toIsoStringOrNull(value: unknown): string | null {
   if (!value) return null;
   const date = new Date(String(value));
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function parseActivityEventTime(value: string | null): number | null {
+  if (!value) return null;
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function isTerminalVehiclePair(
+  damageEvent: ExporterActivityKillfeedEventSnapshot,
+  destroyedEvent: ExporterActivityKillfeedEventSnapshot
+): boolean {
+  if (damageEvent.destroyed || !destroyedEvent.destroyed) return false;
+  if (damageEvent.healthRemaining !== null) return false;
+  if (destroyedEvent.healthRemaining !== null && destroyedEvent.healthRemaining > 0) return false;
+  if (!damageEvent.vehicleName || damageEvent.vehicleName !== destroyedEvent.vehicleName) return false;
+  if (
+    typeof damageEvent.damage !== 'number' ||
+    !Number.isFinite(damageEvent.damage) ||
+    damageEvent.damage <= 0 ||
+    damageEvent.damage !== destroyedEvent.damage
+  ) {
+    return false;
+  }
+
+  const damageTime = parseActivityEventTime(damageEvent.occurredAt);
+  const destroyedTime = parseActivityEventTime(destroyedEvent.occurredAt);
+  if (damageTime === null || destroyedTime === null) return false;
+
+  const delta = destroyedTime - damageTime;
+  return delta >= 0 && delta <= MAX_TERMINAL_VEHICLE_PAIR_DELTA_MS;
+}
+
+export function collapseTerminalVehicleEvents(
+  events: readonly ExporterActivityKillfeedEventSnapshot[]
+): ExporterActivityKillfeedEventSnapshot[] {
+  const collapsed: ExporterActivityKillfeedEventSnapshot[] = [];
+
+  for (const event of events) {
+    if (event.destroyed) {
+      let damageIndex = -1;
+      for (let index = collapsed.length - 1; index >= 0; index -= 1) {
+        if (isTerminalVehiclePair(collapsed[index], event)) {
+          damageIndex = index;
+          break;
+        }
+      }
+
+      if (damageIndex >= 0) {
+        const damageEvent = collapsed[damageIndex];
+        collapsed[damageIndex] = {
+          ...damageEvent,
+          ...event,
+          attackerName: event.attackerName || damageEvent.attackerName,
+          weapon: event.weapon || damageEvent.weapon
+        };
+        continue;
+      }
+    }
+
+    collapsed.push({ ...event });
+  }
+
+  return collapsed;
 }
 
 function buildLegacyActivitySessionId(endedAt: string | null): string {
@@ -547,6 +621,25 @@ function mapTeamBalancerVoteGate(value: unknown): ExporterTeamBalancerVoteGateSn
   };
 }
 
+function mapTeamBalancerControl(value: unknown): ExporterTeamBalancerControlSnapshot | null {
+  const control = getRecord(value);
+  if (!control) return null;
+
+  const activeVote = getRecord(control.activeVote);
+  return {
+    enabled: Boolean(control.enabled),
+    updatedAt: toIsoStringOrNull(control.updatedAt),
+    activeVote: activeVote
+      ? {
+          targetEnabled: Boolean(activeVote.targetEnabled),
+          createdAt: toIsoStringOrNull(activeVote.createdAt),
+          expiresAt: toIsoStringOrNull(activeVote.expiresAt),
+          voteGate: mapTeamBalancerVoteGate(activeVote.voteGate)
+        }
+      : null
+  };
+}
+
 function mapTeamBalancerModeratorDecision(
   value: unknown
 ): ExporterTeamBalancerModeratorDecisionSnapshot | null {
@@ -781,6 +874,7 @@ function mapTeamBalancerSnapshot(value: unknown): ExporterTeamBalancerSnapshot |
     voteGate: mapTeamBalancerVoteGate(snapshot.voteGate),
     moderatorDecision: mapTeamBalancerModeratorDecision(snapshot.moderatorDecision),
     execution: mapTeamBalancerExecution(snapshot.execution),
+    control: mapTeamBalancerControl(snapshot.control),
     history
   };
 }
@@ -1083,7 +1177,7 @@ function mapActivitySessionEvents(value: unknown): ExporterActivitySessionEvents
     damage: mapList('damage', 'damage'),
     knockdowns: mapList('knockdowns', 'knockdown'),
     revives: mapList('revives', 'revive'),
-    vehicles: mapList('vehicles', 'vehicle')
+    vehicles: collapseTerminalVehicleEvents(mapList('vehicles', 'vehicle'))
   };
 }
 
@@ -1092,11 +1186,18 @@ function mapActivitySessionResponse(value: unknown): ExporterActivitySessionResp
   if (!payload || payload.ok !== true) return null;
   const session = mapActivityRecentRound(payload.session);
   if (!session) return null;
+  const events = mapActivitySessionEvents(payload.events);
 
   return {
     generatedAt: toIsoStringOrNull(payload.generatedAt),
-    session,
-    events: mapActivitySessionEvents(payload.events)
+    session: {
+      ...session,
+      eventCounts: {
+        ...session.eventCounts,
+        vehicles: events.vehicles.length
+      }
+    },
+    events
   };
 }
 
