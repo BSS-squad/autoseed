@@ -192,13 +192,13 @@ function formatLayerAvailability(session: ExporterActivityRecentRoundSnapshot): 
   if (session.layer) return null;
   switch (session.layerMissingReason) {
     case 'missing_start_event':
-      return 'Сборщик подключился после начала матча.';
+      return 'Событие начала матча не записано.';
     case 'missing_end_event':
-      return 'Сервер не передал время завершения матча.';
+      return 'Событие завершения матча не записано.';
     case 'unmatched_session':
       return 'События начала и завершения матча нельзя безопасно связать.';
     case 'normalization_failed':
-      return 'Сервер передал неизвестный слой; название намеренно не угадываем.';
+      return 'Название слоя не удалось распознать; его намеренно не угадываем.';
     default:
       return 'Название слоя недоступно.';
   }

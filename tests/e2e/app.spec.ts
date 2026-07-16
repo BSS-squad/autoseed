@@ -1688,41 +1688,66 @@ test('renders one completed session with separate full journal categories', asyn
   expect(sessionRequests.filter((sessionId) => sessionId === GORODOK_SESSION_ID)).toHaveLength(1);
 });
 
-test('explains a missing layer without guessing or showing a technical classname', async ({ page }) => {
-  const activity = buildActivitySnapshot();
-  const unavailableSession = {
-    ...activity.sessions[0],
-    layer: null,
-    layerSource: null,
-    layerMissingReason: 'unmatched_session'
-  };
-  activity.sessions[0] = unavailableSession;
-  activity.recentRounds[0] = unavailableSession;
-  const detail = buildActivitySessionDetail();
-  detail.session = {
-    ...detail.session,
-    layer: null,
-    layerSource: null,
-    layerMissingReason: 'unmatched_session'
-  };
+const missingLayerScenarios = [
+  {
+    reason: 'missing_start_event',
+    message: 'Событие начала матча не записано.'
+  },
+  {
+    reason: 'missing_end_event',
+    message: 'Событие завершения матча не записано.'
+  },
+  {
+    reason: 'unmatched_session',
+    message: 'События начала и завершения матча нельзя безопасно связать.'
+  },
+  {
+    reason: 'normalization_failed',
+    message: 'Название слоя не удалось распознать; его намеренно не угадываем.'
+  }
+] as const;
 
-  await mockAutoseedApi(page, undefined, singleJournalServerRuntimeConfig, {
-    squadjs2Activity: activity,
-    squadjs2ActivitySessions: { [NARVA_SESSION_ID]: detail }
+for (const scenario of missingLayerScenarios) {
+  test(`explains ${scenario.reason} without guessing or showing a technical classname`, async ({
+    page
+  }) => {
+    const activity = buildActivitySnapshot();
+    const unavailableSession = {
+      ...activity.sessions[0],
+      layer: null,
+      layerClassname: 'Technical_Layer_Classname',
+      layerSource: null,
+      layerMissingReason: scenario.reason
+    };
+    activity.sessions[0] = unavailableSession;
+    activity.recentRounds[0] = unavailableSession;
+    const detail = buildActivitySessionDetail();
+    detail.session = {
+      ...detail.session,
+      layer: null,
+      layerClassname: 'Technical_Layer_Classname',
+      layerSource: null,
+      layerMissingReason: scenario.reason
+    };
+
+    await mockAutoseedApi(page, undefined, singleJournalServerRuntimeConfig, {
+      squadjs2Activity: activity,
+      squadjs2ActivitySessions: { [NARVA_SESSION_ID]: detail }
+    });
+
+    await page.goto('/#journal');
+
+    const journalPage = page.getByTestId('journal-page');
+    const matchPanel = page.getByTestId('journal-workspace').locator('.journal-match-panel');
+    await expect(matchPanel.locator('h2')).toHaveText('Слой матча не сохранён');
+    await expect(page.getByTestId('journal-layer-status')).toHaveText(scenario.message);
+    await expect(page.getByTestId(`journal-session-${NARVA_SESSION_ID}`)).toContainText(
+      'Слой матча не сохранён'
+    );
+    await expect(journalPage).not.toContainText('Карта не записана');
+    await expect(journalPage).not.toContainText('Technical_Layer_Classname');
   });
-
-  await page.goto('/#journal');
-
-  const matchPanel = page.getByTestId('journal-workspace').locator('.journal-match-panel');
-  await expect(matchPanel.locator('h2')).toHaveText('Слой матча не сохранён');
-  await expect(page.getByTestId('journal-layer-status')).toHaveText(
-    'События начала и завершения матча нельзя безопасно связать.'
-  );
-  await expect(page.getByTestId(`journal-session-${NARVA_SESSION_ID}`)).toContainText(
-    'Слой матча не сохранён'
-  );
-  await expect(page.getByTestId('journal-page')).not.toContainText('Карта не записана');
-});
+}
 
 test('keeps every recent match reachable through the session list scroll', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 720 });
