@@ -365,6 +365,19 @@ export type ExporterTeamBalancerHistoryEntrySnapshot = {
   >;
 };
 
+export type ExporterTeamBalancerControlVoteSnapshot = {
+  targetEnabled: boolean;
+  createdAt: string | null;
+  expiresAt: string | null;
+  voteGate: ExporterTeamBalancerVoteGateSnapshot | null;
+};
+
+export type ExporterTeamBalancerControlSnapshot = {
+  enabled: boolean;
+  updatedAt: string | null;
+  activeVote: ExporterTeamBalancerControlVoteSnapshot | null;
+};
+
 export type ExporterTeamBalancerSnapshot = {
   version: number;
   schemaVersion?: number;
@@ -388,6 +401,7 @@ export type ExporterTeamBalancerSnapshot = {
   voteGate: ExporterTeamBalancerVoteGateSnapshot | null;
   moderatorDecision: ExporterTeamBalancerModeratorDecisionSnapshot | null;
   execution: ExporterTeamBalancerExecutionSnapshot | null;
+  control?: ExporterTeamBalancerControlSnapshot | null;
   history: ExporterTeamBalancerHistoryEntrySnapshot[];
 };
 

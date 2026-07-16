@@ -118,6 +118,28 @@ test('keeps Team Balancer safety gate fields from exporter snapshots', async () 
                 maxAttemptsPerPlayer: 2,
                 completedAt: null
               },
+              control: {
+                enabled: false,
+                updatedAt: '2026-07-06T11:58:00.000Z',
+                activeVote: {
+                  targetEnabled: true,
+                  createdAt: '2026-07-06T12:00:00.000Z',
+                  expiresAt: '2026-07-06T12:05:00.000Z',
+                  voteGate: {
+                    enabled: true,
+                    quorumPercent: 25,
+                    passThresholdPercent: 60,
+                    eligiblePlayerCount: 10,
+                    requiredVotes: 3,
+                    totalVotes: 2,
+                    yesVotes: 2,
+                    noVotes: 0,
+                    quorumMet: false,
+                    passThresholdMet: true,
+                    approved: false
+                  }
+                }
+              },
               history: [
                 {
                   decisionId: 'decision-1',
@@ -172,6 +194,10 @@ test('keeps Team Balancer safety gate fields from exporter snapshots', async () 
   assert.equal(teamBalancer?.moderatorDecision?.reason, 'technical');
   assert.equal(teamBalancer?.execution?.status, 'blocked');
   assert.equal(teamBalancer?.execution?.plannedPlayers, 2);
+  assert.equal(teamBalancer?.control?.enabled, false);
+  assert.equal(teamBalancer?.control?.activeVote?.targetEnabled, true);
+  assert.equal(teamBalancer?.control?.activeVote?.voteGate?.yesVotes, 2);
+  assert.equal(teamBalancer?.control?.activeVote?.voteGate?.requiredVotes, 3);
   assert.equal(teamBalancer?.history[0]?.plannedPlayers, 2);
   assert.equal(teamBalancer?.history[0]?.moves[0]?.squadName, 'Vanguard Alpha');
   assert.equal(teamBalancer?.history[0]?.players[0]?.name, 'Vanguard Commander');
@@ -535,7 +561,7 @@ test('loads a complete journal for one finished session without exposing private
             layer: 'Narva RAAS v3',
             playerCount: 91,
             totals: { kills: 83, deaths: 87, revives: 14, knockdowns: 106 },
-            eventCounts: { kills: 1, damage: 1, knockdowns: 1, revives: 1, vehicles: 1 },
+            eventCounts: { kills: 1, damage: 1, knockdowns: 1, revives: 1, vehicles: 4 },
             scoreboard: {
               teams: [
                 {
@@ -605,6 +631,36 @@ test('loads a complete journal for one finished session without exposing private
                 healthRemaining: 1200.25,
                 destroyed: false,
                 controllerId: 'private-controller-id'
+              },
+              {
+                type: 'vehicle',
+                occurredAt: '2026-07-13T17:12:01.000Z',
+                attackerName: null,
+                vehicleName: 'BP_minsk_C_2146128567',
+                weapon: 'FragmentationDamageType',
+                damage: 250,
+                healthRemaining: null,
+                destroyed: false
+              },
+              {
+                type: 'vehicle',
+                occurredAt: '2026-07-13T17:12:02.000Z',
+                attackerName: null,
+                vehicleName: 'BP_CPV_Transport_Blue_C_2147481862',
+                weapon: 'BP_Explosives_Damagetype_C',
+                damage: 500,
+                healthRemaining: null,
+                destroyed: false
+              },
+              {
+                type: 'vehicle',
+                occurredAt: '2026-07-13T17:12:02.000Z',
+                attackerName: null,
+                vehicleName: 'BP_CPV_Transport_Blue_C_2147481862',
+                weapon: 'BP_Deployable_TNT_600g_Explosive_Timed_C_2146147035',
+                damage: 500,
+                healthRemaining: 0,
+                destroyed: true
               }
             ]
           }
@@ -633,6 +689,14 @@ test('loads a complete journal for one finished session without exposing private
   assert.equal(detail.events.vehicles[0]?.vehicleName, 'M1A2 Abrams');
   assert.equal(detail.events.vehicles[0]?.healthRemaining, 1200.25);
   assert.equal(detail.events.vehicles[0]?.attackerName, null);
+  assert.equal(detail.events.vehicles[1]?.healthRemaining, null);
+  assert.equal(detail.events.vehicles[2]?.destroyed, true);
+  assert.equal(
+    detail.events.vehicles[2]?.weapon,
+    'BP_Deployable_TNT_600g_Explosive_Timed_C_2146147035'
+  );
+  assert.equal(detail.events.vehicles.length, 3);
+  assert.equal(detail.session.eventCounts.vehicles, 3);
   assert.match(requestedUrls[1] || '', /\/activity\/sessions\/s2_0123456789abcdef01234567$/);
   assert.doesNotMatch(
     JSON.stringify(detail),

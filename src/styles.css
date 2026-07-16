@@ -2494,6 +2494,53 @@ input {
   gap: 10px;
 }
 
+.team-balancer-control {
+  display: grid;
+  grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.3fr);
+  gap: 10px 22px;
+  align-items: center;
+  margin-top: 14px;
+  padding: 14px 16px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.48);
+}
+
+.team-balancer-control.is-enabled {
+  border-color: rgba(52, 211, 153, 0.34);
+  background: rgba(6, 78, 59, 0.16);
+}
+
+.team-balancer-control > div {
+  display: grid;
+  gap: 4px;
+}
+
+.team-balancer-control span,
+.team-balancer-control small {
+  color: var(--muted);
+}
+
+.team-balancer-control strong {
+  color: var(--text);
+}
+
+.team-balancer-control p,
+.team-balancer-control small {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.team-balancer-control small {
+  grid-column: 1 / -1;
+}
+
+.team-balancer-control code {
+  color: var(--accent-soft, #67e8f9);
+  font: inherit;
+  font-weight: 700;
+}
+
 .team-balancer-meta > div,
 .team-balancer-empty,
 .team-balancer-diff-row {
@@ -3756,6 +3803,14 @@ input {
 }
 
 @media (max-width: 860px) {
+  .team-balancer-control {
+    grid-template-columns: 1fr;
+  }
+
+  .team-balancer-control small {
+    grid-column: 1;
+  }
+
   .shell {
     width: min(100%, calc(100% - 22px));
     padding-top: 18px;

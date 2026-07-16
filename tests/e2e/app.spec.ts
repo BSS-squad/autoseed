@@ -316,6 +316,11 @@ function buildTeamBalancerProposalSnapshot(overrides: Record<string, unknown> = 
         score: null
       }
     ],
+    control: {
+      enabled: false,
+      updatedAt: '2026-07-06T11:58:00.000Z',
+      activeVote: null
+    },
     history: [
       {
         decisionId: 'decision-1',
@@ -434,7 +439,7 @@ function buildActivitySnapshot() {
         action: 'execute',
         result: 'executed',
         status: 'executed',
-        trigger: 'MODERATOR_APPROVED',
+        trigger: 'ROUND_ENDED',
         plannedMoves: 1,
         plannedPlayers: 2,
         summary: 'Team Balancer execute completed.',
@@ -649,7 +654,7 @@ function buildActivitySessionDetail(sessionId = NARVA_SESSION_ID) {
       loser: { team: '2', faction: 'Loser', tickets: 20 },
       playerCount: 80,
       totals: { kills: 42, deaths: 40, revives: 7, knockdowns: 61 },
-      eventCounts: { kills: 1, damage: 105, knockdowns: 1, revives: 1, vehicles: 1 },
+      eventCounts: { kills: 1, damage: 105, knockdowns: 1, revives: 1, vehicles: 4 },
       scoreboard: {
         teams: [
           {
@@ -741,6 +746,36 @@ function buildActivitySessionDetail(sessionId = NARVA_SESSION_ID) {
           healthRemaining: 80,
           destroyed: false,
           attackerSteamID: '76561198000000001'
+        },
+        {
+          type: 'vehicle-damage',
+          occurredAt: '2026-07-06T11:56:10.000Z',
+          attackerName: null,
+          vehicleName: 'BP_minsk_C_2146128567',
+          weapon: 'FragmentationDamageType',
+          damage: 250,
+          healthRemaining: null,
+          destroyed: false
+        },
+        {
+          type: 'vehicle-damage',
+          occurredAt: '2026-07-06T11:56:20.000Z',
+          attackerName: null,
+          vehicleName: 'BP_CPV_Transport_Blue_C_2147481862',
+          weapon: 'BP_Explosives_Damagetype_C',
+          damage: 500,
+          healthRemaining: null,
+          destroyed: false
+        },
+        {
+          type: 'vehicle-destroyed',
+          occurredAt: '2026-07-06T11:56:20.000Z',
+          attackerName: null,
+          vehicleName: 'BP_CPV_Transport_Blue_C_2147481862',
+          weapon: 'BP_Deployable_TNT_600g_Explosive_Timed_C_2146147035',
+          damage: 500,
+          healthRemaining: 0,
+          destroyed: true
         }
       ]
     }
@@ -1540,7 +1575,9 @@ test('renders an empty Team Balancer state when no fresh report exists', async (
   const panel = page.getByTestId('balance-server-2').getByTestId('team-balancer-panel');
   await expect(panel).toBeVisible();
   await expect(panel).toContainText('Баланс сторон');
-  await expect(panel).toContainText('Отчета по dry-run балансу пока нет');
+  await expect(panel).toContainText('Расчёт баланса пока не получен');
+  await expect(panel).toContainText('Данные управления ещё не получены');
+  await expect(panel).not.toContainText('!автобаланс');
   await expect(panel).not.toContainText('snapshot');
   await expect(panel).not.toContainText('7656119');
   await expect(page.getByTestId('team-balancer-round-signals')).toHaveCount(0);
@@ -1574,7 +1611,7 @@ test('renders healthy Team Balancer state without proposal rows', async ({ page 
 
   const panel = page.getByTestId('balance-server-2').getByTestId('team-balancer-panel');
   await expect(panel).toContainText('Без изменений');
-  await expect(panel).toContainText('сейчас 40:39 · dry-run 40:39');
+  await expect(panel).toContainText('сейчас 40:39 · по расчёту 40:39');
   await expect(panel).not.toContainText('Импакт');
   await expect(panel).not.toContainText('Сила сторон');
   await expect(page.getByTestId('team-balancer-round-signals')).toHaveCount(0);
@@ -1666,6 +1703,17 @@ test('renders one completed session with separate full journal categories', asyn
   await expect(vehicles).toContainText('T72B3');
   await expect(vehicles).toContainText('420 урона');
   await expect(vehicles).toContainText('осталось 80');
+  await expect(vehicles.locator('.journal-event-row')).toHaveCount(3);
+  await expect(page.getByTestId('journal-tab-vehicles')).toContainText('3');
+  await expect(vehicles).toContainText('Minsk');
+  await expect(vehicles).toContainText('CPV Transport Blue');
+  await expect(vehicles).toContainText('Deployable TNT 600g Explosive Timed');
+  await expect(vehicles).not.toContainText('BP_');
+  await expect(vehicles).not.toContainText('DamageType');
+  await expect(vehicles).not.toContainText('_C_214');
+  await expect(
+    vehicles.locator('.journal-event-row').filter({ hasText: 'Minsk' })
+  ).not.toContainText('осталось 0');
 
   await page.getByTestId('journal-tab-revives').click();
   const revives = page.getByTestId('journal-events-revives');
@@ -1838,6 +1886,73 @@ test('keeps the completed-game journal discoverable before session data arrives'
   await expect(workspace).not.toContainText('endpoint');
 });
 
+test('shows only round-end execution attempts without inventing successful routes', async ({ page }) => {
+  await page.clock.setFixedTime('2026-07-06T12:02:00.000Z');
+  const execution = (status: 'completed' | 'failed' | 'partial_failed', succeededPlayers: number) => ({
+    enabled: true,
+    status,
+    plannedMoves: 1,
+    plannedPlayers: 4,
+    attemptedPlayers: 4,
+    succeededPlayers,
+    failedPlayers: 4 - succeededPlayers,
+    totalRconAttempts: 4,
+    maxAttemptsPerPlayer: 1,
+    completedAt: '2026-07-06T12:01:30.000Z'
+  });
+  const operation = (
+    decisionId: string,
+    trigger: string,
+    status: 'completed' | 'failed' | 'partial_failed',
+    succeededPlayers: number
+  ) => ({
+    decisionId,
+    createdAt: '2026-07-06T12:01:00.000Z',
+    mode: 'execute',
+    action: status === 'completed' ? 'execute' : 'blocked',
+    result: status === 'completed' ? 'executed' : 'failed',
+    status,
+    trigger,
+    reasonCodes: [],
+    plannedMoves: 1,
+    plannedPlayers: 4,
+    summary: 'Internal summary',
+    execution: execution(status, succeededPlayers),
+    moves: [
+      {
+        type: 'squad',
+        fromTeamID: '1',
+        toTeamID: '2',
+        squadName: 'Не подтверждённый маршрут',
+        playerCount: 4,
+        status
+      }
+    ],
+    players: []
+  });
+
+  await mockAutoseedApi(page, undefined, runtimeConfig, {
+    squadjs2Activity: {
+      ...buildActivitySnapshot(),
+      teamBalancerHistory: [
+        operation('legacy', 'MODERATOR_APPROVED', 'completed', 4),
+        operation('failed', 'ROUND_ENDED', 'failed', 0),
+        operation('partial', 'ROUND_ENDED', 'partial_failed', 2)
+      ]
+    }
+  });
+
+  await page.goto('./#balance');
+
+  const history = page
+    .getByTestId('balance-server-2')
+    .getByTestId('team-balancer-history-panel');
+  await expect(history.locator('.server-activity-row')).toHaveCount(2);
+  await expect(history).toContainText('Не выполнено: 0 из 4');
+  await expect(history).toContainText('Частично: 2 из 4');
+  await expect(history).not.toContainText('Не подтверждённый маршрут');
+});
+
 test('shows the balancer and completed-game journal on separate routes', async ({ page }) => {
   await page.clock.setFixedTime('2026-07-06T12:02:00.000Z');
   await mockAutoseedApi(page, undefined, runtimeConfig, {
@@ -1856,7 +1971,12 @@ test('shows the balancer and completed-game journal on separate routes', async (
   await expect(balancePage).toContainText('Балансер');
   await expect(
     balancePage.getByTestId('balance-server-2').getByTestId('team-balancer-history-panel')
-  ).toContainText('Vanguard Alpha');
+  ).toContainText('Выполнено 2 из 2');
+  const historyPanel = balancePage
+    .getByTestId('balance-server-2')
+    .getByTestId('team-balancer-history-panel');
+  await expect(historyPanel.locator('.server-activity-row')).toHaveCount(1);
+  await expect(historyPanel).not.toContainText('рассчитано');
   await expect(balancePage.getByTestId('journal-workspace')).toHaveCount(0);
 
   await page.getByTestId('journal-nav-link').click();
@@ -1896,6 +2016,26 @@ test('keeps all Team Balancer meta cards in one desktop row', async ({ page }) =
   expect(cardBoxes.map((box) => box.left)).toEqual(
     [...cardBoxes].map((box) => box.left).sort((leftA, leftB) => leftA - leftB)
   );
+});
+
+test('keeps Team Balancer control copy readable on a mobile viewport', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.clock.setFixedTime('2026-07-06T12:01:00.000Z');
+  await mockAutoseedApi(page, undefined, runtimeConfig, {
+    squadjs2TeamBalancer: buildTeamBalancerProposalSnapshot()
+  });
+
+  await page.goto('./#balance');
+
+  const control = page
+    .getByTestId('balance-server-2')
+    .getByTestId('team-balancer-control');
+  await expect(control).toBeVisible();
+  await expect(control).toContainText('Автобаланс выключен');
+  await expect(control).toContainText('Перемещения отключены');
+  expect(
+    await control.evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(' ').length)
+  ).toBe(1);
 });
 
 test('renders Team Balancer diff and switches its proposal mode', async ({ page }) => {
@@ -2043,6 +2183,28 @@ test('renders Team Balancer diff and switches its proposal mode', async ({ page 
         totalRconAttempts: 0,
         maxAttemptsPerPlayer: 2,
         completedAt: null
+      },
+      control: {
+        enabled: false,
+        updatedAt: '2026-07-06T11:58:00.000Z',
+        activeVote: {
+          targetEnabled: true,
+          createdAt: '2026-07-06T12:00:00.000Z',
+          expiresAt: '2026-07-06T12:05:00.000Z',
+          voteGate: {
+            enabled: true,
+            quorumPercent: 25,
+            passThresholdPercent: 60,
+            eligiblePlayerCount: 10,
+            requiredVotes: 3,
+            totalVotes: 2,
+            yesVotes: 2,
+            noVotes: 0,
+            quorumMet: false,
+            passThresholdMet: true,
+            approved: false
+          }
+        }
       }
     })
   });
@@ -2050,10 +2212,15 @@ test('renders Team Balancer diff and switches its proposal mode', async ({ page 
   await page.goto('./#balance');
 
   const panel = page.getByTestId('balance-server-2').getByTestId('team-balancer-panel');
+  await expect(panel.getByTestId('team-balancer-control')).toContainText('Автобаланс выключен');
+  await expect(panel.getByTestId('team-balancer-control-vote')).toContainText(
+    'включить автобаланс: за 2, против 0, нужно 3'
+  );
+  await expect(panel).toContainText('только после завершения матча');
   await expect(panel).toContainText('Есть diff');
-  await expect(panel).toContainText('Scramble dry-run');
+  await expect(panel).toContainText('Расчёт перестановок');
   await expect(panel).toContainText('1 к смене');
-  await expect(panel).toContainText('сейчас 6:2 · dry-run 4:4');
+  await expect(panel).toContainText('сейчас 6:2 · по расчёту 4:4');
   await expect(panel).not.toContainText('Сила сторон');
   await expect(panel).not.toContainText('Перекос импакта');
   await expect(page.getByTestId('team-balancer-round-signal-severity')).toContainText(
@@ -2096,7 +2263,7 @@ test('renders Team Balancer diff and switches its proposal mode', async ({ page 
   await expect(playerDiffRow.first()).toContainText('Vanguard Commander');
   await expect(playerDiffRow.first()).toContainText('Vanguard Alpha · Сторона 1 в Сторона 2');
   await expect(playerDiffRow.first()).toContainText('Нужна смена');
-  await expect(panel).toContainText('сейчас 6:2 · dry-run 5:3');
+  await expect(panel).toContainText('сейчас 6:2 · по расчёту 5:3');
   await expect(panel).not.toContainText('steamID');
   await expect(panel).not.toContainText('discordID');
   await expect(panel).not.toContainText('playerIds');
@@ -2192,7 +2359,7 @@ test('keeps squad diff visible when the live roster has no visible marks', async
   const panel = page.getByTestId('balance-server-2').getByTestId('team-balancer-panel');
   await expect(panel).toContainText('Есть diff');
   await expect(panel).toContainText('1 к смене');
-  await expect(panel).toContainText('сейчас 6:2 · dry-run 4:4');
+  await expect(panel).toContainText('сейчас 6:2 · по расчёту 4:4');
   const squadDiffRow = page.getByTestId('team-balancer-diff-row');
   await expect(squadDiffRow).toHaveCount(1);
   await expect(squadDiffRow.first()).toContainText('Vanguard Alpha');
@@ -2201,7 +2368,7 @@ test('keeps squad diff visible when the live roster has no visible marks', async
 
   await expect(panel).toContainText('Есть diff');
   await expect(panel).toContainText('1 к смене');
-  await expect(panel).toContainText('сейчас 6:2 · dry-run 5:3');
+  await expect(panel).toContainText('сейчас 6:2 · по расчёту 5:3');
   const playerDiffRow = page.getByTestId('team-balancer-diff-row');
   await expect(playerDiffRow).toHaveCount(1);
   await expect(playerDiffRow.first()).toContainText('Vanguard Commander');

@@ -140,7 +140,7 @@ test('returns a degraded state when no Team Balancer dry-run is available', () =
   assert.equal(view.tone, 'neutral');
   assert.equal(view.assignmentSummary, '—');
   assert.equal(view.teamSizeSummary, '—');
-  assert.match(view.message, /dry-run/i);
+  assert.match(view.message, /расчёт/i);
 });
 
 test('summarizes dry-run assignments without score or impact wording', () => {
@@ -165,13 +165,13 @@ test('summarizes dry-run assignments without score or impact wording', () => {
   assert.equal(view.state, 'proposal');
   assert.equal(view.mode, 'squad');
   assert.equal(view.message, 'Есть diff');
-  assert.equal(view.triggerLabel, 'Scramble dry-run');
+  assert.equal(view.triggerLabel, 'Расчёт перестановок');
   assert.equal(view.assignmentSummary, '1 к смене');
-  assert.equal(view.teamSizeSummary, 'сейчас 6:2 · dry-run 4:4');
+  assert.equal(view.teamSizeSummary, 'сейчас 6:2 · по расчёту 4:4');
   assert.deepEqual(squadMark, {
     tone: 'conflict',
     label: 'Нужна смена',
-    detail: 'Сторона по dry-run: Сторона 2'
+    detail: 'Предлагаемая сторона: Сторона 2'
   });
   assert.equal(playerMarkInSquadMode, null);
   assert.doesNotMatch(serialized, /impact|skill|score|Ожидаемая сторона|->|\d+\s*ч/i);
@@ -214,17 +214,17 @@ test('marks player-level dry-run rows only in player mode', () => {
   assert.deepEqual(conflictMark, {
     tone: 'conflict',
     label: 'Нужна смена',
-    detail: 'Сторона по dry-run: Сторона 2'
+    detail: 'Предлагаемая сторона: Сторона 2'
   });
   assert.deepEqual(neutralMark, {
     tone: 'neutral',
     label: 'На месте',
-    detail: 'Сторона по dry-run: Сторона 1'
+    detail: 'Предлагаемая сторона: Сторона 1'
   });
   assert.deepEqual(successMark, {
     tone: 'success',
     label: 'Смена учтена',
-    detail: 'Сторона по dry-run: Сторона 2'
+    detail: 'Предлагаемая сторона: Сторона 2'
   });
   assert.doesNotMatch(serialized, /impact|skill|score|steamID|eosID|discordID|playerIds/i);
 });
@@ -346,11 +346,11 @@ test('uses mode-specific dry-run slices when proposalModes are present', () => {
   );
 
   assert.equal(playerView.assignmentSummary, '1 к смене');
-  assert.equal(playerView.teamSizeSummary, 'сейчас 6:2 · dry-run 5:3');
+  assert.equal(playerView.teamSizeSummary, 'сейчас 6:2 · по расчёту 5:3');
   assert.deepEqual(alphaPlayerMark, {
     tone: 'neutral',
     label: 'На месте',
-    detail: 'Сторона по dry-run: Сторона 1'
+    detail: 'Предлагаемая сторона: Сторона 1'
   });
 });
 
@@ -499,7 +499,7 @@ test('keeps squad dry-run diff visible when the live roster has no matching mark
   assert.equal(squadView.tone, 'conflict');
   assert.equal(squadView.message, 'Есть diff');
   assert.equal(squadView.assignmentSummary, '1 к смене');
-  assert.equal(squadView.teamSizeSummary, 'сейчас 6:2 · dry-run 4:4');
+  assert.equal(squadView.teamSizeSummary, 'сейчас 6:2 · по расчёту 4:4');
   assert.equal(squadView.rows.length, 1);
   assert.equal(squadView.rows[0]?.title, 'Alpha');
   assert.equal(squadView.rows[0]?.label, 'Нужна смена');
@@ -507,7 +507,7 @@ test('keeps squad dry-run diff visible when the live roster has no matching mark
   assert.equal(playerView.tone, 'conflict');
   assert.equal(playerView.message, 'Есть diff');
   assert.equal(playerView.assignmentSummary, '1 к смене');
-  assert.equal(playerView.teamSizeSummary, 'сейчас 6:2 · dry-run 5:3');
+  assert.equal(playerView.teamSizeSummary, 'сейчас 6:2 · по расчёту 5:3');
 });
 
 test('lists solo player cohorts in the squad dry-run slice', () => {
@@ -573,7 +573,7 @@ test('lists solo player cohorts in the squad dry-run slice', () => {
   assert.equal(view.state, 'proposal');
   assert.equal(view.message, 'Есть diff');
   assert.equal(view.assignmentSummary, '1 к смене');
-  assert.equal(view.teamSizeSummary, 'сейчас 47:48 · dry-run 48:47');
+  assert.equal(view.teamSizeSummary, 'сейчас 47:48 · по расчёту 48:47');
   assert.equal(view.rows.length, 1);
   assert.equal(view.rows[0]?.title, 'Игрок без сквада');
   assert.equal(view.rows[0]?.detail, '1 игрок · Сторона 2 в Сторона 1');
@@ -684,7 +684,7 @@ test('shows no-change state when the dry-run has no proposed assignments', () =>
   assert.equal(view.tone, 'neutral');
   assert.equal(view.message, 'Без изменений');
   assert.equal(view.assignmentSummary, 'Без изменений');
-  assert.equal(view.teamSizeSummary, 'сейчас 40:39 · dry-run 40:39');
+  assert.equal(view.teamSizeSummary, 'сейчас 40:39 · по расчёту 40:39');
 });
 
 test('degrades stale reports instead of displaying old dry-run diff as fresh', () => {
@@ -720,12 +720,12 @@ test('computes player color from live roster team versus dry-run expected team',
   assert.deepEqual(movedPlayerMark, {
     tone: 'success',
     label: 'Смена учтена',
-    detail: 'Сторона по dry-run: Сторона 2'
+    detail: 'Предлагаемая сторона: Сторона 2'
   });
   assert.deepEqual(stillWrongSideMark, {
     tone: 'conflict',
     label: 'Нужна смена',
-    detail: 'Сторона по dry-run: Сторона 2'
+    detail: 'Предлагаемая сторона: Сторона 2'
   });
 });
 
@@ -742,7 +742,7 @@ test('computes squad color from live team versus dry-run expected team', () => {
   assert.deepEqual(movedSquadMark, {
     tone: 'success',
     label: 'Смена учтена',
-    detail: 'Сторона по dry-run: Сторона 2'
+    detail: 'Предлагаемая сторона: Сторона 2'
   });
 });
 
@@ -778,7 +778,7 @@ test('matches squad dry-run marks by squad identity when composition key is abse
   assert.deepEqual(squadMark, {
     tone: 'conflict',
     label: 'Нужна смена',
-    detail: 'Сторона по dry-run: Сторона 2'
+    detail: 'Предлагаемая сторона: Сторона 2'
   });
 });
 

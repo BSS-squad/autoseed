@@ -79,11 +79,11 @@ type SquadIdentity = {
 const DEFAULT_MODES: TeamBalancerProposalMode[] = ['squad', 'player'];
 
 const TRIGGER_LABELS: Record<string, string> = {
-  scramble_dry_run: 'Scramble dry-run',
-  scramble_elo: 'Scramble dry-run',
-  scramble_skill: 'Scramble dry-run',
-  scramble_size: 'Scramble dry-run',
-  impact_diff: 'Scramble dry-run',
+  scramble_dry_run: 'Расчёт перестановок',
+  scramble_elo: 'Расчёт перестановок',
+  scramble_skill: 'Расчёт перестановок',
+  scramble_size: 'Расчёт перестановок',
+  impact_diff: 'Расчёт перестановок',
   team_impact_within_tolerance: 'Без изменений',
   team_size_diff: 'Разница размера сторон',
   team_size_within_tolerance: 'Размер команд в допуске',
@@ -178,7 +178,7 @@ function buildBeforeAfterSummary(
   after: Record<string, number>,
   formatter: (counts: Record<string, number>) => string
 ): string {
-  return `сейчас ${formatter(before)} · dry-run ${formatter(after)}`;
+  return `сейчас ${formatter(before)} · по расчёту ${formatter(after)}`;
 }
 
 function getModeSnapshot(
@@ -732,7 +732,7 @@ function buildRosterMarkFromEntry(entry: {
   return {
     tone: getStatusTone(status),
     label: getRosterLabel(status),
-    detail: `Сторона по dry-run: ${formatTeamId(expectedTeamID)}`
+    detail: `Предлагаемая сторона: ${formatTeamId(expectedTeamID)}`
   };
 }
 
@@ -824,7 +824,7 @@ export function buildTeamBalancerDiffView(
       tone: 'neutral',
       mode,
       modes,
-      message: 'Отчета по dry-run балансу пока нет',
+      message: 'Расчёт баланса пока не получен',
       triggerLabel: 'Плановая проверка состава',
       assignmentSummary: '—',
       teamSizeSummary: '—',
@@ -857,7 +857,7 @@ export function buildTeamBalancerDiffView(
       tone: 'neutral',
       mode,
       modes,
-      message: 'Отчет по dry-run балансу устарел',
+      message: 'Расчёт баланса устарел',
       triggerLabel,
       assignmentSummary,
       teamSizeSummary,
