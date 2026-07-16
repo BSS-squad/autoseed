@@ -871,6 +871,25 @@ function mapActivityScoreboard(value: unknown): ExporterActivityScoreboardSnapsh
   return teams.length ? { teams } : null;
 }
 
+function mapActivityLayerSource(
+  value: unknown
+): ExporterActivityRecentRoundSnapshot['layerSource'] {
+  return value === 'new_game' || value === 'round_ended' || value === 'server_snapshot'
+    ? value
+    : null;
+}
+
+function mapActivityLayerMissingReason(
+  value: unknown
+): ExporterActivityRecentRoundSnapshot['layerMissingReason'] {
+  return value === 'missing_start_event' ||
+    value === 'missing_end_event' ||
+    value === 'unmatched_session' ||
+    value === 'normalization_failed'
+    ? value
+    : null;
+}
+
 function mapActivityRecentRound(value: unknown): ExporterActivityRecentRoundSnapshot | null {
   const round = getRecord(value);
   if (!round) return null;
@@ -885,6 +904,8 @@ function mapActivityRecentRound(value: unknown): ExporterActivityRecentRoundSnap
     journalComplete: Boolean(round.journalComplete),
     endedAt,
     layer: toStringOrNull(round.layer),
+    layerSource: mapActivityLayerSource(round.layerSource),
+    layerMissingReason: mapActivityLayerMissingReason(round.layerMissingReason),
     winner: mapActivityTeamResult(round.winner),
     loser: mapActivityTeamResult(round.loser),
     playerCount: Math.max(0, Math.round(toNumber(round.playerCount))),

@@ -334,6 +334,10 @@ input {
   line-height: 1.4;
 }
 
+.journal-session-button > .journal-layer-status {
+  color: rgba(255, 211, 108, 0.88);
+}
+
 .journal-session-button time {
   font-family: 'JetBrains Mono', monospace;
   letter-spacing: 0.04em;
@@ -463,6 +467,10 @@ input {
   margin: 0;
   color: var(--muted);
   line-height: 1.5;
+}
+
+.journal-match-copy .journal-layer-provenance {
+  color: rgba(255, 211, 108, 0.9);
 }
 
 .journal-match-hero > time {

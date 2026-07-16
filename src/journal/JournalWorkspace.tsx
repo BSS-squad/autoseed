@@ -184,6 +184,26 @@ function formatResult(session: ExporterActivityRecentRoundSnapshot): string {
   return `${winner} победил ${loser}${tickets}`;
 }
 
+function formatLayerName(session: ExporterActivityRecentRoundSnapshot): string {
+  return session.layer || 'Слой матча не сохранён';
+}
+
+function formatLayerAvailability(session: ExporterActivityRecentRoundSnapshot): string | null {
+  if (session.layer) return null;
+  switch (session.layerMissingReason) {
+    case 'missing_start_event':
+      return 'Событие начала матча не записано.';
+    case 'missing_end_event':
+      return 'Событие завершения матча не записано.';
+    case 'unmatched_session':
+      return 'События начала и завершения матча нельзя безопасно связать.';
+    case 'normalization_failed':
+      return 'Название слоя не удалось распознать; его намеренно не угадываем.';
+    default:
+      return 'Название слоя недоступно.';
+  }
+}
+
 function legacySessionKey(value: string | null): string {
   if (!value) return '';
   const timestamp = Date.parse(value);
@@ -716,6 +736,9 @@ export function JournalWorkspace({ servers }: JournalWorkspaceProps) {
     () => sessions.find((session) => session.sessionId === selectedSessionId) || sessions[0] || null,
     [selectedSessionId, sessions]
   );
+  const selectedLayerAvailability = selectedSession
+    ? formatLayerAvailability(selectedSession)
+    : null;
   const detailKey =
     selectedServer && selectedSession
       ? `${selectedServer.activitySessionBaseUrl}:${selectedSession.sessionId}`
@@ -866,6 +889,7 @@ export function JournalWorkspace({ servers }: JournalWorkspaceProps) {
             <ul className="journal-session-list">
               {sessions.map((session) => {
                 const active = session.sessionId === selectedSession?.sessionId;
+                const layerAvailability = formatLayerAvailability(session);
                 return (
                   <li className="journal-session-item" key={session.sessionId}>
                     <button
@@ -878,7 +902,10 @@ export function JournalWorkspace({ servers }: JournalWorkspaceProps) {
                       <time dateTime={session.endedAt || undefined}>
                         {formatMatchDate(session.endedAt)}
                       </time>
-                      <strong>{session.layer || 'Карта не записана'}</strong>
+                      <strong>{formatLayerName(session)}</strong>
+                      {layerAvailability ? (
+                        <span className="journal-layer-status">{layerAvailability}</span>
+                      ) : null}
                       <span>{formatResult(session)}</span>
                       <p>
                         {session.playerCount} игроков · {session.totals.kills} убийств
@@ -903,7 +930,12 @@ export function JournalWorkspace({ servers }: JournalWorkspaceProps) {
               <header className="journal-match-hero">
                 <div className="journal-match-copy">
                   <span className="journal-complete-badge">Завершённый матч</span>
-                  <h2>{selectedSession.layer || 'Карта не записана'}</h2>
+                  <h2>{formatLayerName(selectedSession)}</h2>
+                  {selectedLayerAvailability ? (
+                    <p className="journal-layer-provenance" data-testid="journal-layer-status">
+                      {selectedLayerAvailability}
+                    </p>
+                  ) : null}
                   <p>{formatResult(selectedSession)}</p>
                 </div>
                 <time dateTime={selectedSession.endedAt || undefined}>

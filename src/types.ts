@@ -435,12 +435,22 @@ export type ExporterActivityScoreboardSnapshot = {
   teams: ExporterActivityScoreboardTeamSnapshot[];
 };
 
+export type ExporterActivityLayerSource = 'new_game' | 'round_ended' | 'server_snapshot';
+
+export type ExporterActivityLayerMissingReason =
+  | 'missing_start_event'
+  | 'missing_end_event'
+  | 'unmatched_session'
+  | 'normalization_failed';
+
 export type ExporterActivityRecentRoundSnapshot = {
   sessionId: string;
   journalAvailable: boolean;
   journalComplete: boolean;
   endedAt: string | null;
   layer: string | null;
+  layerSource: ExporterActivityLayerSource | null;
+  layerMissingReason: ExporterActivityLayerMissingReason | null;
   winner: ExporterActivityTeamResultSnapshot | null;
   loser: ExporterActivityTeamResultSnapshot | null;
   playerCount: number;
