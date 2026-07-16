@@ -1435,7 +1435,7 @@ async function seedStoredAutoconnectState(
 test('renders the localized control room from exporter snapshots', async ({ page }) => {
   await mockAutoseedApi(page);
 
-  await page.goto('/');
+  await page.goto('./');
 
   await expect(page.getByTestId('hero-title')).toHaveText('Автосид BSS');
   await expect(page.getByTestId('hero-glance-grid')).toBeVisible();
@@ -1452,7 +1452,7 @@ test('hides the VIP purchase link when the runtime config does not provide a URL
 }) => {
   await mockAutoseedApi(page);
 
-  await page.goto('/');
+  await page.goto('./');
 
   await expect(page.getByTestId('vip-shop-nav-link')).toHaveCount(0);
 });
@@ -1460,7 +1460,7 @@ test('hides the VIP purchase link when the runtime config does not provide a URL
 test('renders the VIP purchase link from runtime config', async ({ page }) => {
   await mockAutoseedApi(page, undefined, vipShopRuntimeConfig);
 
-  await page.goto('/');
+  await page.goto('./');
 
   const vipLink = page.getByRole('link', { name: 'VIP' });
   await expect(vipLink).toBeVisible();
@@ -1479,7 +1479,7 @@ test('normalizes exporter v3 fixtures and follows Mix Spec Ops Invasion day prio
     invasionPlayers: 49
   });
 
-  await page.goto('/');
+  await page.goto('./');
 
   await expect(page.getByTestId('overview-target')).toContainText('[RU] BSS Mix');
   await expect(page.getByTestId('server-card-1')).toContainText('[RU] BSS Mix');
@@ -1496,7 +1496,7 @@ test('switches to a stronger server only when switchDelta is exceeded', async ({
   };
   await mockPriorityAutoseedApi(page, snapshotState);
 
-  await page.goto('/');
+  await page.goto('./');
   await expect(page.getByTestId('overview-target')).toContainText('[RU] BSS Mix');
 
   snapshotState.specOpsPlayers = 71;
@@ -1513,7 +1513,7 @@ test('skips a priority server that has reached the seed limit', async ({ page })
     invasionPlayers: 10
   });
 
-  await page.goto('/');
+  await page.goto('./');
 
   await expect(page.getByTestId('overview-target')).toContainText('[RU] BSS Spec Ops');
 });
@@ -1526,7 +1526,7 @@ test('uses configured night preferred server over day priority order', async ({ 
     invasionPlayers: 5
   });
 
-  await page.goto('/');
+  await page.goto('./');
 
   await expect(page.getByTestId('overview-target')).toContainText('[RU] BSS Spec Ops');
 });
@@ -1535,7 +1535,7 @@ test('renders an empty Team Balancer state when no fresh report exists', async (
   await page.clock.setFixedTime('2026-07-06T12:01:00.000Z');
   await mockAutoseedApi(page);
 
-  await page.goto('/#balance');
+  await page.goto('./#balance');
 
   const panel = page.getByTestId('balance-server-2').getByTestId('team-balancer-panel');
   await expect(panel).toBeVisible();
@@ -1570,7 +1570,7 @@ test('renders healthy Team Balancer state without proposal rows', async ({ page 
     })
   });
 
-  await page.goto('/#balance');
+  await page.goto('./#balance');
 
   const panel = page.getByTestId('balance-server-2').getByTestId('team-balancer-panel');
   await expect(panel).toContainText('Без изменений');
@@ -1593,7 +1593,7 @@ test('renders one completed session with separate full journal categories', asyn
     squadjs2ActivitySessionRequests: sessionRequests
   });
 
-  await page.goto('/#journal');
+  await page.goto('./#journal');
 
   const workspace = page.getByTestId('journal-workspace');
   const matchPanel = workspace.locator('.journal-match-panel');
@@ -1733,7 +1733,7 @@ test('keeps every recent match reachable through the session list scroll', async
     }
   });
 
-  await page.goto('/#journal');
+  await page.goto('./#journal');
 
   const sessionList = page.locator('.journal-session-list');
   const lastSession = page.getByTestId('journal-session-session-scroll-10');
@@ -1801,7 +1801,7 @@ test('keeps the completed-game journal discoverable before session data arrives'
   await page.clock.setFixedTime('2026-07-06T12:02:00.000Z');
   await mockAutoseedApi(page);
 
-  await page.goto('/#journal');
+  await page.goto('./#journal');
 
   const workspace = page.getByTestId('journal-workspace');
   await expect(workspace).toBeVisible();
@@ -1824,7 +1824,7 @@ test('shows the balancer and completed-game journal on separate routes', async (
     squadjs2TeamBalancer: buildTeamBalancerProposalSnapshot()
   });
 
-  await page.goto('/#balance');
+  await page.goto('./#balance');
 
   const balancePage = page.getByTestId('balance-page');
   await expect(balancePage).toBeVisible();
@@ -1851,7 +1851,7 @@ test('keeps all Team Balancer meta cards in one desktop row', async ({ page }) =
     squadjs2TeamBalancer: buildTeamBalancerProposalSnapshot()
   });
 
-  await page.goto('/#balance');
+  await page.goto('./#balance');
 
   const metaCards = page.getByTestId('balance-server-2').locator('.team-balancer-meta > div');
   await expect(metaCards).toHaveCount(4);
@@ -2022,7 +2022,7 @@ test('renders Team Balancer diff and switches its proposal mode', async ({ page 
     })
   });
 
-  await page.goto('/#balance');
+  await page.goto('./#balance');
 
   const panel = page.getByTestId('balance-server-2').getByTestId('team-balancer-panel');
   await expect(panel).toContainText('Есть diff');
@@ -2162,7 +2162,7 @@ test('keeps squad diff visible when the live roster has no visible marks', async
     })
   });
 
-  await page.goto('/#balance');
+  await page.goto('./#balance');
 
   const panel = page.getByTestId('balance-server-2').getByTestId('team-balancer-panel');
   await expect(panel).toContainText('Есть diff');
@@ -2185,7 +2185,7 @@ test('keeps squad diff visible when the live roster has no visible marks', async
 test('uses player-friendly language on the home page', async ({ page }) => {
   await mockAutoseedApi(page);
 
-  await page.goto('/');
+  await page.goto('./');
 
   await expect(page.getByTestId('mode-production')).toHaveText('Обычный');
   await expect(page.getByTestId('power-toggle')).toContainText('Автоподключение');
@@ -2199,7 +2199,7 @@ test('uses player-friendly language on the winners page', async ({ page }) => {
   await page.clock.setFixedTime('2026-06-27T12:00:00.000Z');
   await mockRaffleAutoseedApi(page);
 
-  await page.goto('/#winners');
+  await page.goto('./#winners');
 
   await expect(page.getByText('Розыгрыши BSS', { exact: true })).toBeVisible();
   await expect(page.getByText('Здесь собраны текущие розыгрыши и история победителей со всех серверов BSS.')).toBeVisible();
@@ -2210,7 +2210,7 @@ test('uses player-friendly language on the winners page', async ({ page }) => {
 test('uses player-friendly language for the empty winners state', async ({ page }) => {
   await mockAutoseedApi(page);
 
-  await page.goto('/#winners');
+  await page.goto('./#winners');
 
   await expect(page.getByTestId('winners-empty')).toContainText('Розыгрыши');
   await expect(page.getByTestId('winners-empty')).toContainText(
@@ -2222,7 +2222,7 @@ test('uses player-friendly language for the empty winners state', async ({ page 
 test('renders public leaderboards and switches periods', async ({ page }) => {
   await mockLeaderboardApi(page);
 
-  await page.goto('/#leaderboards');
+  await page.goto('./#leaderboards');
 
   await expect(page.getByTestId('leaderboards-page')).toBeVisible();
   await expect(page.getByTestId('leaderboards-title')).toHaveText('Топ игроков BSS');
@@ -2241,7 +2241,7 @@ test('renders public leaderboards and switches periods', async ({ page }) => {
 test('uses player-friendly language for unavailable leaderboards', async ({ page }) => {
   await mockAutoseedApi(page);
 
-  await page.goto('/#leaderboards');
+  await page.goto('./#leaderboards');
 
   await expect(page.getByTestId('leaderboards-empty')).toContainText('Лидерборды пока недоступны');
   await expect(page.getByTestId('leaderboards-empty')).toContainText(
@@ -2256,7 +2256,7 @@ test('keeps the public page selector and content width stable while switching se
   await page.setViewportSize({ width: 1440, height: 900 });
   await mockLeaderboardApi(page);
 
-  await page.goto('/');
+  await page.goto('./');
 
   const nav = page.locator('nav.app-nav');
   const shell = page.locator('.shell').first();
@@ -2305,7 +2305,7 @@ test('uses player-friendly language in the autoconnect window', async ({ page })
   await seedStoredAutoconnectState(page, { enabled: false });
   await mockAutoseedApi(page);
 
-  await page.goto('/');
+  await page.goto('./');
   await expect(page.getByTestId('overview-target')).toContainText('[RU] BSS Spec Ops');
   await page.getByTestId('power-toggle').click();
 
@@ -2326,7 +2326,7 @@ test('renders multiple planned raffle campaigns as deduplicated notifications', 
   await page.clock.setFixedTime('2026-06-27T12:00:00.000Z');
   await mockRaffleAutoseedApi(page);
 
-  await page.goto('/');
+  await page.goto('./');
   await page.getByTestId('winners-nav-link').click();
 
   await expect(page).toHaveURL(/#winners$/);
@@ -2353,7 +2353,7 @@ test('shows raffle participant nicknames without public identifiers', async ({ p
   await mockRaffleAutoseedApi(page);
   await page.setViewportSize({ width: 390, height: 844 });
 
-  await page.goto('/#winners');
+  await page.goto('./#winners');
 
   const participants = page.getByTestId('winner-participants-12');
   await expect(participants).toContainText('Участники (2)');
@@ -2380,7 +2380,7 @@ test('renders the series card only after its campaign has started', async ({ pag
   await page.clock.setFixedTime('2026-07-15T12:00:00.000Z');
   await mockRaffleAutoseedApi(page);
 
-  await page.goto('/#winners');
+  await page.goto('./#winners');
 
   await expect(page.getByTestId('winners-campaign-card')).toContainText('Серия розыгрышей');
   await expect(page.getByTestId('winners-campaign-card')).toContainText('1 июл. - 1 авг.');
@@ -2404,7 +2404,7 @@ test('shows cancelled raffle campaign by cancellation date', async ({ page }) =>
     })
   });
 
-  await page.goto('/#winners');
+  await page.goto('./#winners');
 
   const campaignCard = page.getByTestId('winners-campaign-card');
   await expect(campaignCard).toContainText('Серия розыгрышей отменена');
@@ -2419,7 +2419,7 @@ test('requests join-link on demand and dispatches direct joins in the current ta
   const counters = { joinLinkRequests: 0 };
   await mockAutoseedApi(page, counters);
 
-  await page.goto('/');
+  await page.goto('./');
   await expect(page.getByTestId('direct-join-2')).toBeVisible();
   expect(counters.joinLinkRequests).toBe(0);
 
@@ -2436,7 +2436,7 @@ test('marks browser check as successful and keeps the button green', async ({ pa
   await mockSuccessfulPermissionCheck(page);
   await mockAutoseedApi(page);
 
-  await page.goto('/');
+  await page.goto('./');
 
   const button = page.getByTestId('check-browser-button');
   await button.click();
@@ -2450,7 +2450,7 @@ test('keeps help popovers visible inside the viewport on mobile', async ({ page 
   await page.setViewportSize({ width: 390, height: 844 });
   await mockAutoseedApi(page);
 
-  await page.goto('/');
+  await page.goto('./');
 
   await page.getByTestId('hero-help-trigger').click();
   await expect(page.getByTestId('hero-help-popover')).toBeVisible();
@@ -2467,7 +2467,7 @@ test('keeps the layout usable on mobile without document-level horizontal overfl
   await page.setViewportSize({ width: 390, height: 844 });
   await mockAutoseedApi(page);
 
-  await page.goto('/');
+  await page.goto('./');
 
   await expect(page.getByTestId('mobile-monitor-note')).toBeVisible();
   await expect(page.getByTestId('power-toggle')).toBeHidden();
@@ -2498,7 +2498,7 @@ test('keeps a long selected server name inside the mobile viewport', async ({ pa
   );
   await page.setViewportSize({ width: 390, height: 844 });
 
-  await page.goto('/');
+  await page.goto('./');
   await expect(page.getByTestId('overview-target')).toContainText('МирДружбаЖвачка');
 
   const dimensions = await page.evaluate(() => ({
@@ -2512,7 +2512,7 @@ test('keeps the desktop layout within the viewport', async ({ page }) => {
   await mockAutoseedApi(page);
   await page.setViewportSize({ width: 1440, height: 1000 });
 
-  await page.goto('/');
+  await page.goto('./');
 
   const dimensions = await page.evaluate(() => ({
     viewport: document.documentElement.clientWidth,
@@ -2528,7 +2528,7 @@ test('accepts a fresh snapshot during the pending test sequence without regenera
   await mockSuccessfulPermissionCheck(page);
   await mockTestModeAutoseedApi(page, counters);
 
-  await page.goto('/');
+  await page.goto('./');
   await page.getByTestId('mode-test').click();
   await page.getByTestId('check-browser-button').click();
   await expect(page.getByTestId('check-browser-button')).toContainText('Браузер проверен');
@@ -2553,7 +2553,7 @@ test('regenerates the production join-link only when the current target crosses 
   await mockSuccessfulPermissionCheck(page);
   await mockProductionSwitchAutoseedApi(page, counters, snapshotState);
 
-  await page.goto('/');
+  await page.goto('./');
   await page.getByTestId('check-browser-button').click();
   await expect(page.getByTestId('check-browser-button')).toContainText('Браузер проверен');
 
@@ -2589,7 +2589,7 @@ test('restores the current production target after reload without showing a stal
     activeRedirectServerKey: SQUADJS2_SELECTION_KEY
   });
 
-  await page.goto('/');
+  await page.goto('./');
 
   await expect(page.getByTestId('power-toggle')).toContainText('Включён');
   await expect(page.getByTestId('hero-next-action-value')).toHaveText('30 с');

@@ -4,39 +4,156 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
+    inputs:
+      deploy:
+        description: 'Опубликовать Pages после проверок (только для main)'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
+
+concurrency:
+  group: pages-${{ github.event.pull_request.number || github.ref_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  build:
+  quality:
     if: github.repository == 'BSS-squad/autoseed'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
     env:
-      AUTOSEED_RUNTIME_CONFIG_JSON: ${{ secrets.AUTOSEED_RUNTIME_CONFIG_JSON }}
-      VITE_BASE_PATH: ${{ vars.VITE_BASE_PATH }}
+      VITE_BASE_PATH: /autoseed/
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run build
-      - uses: actions/configure-pages@v6
-      - uses: actions/upload-pages-artifact@v5
+      - run: npm run test:unit
+      - name: Build production bundle
+        env:
+          AUTOSEED_ALLOWED_EXPORTER_ORIGINS: https://api.squad.leo-land.ru
+          AUTOSEED_RUNTIME_CONFIG_MODE: production
+        run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: PLAYWRIGHT_SERVER=preview PLAYWRIGHT_BASE_PATH="$VITE_BASE_PATH" npm run test:e2e
+
+  package:
+    if: >-
+      github.repository == 'BSS-squad/autoseed' &&
+      github.ref_name == github.event.repository.default_branch &&
+      (github.event_name == 'push' || inputs.deploy)
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      VITE_BASE_PATH: ${{ vars.VITE_BASE_PATH }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build release artifact
+        env:
+          AUTOSEED_ALLOWED_EXPORTER_ORIGINS: https://api.squad.leo-land.ru
+          AUTOSEED_RUNTIME_CONFIG_MODE: production
+          AUTOSEED_RUNTIME_CONFIG_JSON: ${{ secrets.AUTOSEED_RUNTIME_CONFIG_JSON }}
+        run: npm run build
+      - name: Add release manifest
+        env:
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          fs.writeFileSync('dist/release.json', `${JSON.stringify({ sha: process.env.RELEASE_SHA })}\n`);
+          NODE
+      - run: npx playwright install --with-deps chromium
+      - run: PLAYWRIGHT_SERVER=preview PLAYWRIGHT_BASE_PATH="${VITE_BASE_PATH:-/}" npm run test:e2e
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: pages-dist
+          path: ./dist
+          if-no-files-found: error
+          retention-days: 1
+
+  upload:
+    if: >-
+      github.repository == 'BSS-squad/autoseed' &&
+      github.ref_name == github.event.repository.default_branch &&
+      (github.event_name == 'push' || inputs.deploy)
+    needs: package
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+    steps:
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: pages-dist
+          path: ./dist
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
         with:
           path: ./dist
 
   deploy:
-    needs: build
+    if: >-
+      github.repository == 'BSS-squad/autoseed' &&
+      github.ref_name == github.event.repository.default_branch &&
+      (github.event_name == 'push' || inputs.deploy)
+    needs: upload
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      pages: write
+      id-token: write
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v5
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5
+
+  smoke:
+    if: >-
+      github.repository == 'BSS-squad/autoseed' &&
+      github.ref_name == github.event.repository.default_branch &&
+      (github.event_name == 'push' || inputs.deploy)
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      PAGES_URL: ${{ needs.deploy.outputs.page_url }}
+      EXPECTED_RELEASE_SHA: ${{ github.sha }}
+      ALLOWED_EXPORTER_ORIGINS: https://api.squad.leo-land.ru
+      EXPORTER_MAX_AGE_MS: 120000
+      EXPORTER_MAX_FUTURE_SKEW_MS: 30000
+      SMOKE_REQUEST_TIMEOUT_MS: 15000
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22
+      - name: Wait for Pages availability
+        run: >-
+          curl --fail --location --retry 6 --retry-all-errors --retry-delay 5
+          --connect-timeout 10 --max-time 20 "$PAGES_URL"
+      - name: Verify deployed release and exporter freshness
+        run: node scripts/verify-pages-release.mjs
