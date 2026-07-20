@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { collapseTerminalVehicleEvents, fetchActivitySession } from '../lib/snapshot';
-import { formatDamageSource, formatVehicleName } from '../lib/vehicle-journal';
+import {
+  formatDamageSource,
+  formatVehicleActor,
+  formatVehicleEventKind,
+  formatVehicleName,
+  summarizeVehicleEvents
+} from '../lib/vehicle-journal';
 import {
   buildTimeline,
   buildTimelineIntensity,
@@ -315,7 +321,7 @@ function getEventTone(event: ExporterActivityKillfeedEventSnapshot): string {
 
 function getEventLabel(event: ExporterActivityKillfeedEventSnapshot): string {
   const tone = getEventTone(event);
-  if (tone === 'vehicle') return event.destroyed ? 'Уничтожена' : 'Повреждена';
+  if (tone === 'vehicle') return formatVehicleEventKind(event);
   if (tone === 'revive') return 'Поднятие';
   if (tone === 'damage') return 'Урон';
   if (tone === 'knockdown') return 'Нокаут';
@@ -427,7 +433,7 @@ function EventRow({
 }) {
   const tone = getEventTone(event);
   const actor =
-    event.attackerName || (tone === 'vehicle' ? 'Источник не записан' : 'Неизвестный игрок');
+    tone === 'vehicle' ? formatVehicleActor(event) : event.attackerName || 'Неизвестный игрок';
   const target = event.vehicleName
     ? formatVehicleName(event.vehicleName)
     : event.victimName || 'Цель не определена';
@@ -475,6 +481,7 @@ function EventJournal({
   onPageSizeChange: (value: EventPageSize) => void;
 }) {
   const allEvents = useMemo(() => getTabEvents(events, tab), [events, tab]);
+  const vehicleSummary = tab === 'vehicles' ? summarizeVehicleEvents(allEvents) : null;
   const filteredEvents = allEvents.filter((event) => matchesSearch(event, search));
   const pageRange = getPageRange(filteredEvents.length, page, pageSize);
   const pageCount = getPageCount(filteredEvents.length, pageSize);
@@ -557,6 +564,9 @@ function EventJournal({
             {selectedCountLabel}
             {pageSize === 'all' && filteredEvents.length ? ' · целиком' : ''}
             {search ? ` · всего ${allEvents.length}` : ''}
+            {vehicleSummary
+              ? ` · уничтожено: ${vehicleSummary.destroyed} · попаданий: ${vehicleSummary.impacts}`
+              : ''}
           </span>
         </div>
         <div className="journal-toolbar-controls">

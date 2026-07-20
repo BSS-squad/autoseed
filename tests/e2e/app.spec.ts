@@ -1703,11 +1703,21 @@ test('renders one completed session with separate full journal categories', asyn
   await expect(vehicles).toContainText('T72B3');
   await expect(vehicles).toContainText('420 урона');
   await expect(vehicles).toContainText('осталось 80');
+  await expect(
+    vehicles.locator('.journal-event-row').filter({ hasText: 'Vehicle Hunter' })
+  ).toContainText('Попадание');
   await expect(vehicles.locator('.journal-event-row')).toHaveCount(3);
   await expect(page.getByTestId('journal-tab-vehicles')).toContainText('3');
+  await expect(vehicles).toContainText('уничтожено: 1 · попаданий: 2');
   await expect(vehicles).toContainText('Minsk');
   await expect(vehicles).toContainText('CPV Transport Blue');
   await expect(vehicles).toContainText('Deployable TNT 600g Explosive Timed');
+  await expect(
+    vehicles.locator('.journal-event-row').filter({ hasText: 'Minsk' })
+  ).toContainText('Источник не подтверждён');
+  await expect(
+    vehicles.locator('.journal-event-row').filter({ hasText: 'CPV Transport Blue' })
+  ).toContainText('Уничтожена');
   await expect(vehicles).not.toContainText('BP_');
   await expect(vehicles).not.toContainText('DamageType');
   await expect(vehicles).not.toContainText('_C_214');
