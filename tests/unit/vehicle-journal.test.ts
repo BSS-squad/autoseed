@@ -2,8 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  formatVehicleActor,
   formatDamageSource,
-  formatVehicleName
+  formatVehicleEventKind,
+  formatVehicleName,
+  summarizeVehicleEvents
 } from '../../src/lib/vehicle-journal.ts';
 import { collapseTerminalVehicleEvents } from '../../src/lib/snapshot.ts';
 import type { ExporterActivityKillfeedEventSnapshot } from '../../src/types.ts';
@@ -47,6 +50,26 @@ test('formats Unreal vehicle and damage identifiers without technical instance s
     formatDamageSource('BP_Deployable_TNT_600g_Explosive_Timed_C_2146147035'),
     'Deployable TNT 600g Explosive Timed'
   );
+});
+
+test('calls anonymous vehicle traces impacts and does not imply that a source was lost', () => {
+  const anonymousImpact = vehicleEvent({ destroyed: false, attackerName: null });
+  const knownDestruction = vehicleEvent({ destroyed: true, attackerName: 'Сапёр' });
+
+  assert.equal(formatVehicleEventKind(anonymousImpact), 'Попадание');
+  assert.equal(formatVehicleActor(anonymousImpact), 'Источник не передан игрой');
+  assert.equal(formatVehicleEventKind(knownDestruction), 'Уничтожена');
+  assert.equal(formatVehicleActor(knownDestruction), 'Сапёр');
+});
+
+test('separates vehicle impacts from confirmed destructions in the journal counter', () => {
+  const summary = summarizeVehicleEvents([
+    vehicleEvent({ destroyed: false }),
+    vehicleEvent({ destroyed: false }),
+    vehicleEvent({ destroyed: true })
+  ]);
+
+  assert.deepEqual(summary, { impacts: 2, destroyed: 1 });
 });
 
 test('collapses only a proven terminal damage and destruction pair', () => {

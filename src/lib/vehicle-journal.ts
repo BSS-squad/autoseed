@@ -50,3 +50,29 @@ export function formatVehicleName(value: string | null | undefined): string {
 export function formatDamageSource(value: string | null | undefined): string {
   return normalizeAssetName(value, true) || 'оружие не записано';
 }
+
+export function formatVehicleEventKind(
+  event: Pick<ExporterActivityKillfeedEventSnapshot, 'destroyed'>
+): string {
+  return event.destroyed ? 'Уничтожена' : 'Попадание';
+}
+
+export function formatVehicleActor(
+  event: Pick<ExporterActivityKillfeedEventSnapshot, 'attackerName'>
+): string {
+  return String(event.attackerName || '').trim() || 'Источник не передан игрой';
+}
+
+export function summarizeVehicleEvents(
+  events: Array<Pick<ExporterActivityKillfeedEventSnapshot, 'destroyed'>>
+): { impacts: number; destroyed: number } {
+  return events.reduce(
+    (summary, event) => {
+      if (event.destroyed) summary.destroyed += 1;
+      else summary.impacts += 1;
+      return summary;
+    },
+    { impacts: 0, destroyed: 0 }
+  );
+}
+import type { ExporterActivityKillfeedEventSnapshot } from '../types';
