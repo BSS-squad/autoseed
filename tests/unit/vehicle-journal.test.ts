@@ -57,7 +57,7 @@ test('calls anonymous vehicle traces impacts and does not imply that a source wa
   const knownDestruction = vehicleEvent({ destroyed: true, attackerName: 'Сапёр' });
 
   assert.equal(formatVehicleEventKind(anonymousImpact), 'Попадание');
-  assert.equal(formatVehicleActor(anonymousImpact), 'Источник не передан игрой');
+  assert.equal(formatVehicleActor(anonymousImpact), 'Источник не подтверждён');
   assert.equal(formatVehicleEventKind(knownDestruction), 'Уничтожена');
   assert.equal(formatVehicleActor(knownDestruction), 'Сапёр');
 });

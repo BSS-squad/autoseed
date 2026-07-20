@@ -60,7 +60,7 @@ export function formatVehicleEventKind(
 export function formatVehicleActor(
   event: Pick<ExporterActivityKillfeedEventSnapshot, 'attackerName'>
 ): string {
-  return String(event.attackerName || '').trim() || 'Источник не передан игрой';
+  return String(event.attackerName || '').trim() || 'Источник не подтверждён';
 }
 
 export function summarizeVehicleEvents(

@@ -1714,7 +1714,7 @@ test('renders one completed session with separate full journal categories', asyn
   await expect(vehicles).toContainText('Deployable TNT 600g Explosive Timed');
   await expect(
     vehicles.locator('.journal-event-row').filter({ hasText: 'Minsk' })
-  ).toContainText('Источник не передан игрой');
+  ).toContainText('Источник не подтверждён');
   await expect(
     vehicles.locator('.journal-event-row').filter({ hasText: 'CPV Transport Blue' })
   ).toContainText('Уничтожена');
