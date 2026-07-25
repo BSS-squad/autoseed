@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { collapseTerminalVehicleEvents, fetchActivitySession } from '../lib/snapshot';
 import {
+  buildVehicleDisplayNames,
   formatDamageSource,
   formatVehicleActor,
   formatVehicleEventKind,
@@ -449,17 +450,21 @@ function ScoreboardView({
 
 function EventRow({
   event,
-  eventRef
+  eventRef,
+  vehicleDisplayNames
 }: {
   event: ExporterActivityKillfeedEventSnapshot;
   eventRef?: (element: HTMLElement | null) => void;
+  vehicleDisplayNames: ReadonlyMap<string, string>;
 }) {
   const tone = getEventTone(event);
   const actor =
     tone === 'vehicle' ? formatVehicleActor(event) : event.attackerName || 'Неизвестный игрок';
   const target = event.vehicleName
-    ? formatVehicleName(event.vehicleName)
+    ? vehicleDisplayNames.get(event.vehicleName) || formatVehicleName(event.vehicleName)
     : event.victimName || 'Цель не определена';
+  const anonymousVehicleSource = tone === 'vehicle' && !String(event.attackerName || '').trim();
+  const sourceNote = anonymousVehicleSource ? 'игрок не указан журналом' : formatWeapon(event.weapon);
   const damage = typeof event.damage === 'number' ? `${formatNumber(event.damage)} урона` : null;
   const health =
     tone === 'vehicle' && typeof event.healthRemaining === 'number'
@@ -479,7 +484,7 @@ function EventRow({
         <span aria-hidden="true">→</span>
         <strong>{target}</strong>
       </div>
-      <p>{[formatWeapon(event.weapon), damage, health].filter(Boolean).join(' · ')}</p>
+      <p>{[sourceNote, damage, health].filter(Boolean).join(' · ')}</p>
     </article>
   );
 }
@@ -504,6 +509,10 @@ function EventJournal({
   onPageSizeChange: (value: EventPageSize) => void;
 }) {
   const allEvents = useMemo(() => getTabEvents(events, tab), [events, tab]);
+  const vehicleDisplayNames = useMemo(
+    () => buildVehicleDisplayNames(tab === 'vehicles' ? allEvents : []),
+    [allEvents, tab]
+  );
   const vehicleSummary = tab === 'vehicles' ? summarizeVehicleEvents(allEvents) : null;
   const filteredEvents = allEvents.filter((event) => matchesSearch(event, search));
   const pageRange = getPageRange(filteredEvents.length, page, pageSize);
@@ -693,6 +702,7 @@ function EventJournal({
           {visibleEvents.map((event, index) => (
             <EventRow
               event={event}
+              vehicleDisplayNames={vehicleDisplayNames}
               key={`${event.type}:${event.occurredAt || 'no-time'}:${event.attackerName || ''}:${event.victimName || event.vehicleName || ''}:${index}`}
               eventRef={(element) => {
                 const eventIndex = pageRange.start + index;
@@ -919,7 +929,7 @@ export function JournalWorkspace({ servers }: JournalWorkspaceProps) {
         <aside className="journal-session-sidebar">
           <div className="journal-sidebar-head">
             <span>Последние матчи</span>
-            <strong>{sessions.length} / 10</strong>
+            <strong>{sessions.length} матчей</strong>
           </div>
           {sessions.length ? (
             <ul className="journal-session-list">

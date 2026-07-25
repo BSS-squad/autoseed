@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  buildVehicleDisplayNames,
   formatVehicleActor,
   formatDamageSource,
   formatVehicleEventKind,
@@ -52,14 +53,33 @@ test('formats Unreal vehicle and damage identifiers without technical instance s
   );
 });
 
-test('calls anonymous vehicle traces impacts and does not imply that a source was lost', () => {
-  const anonymousImpact = vehicleEvent({ destroyed: false, attackerName: null });
+test('shows a recorded weapon for anonymous vehicle traces without inventing a player', () => {
+  const anonymousImpact = vehicleEvent({
+    destroyed: false,
+    attackerName: null,
+    weapon: 'BP_BTR82A_RUS_2A72_AP_C_2145664355'
+  });
+  const anonymousWithoutWeapon = vehicleEvent({ destroyed: false, attackerName: null });
   const knownDestruction = vehicleEvent({ destroyed: true, attackerName: 'Сапёр' });
 
   assert.equal(formatVehicleEventKind(anonymousImpact), 'Попадание');
-  assert.equal(formatVehicleActor(anonymousImpact), 'Источник не подтверждён');
+  assert.equal(formatVehicleActor(anonymousImpact), 'BTR82A RUS 2A72 AP');
+  assert.equal(formatVehicleActor(anonymousWithoutWeapon), 'Игрок не указан журналом');
   assert.equal(formatVehicleEventKind(knownDestruction), 'Уничтожена');
   assert.equal(formatVehicleActor(knownDestruction), 'Сапёр');
+});
+
+test('numbers distinct instances that have the same readable vehicle name', () => {
+  const labels = buildVehicleDisplayNames([
+    vehicleEvent({ vehicleName: 'BP_M1151_Woodland_C_2145676702' }),
+    vehicleEvent({ vehicleName: 'BP_M1151_Woodland_C_2145676688' }),
+    vehicleEvent({ vehicleName: 'BP_M1151_Woodland_C_2145676688' }),
+    vehicleEvent({ vehicleName: 'BP_T72B3_C_2145000001' })
+  ]);
+
+  assert.equal(labels.get('BP_M1151_Woodland_C_2145676702'), 'M1151 Woodland №1');
+  assert.equal(labels.get('BP_M1151_Woodland_C_2145676688'), 'M1151 Woodland №2');
+  assert.equal(labels.get('BP_T72B3_C_2145000001'), 'T72B3');
 });
 
 test('separates vehicle impacts from confirmed destructions in the journal counter', () => {

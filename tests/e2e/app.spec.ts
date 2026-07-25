@@ -770,6 +770,26 @@ function buildActivitySessionDetail(sessionId = NARVA_SESSION_ID) {
           destroyed: false
         },
         {
+          type: 'vehicle-destroyed',
+          occurredAt: '2026-07-06T11:56:15.000Z',
+          attackerName: null,
+          vehicleName: 'BP_M1151_Woodland_C_2145676702',
+          weapon: 'BP_RPG28_Tandem_Proj_C_2145594143',
+          damage: 700,
+          healthRemaining: 0,
+          destroyed: true
+        },
+        {
+          type: 'vehicle-damage',
+          occurredAt: '2026-07-06T11:56:16.000Z',
+          attackerName: null,
+          vehicleName: 'BP_M1151_Woodland_C_2145676688',
+          weapon: 'BP_BTR82A_RUS_2A72_AP_C_2145664355',
+          damage: 25.83,
+          healthRemaining: 262.84,
+          destroyed: false
+        },
+        {
           type: 'vehicle-damage',
           occurredAt: '2026-07-06T11:56:20.000Z',
           attackerName: null,
@@ -1735,15 +1755,22 @@ test('renders one completed session with separate full journal categories', asyn
   await expect(
     vehicles.locator('.journal-event-row').filter({ hasText: 'Vehicle Hunter' })
   ).toContainText('Попадание');
-  await expect(vehicles.locator('.journal-event-row')).toHaveCount(3);
-  await expect(page.getByTestId('journal-tab-vehicles')).toContainText('3');
-  await expect(vehicles).toContainText('уничтожено: 1 · попаданий: 2');
+  await expect(vehicles.locator('.journal-event-row')).toHaveCount(5);
+  await expect(page.getByTestId('journal-tab-vehicles')).toContainText('5');
+  await expect(vehicles).toContainText('уничтожено: 2 · попаданий: 3');
   await expect(vehicles).toContainText('Minsk');
   await expect(vehicles).toContainText('CPV Transport Blue');
   await expect(vehicles).toContainText('Deployable TNT 600g Explosive Timed');
   await expect(
     vehicles.locator('.journal-event-row').filter({ hasText: 'Minsk' })
-  ).toContainText('Источник не подтверждён');
+  ).toContainText('Fragmentation');
+  await expect(
+    vehicles.locator('.journal-event-row').filter({ hasText: 'M1151 Woodland №1' })
+  ).toContainText('RPG28 Tandem Proj');
+  await expect(
+    vehicles.locator('.journal-event-row').filter({ hasText: 'M1151 Woodland №2' })
+  ).toContainText('BTR82A RUS 2A72 AP');
+  await expect(vehicles).toContainText('игрок не указан журналом');
   await expect(
     vehicles.locator('.journal-event-row').filter({ hasText: 'CPV Transport Blue' })
   ).toContainText('Уничтожена');
@@ -1850,6 +1877,7 @@ test('keeps every recent match reachable through the session list scroll', async
   const sessionList = page.locator('.journal-session-list');
   const lastSession = page.getByTestId('journal-session-session-scroll-10');
   await expect(sessionList.locator('.journal-session-button')).toHaveCount(10);
+  await expect(page.locator('.journal-sidebar-head strong')).toHaveText('10 матчей');
   await expect(lastSession).not.toBeInViewport();
 
   const scrollMetrics = await sessionList.evaluate((element) => ({

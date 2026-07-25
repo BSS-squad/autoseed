@@ -58,9 +58,34 @@ export function formatVehicleEventKind(
 }
 
 export function formatVehicleActor(
-  event: Pick<ExporterActivityKillfeedEventSnapshot, 'attackerName'>
+  event: Pick<ExporterActivityKillfeedEventSnapshot, 'attackerName' | 'weapon'>
 ): string {
-  return String(event.attackerName || '').trim() || 'Источник не подтверждён';
+  const attackerName = String(event.attackerName || '').trim();
+  if (attackerName) return attackerName;
+  return event.weapon ? formatDamageSource(event.weapon) : 'Игрок не указан журналом';
+}
+
+export function buildVehicleDisplayNames(
+  events: ReadonlyArray<Pick<ExporterActivityKillfeedEventSnapshot, 'vehicleName'>>
+): Map<string, string> {
+  const instancesByDisplayName = new Map<string, string[]>();
+
+  for (const event of events) {
+    const instance = String(event.vehicleName || '').trim();
+    if (!instance) continue;
+    const displayName = formatVehicleName(instance);
+    const instances = instancesByDisplayName.get(displayName) || [];
+    if (!instances.includes(instance)) instances.push(instance);
+    instancesByDisplayName.set(displayName, instances);
+  }
+
+  const labels = new Map<string, string>();
+  for (const [displayName, instances] of instancesByDisplayName) {
+    for (const [index, instance] of instances.entries()) {
+      labels.set(instance, instances.length > 1 ? `${displayName} №${index + 1}` : displayName);
+    }
+  }
+  return labels;
 }
 
 export function summarizeVehicleEvents(
