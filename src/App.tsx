@@ -2832,6 +2832,7 @@ export default function App({ config }: AppProps) {
   const orderedServers = useMemo(
     () =>
       snapshot.servers
+        .filter((server) => server.isSeedCandidate)
         .slice()
         .sort((left, right) => {
           const leftTarget = isSameServer(left, displayTargetServer) ? 1 : 0;
