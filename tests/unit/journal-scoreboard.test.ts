@@ -6,7 +6,15 @@ import { SCOREBOARD_METRICS, sortScoreboardPlayers } from '../../src/journal/sco
 test('scoreboard keeps the requested metric order', () => {
   assert.deepEqual(
     SCOREBOARD_METRICS.map((metric) => metric.key),
-    ['revives', 'knockdowns', 'kills', 'deaths']
+    [
+      'revives',
+      'knockdowns',
+      'kills',
+      'deaths',
+      'teamkills',
+      'vehicleKills',
+      'vehicleDamage'
+    ]
   );
 });
 

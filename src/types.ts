@@ -417,6 +417,9 @@ export type ExporterActivityRoundTotalsSnapshot = {
   deaths?: number;
   revives?: number;
   knockdowns: number;
+  teamkills?: number;
+  vehicleKills?: number;
+  vehicleDamage?: number;
 };
 
 export type ExporterActivityEventCountsSnapshot = {
@@ -435,6 +438,9 @@ export type ExporterActivityScoreboardPlayerSnapshot = {
   deaths: number;
   revives: number;
   knockdowns: number;
+  teamkills: number;
+  vehicleKills: number;
+  vehicleDamage: number;
 };
 
 export type ExporterActivityScoreboardTeamSnapshot = {
@@ -536,6 +542,7 @@ export type ExporterActivitySnapshot = {
 
 export type ExporterActivitySessionDetailSnapshot = ExporterActivityRecentRoundSnapshot & {
   scoreboard: ExporterActivityScoreboardSnapshot | null;
+  matchExportAvailable: boolean;
 };
 
 export type ExporterActivitySessionEventsSnapshot = {

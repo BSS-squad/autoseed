@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { collapseTerminalVehicleEvents, fetchActivitySession } from '../lib/snapshot';
 import {
+  buildVehicleDisplayNames,
   formatDamageSource,
   formatVehicleActor,
   formatVehicleEventKind,
@@ -133,6 +134,9 @@ function formatServerName(server: ExporterServerSnapshot): string {
     identity.includes('инвейжен')
   ) {
     return 'INVASION';
+  }
+  if (identity.includes('squadjs6') || identity.includes('mdc') || identity.includes('мдц')) {
+    return 'MDC CUSTOM';
   }
   return server.name;
 }
@@ -269,6 +273,7 @@ function buildLegacyResponse(
     generatedAt: server.activity?.generatedAt || null,
     session: {
       ...session,
+      matchExportAvailable: false,
       journalAvailable: session.journalAvailable || hasEvents,
       journalComplete: false,
       eventCounts
@@ -349,7 +354,13 @@ function SessionTopSummary({ topWindow }: { topWindow: ExporterActivityTopWindow
   );
 }
 
-function ScoreboardView({ response }: { response: ExporterActivitySessionResponse }) {
+function ScoreboardView({
+  response,
+  server
+}: {
+  response: ExporterActivitySessionResponse;
+  server: ExporterServerSnapshot | null;
+}) {
   const teams = response.session.scoreboard?.teams || [];
   if (!teams.length) {
     return (
@@ -367,6 +378,17 @@ function ScoreboardView({ response }: { response: ExporterActivitySessionRespons
           <strong>Итоговая таблица</strong>
           <span>По убийствам, затем по меньшему числу смертей и поднятиям</span>
         </div>
+        {response.session.matchExportAvailable && server ? (
+          <a
+            className="button button-small"
+            data-testid="journal-match-export"
+            href={`${server.activitySessionBaseUrl}/${encodeURIComponent(
+              response.session.sessionId
+            )}/export?format=csv`}
+          >
+            Скачать CSV
+          </a>
+        ) : null}
       </div>
 
       <div className="journal-scoreboard-teams">
@@ -384,7 +406,9 @@ function ScoreboardView({ response }: { response: ExporterActivitySessionRespons
                 </div>
                 <p>
                   {team.totals.revives || 0} поднятий · {team.totals.knockdowns} нокаутов ·{' '}
-                  {team.totals.kills} убийств · {team.totals.deaths || 0} смертей
+                  {team.totals.kills} убийств · {team.totals.deaths || 0} смертей ·{' '}
+                  {team.totals.teamkills || 0} тимкиллов · {team.totals.vehicleKills || 0}{' '}
+                  единиц техники · {formatNumber(team.totals.vehicleDamage)} урона технике
                 </p>
               </header>
               {unknown ? (
@@ -426,17 +450,21 @@ function ScoreboardView({ response }: { response: ExporterActivitySessionRespons
 
 function EventRow({
   event,
-  eventRef
+  eventRef,
+  vehicleDisplayNames
 }: {
   event: ExporterActivityKillfeedEventSnapshot;
   eventRef?: (element: HTMLElement | null) => void;
+  vehicleDisplayNames: ReadonlyMap<string, string>;
 }) {
   const tone = getEventTone(event);
   const actor =
     tone === 'vehicle' ? formatVehicleActor(event) : event.attackerName || 'Неизвестный игрок';
   const target = event.vehicleName
-    ? formatVehicleName(event.vehicleName)
+    ? vehicleDisplayNames.get(event.vehicleName) || formatVehicleName(event.vehicleName)
     : event.victimName || 'Цель не определена';
+  const anonymousVehicleSource = tone === 'vehicle' && !String(event.attackerName || '').trim();
+  const sourceNote = anonymousVehicleSource ? 'игрок не указан журналом' : formatWeapon(event.weapon);
   const damage = typeof event.damage === 'number' ? `${formatNumber(event.damage)} урона` : null;
   const health =
     tone === 'vehicle' && typeof event.healthRemaining === 'number'
@@ -456,7 +484,7 @@ function EventRow({
         <span aria-hidden="true">→</span>
         <strong>{target}</strong>
       </div>
-      <p>{[formatWeapon(event.weapon), damage, health].filter(Boolean).join(' · ')}</p>
+      <p>{[sourceNote, damage, health].filter(Boolean).join(' · ')}</p>
     </article>
   );
 }
@@ -481,6 +509,10 @@ function EventJournal({
   onPageSizeChange: (value: EventPageSize) => void;
 }) {
   const allEvents = useMemo(() => getTabEvents(events, tab), [events, tab]);
+  const vehicleDisplayNames = useMemo(
+    () => buildVehicleDisplayNames(tab === 'vehicles' ? allEvents : []),
+    [allEvents, tab]
+  );
   const vehicleSummary = tab === 'vehicles' ? summarizeVehicleEvents(allEvents) : null;
   const filteredEvents = allEvents.filter((event) => matchesSearch(event, search));
   const pageRange = getPageRange(filteredEvents.length, page, pageSize);
@@ -670,6 +702,7 @@ function EventJournal({
           {visibleEvents.map((event, index) => (
             <EventRow
               event={event}
+              vehicleDisplayNames={vehicleDisplayNames}
               key={`${event.type}:${event.occurredAt || 'no-time'}:${event.attackerName || ''}:${event.victimName || event.vehicleName || ''}:${index}`}
               eventRef={(element) => {
                 const eventIndex = pageRange.start + index;
@@ -896,7 +929,7 @@ export function JournalWorkspace({ servers }: JournalWorkspaceProps) {
         <aside className="journal-session-sidebar">
           <div className="journal-sidebar-head">
             <span>Последние матчи</span>
-            <strong>{sessions.length} / 10</strong>
+            <strong>{sessions.length} матчей</strong>
           </div>
           {sessions.length ? (
             <ul className="journal-session-list">
@@ -1001,7 +1034,7 @@ export function JournalWorkspace({ servers }: JournalWorkspaceProps) {
                     <p>{activeDetail?.error || 'Сервер ещё не подготовил архив выбранного матча.'}</p>
                   </div>
                 ) : tab === 'scoreboard' ? (
-                  <ScoreboardView response={response} />
+                  <ScoreboardView response={response} server={selectedServer} />
                 ) : (
                   <EventJournal
                     events={response.events || EMPTY_EVENTS}

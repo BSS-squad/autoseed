@@ -653,6 +653,7 @@ function buildActivitySessionDetail(sessionId = NARVA_SESSION_ID) {
       winner: { team: '1', faction: 'Winner', tickets: 123 },
       loser: { team: '2', faction: 'Loser', tickets: 20 },
       playerCount: 80,
+      matchExportAvailable: true,
       totals: { kills: 42, deaths: 40, revives: 7, knockdowns: 61 },
       eventCounts: { kills: 1, damage: 105, knockdowns: 1, revives: 1, vehicles: 4 },
       scoreboard: {
@@ -661,7 +662,15 @@ function buildActivitySessionDetail(sessionId = NARVA_SESSION_ID) {
             teamID: '1',
             name: 'Winner',
             result: 'winner',
-            totals: { kills: 30, deaths: 20, revives: 5, knockdowns: 41 },
+            totals: {
+              kills: 30,
+              deaths: 20,
+              revives: 5,
+              knockdowns: 41,
+              teamkills: 2,
+              vehicleKills: 3,
+              vehicleDamage: 1250.5
+            },
             players: [
               {
                 name: 'Winner Player',
@@ -671,6 +680,9 @@ function buildActivitySessionDetail(sessionId = NARVA_SESSION_ID) {
                 deaths: 2,
                 revives: 3,
                 knockdowns: 5,
+                teamkills: 1,
+                vehicleKills: 2,
+                vehicleDamage: 750.5,
                 eosID: 'private-scoreboard-player'
               }
             ]
@@ -755,6 +767,26 @@ function buildActivitySessionDetail(sessionId = NARVA_SESSION_ID) {
           weapon: 'FragmentationDamageType',
           damage: 250,
           healthRemaining: null,
+          destroyed: false
+        },
+        {
+          type: 'vehicle-destroyed',
+          occurredAt: '2026-07-06T11:56:15.000Z',
+          attackerName: null,
+          vehicleName: 'BP_M1151_Woodland_C_2145676702',
+          weapon: 'BP_RPG28_Tandem_Proj_C_2145594143',
+          damage: 700,
+          healthRemaining: 0,
+          destroyed: true
+        },
+        {
+          type: 'vehicle-damage',
+          occurredAt: '2026-07-06T11:56:16.000Z',
+          attackerName: null,
+          vehicleName: 'BP_M1151_Woodland_C_2145676688',
+          weapon: 'BP_BTR82A_RUS_2A72_AP_C_2145664355',
+          damage: 25.83,
+          healthRemaining: 262.84,
           destroyed: false
         },
         {
@@ -1649,11 +1681,28 @@ test('renders one completed session with separate full journal categories', asyn
   await expect(page.getByTestId('journal-scoreboard')).toContainText('Winner Player');
   await expect(page.getByTestId('journal-scoreboard')).toContainText('Orange · Rifleman');
   await expect(page.getByTestId('journal-scoreboard')).toContainText('Победа');
-  const scoreboardHeaders = ['Игрок', 'Отряд / роль', 'Поднятия', 'Нокауты', 'Убийства', 'Смерти'];
+  const scoreboardHeaders = [
+    'Игрок',
+    'Отряд / роль',
+    'Поднятия',
+    'Нокауты',
+    'Убийства',
+    'Смерти',
+    'Тимкиллы',
+    'Выбито техники',
+    'Урон технике'
+  ];
   await expect(page.getByTestId('journal-scoreboard').locator('thead th')).toHaveText([
     ...scoreboardHeaders,
     ...scoreboardHeaders
   ]);
+  await expect(page.getByTestId('journal-scoreboard')).toContainText('1 250,5 урона технике');
+  await expect(page.getByTestId('journal-match-export')).toHaveAttribute(
+    'href',
+    new RegExp(
+      `/mock/squadjs2/activity/sessions/${NARVA_SESSION_ID}/export\\?format=csv$`
+    )
+  );
   await expect.poll(() => sessionRequests).toContain(NARVA_SESSION_ID);
   await expect(page).toHaveURL(
     new RegExp(`#journal\\?server=squadjs2&session=${NARVA_SESSION_ID}&tab=scoreboard$`)
@@ -1706,15 +1755,22 @@ test('renders one completed session with separate full journal categories', asyn
   await expect(
     vehicles.locator('.journal-event-row').filter({ hasText: 'Vehicle Hunter' })
   ).toContainText('Попадание');
-  await expect(vehicles.locator('.journal-event-row')).toHaveCount(3);
-  await expect(page.getByTestId('journal-tab-vehicles')).toContainText('3');
-  await expect(vehicles).toContainText('уничтожено: 1 · попаданий: 2');
+  await expect(vehicles.locator('.journal-event-row')).toHaveCount(5);
+  await expect(page.getByTestId('journal-tab-vehicles')).toContainText('5');
+  await expect(vehicles).toContainText('уничтожено: 2 · попаданий: 3');
   await expect(vehicles).toContainText('Minsk');
   await expect(vehicles).toContainText('CPV Transport Blue');
   await expect(vehicles).toContainText('Deployable TNT 600g Explosive Timed');
   await expect(
     vehicles.locator('.journal-event-row').filter({ hasText: 'Minsk' })
-  ).toContainText('Источник не подтверждён');
+  ).toContainText('Fragmentation');
+  await expect(
+    vehicles.locator('.journal-event-row').filter({ hasText: 'M1151 Woodland №1' })
+  ).toContainText('RPG28 Tandem Proj');
+  await expect(
+    vehicles.locator('.journal-event-row').filter({ hasText: 'M1151 Woodland №2' })
+  ).toContainText('BTR82A RUS 2A72 AP');
+  await expect(vehicles).toContainText('игрок не указан журналом');
   await expect(
     vehicles.locator('.journal-event-row').filter({ hasText: 'CPV Transport Blue' })
   ).toContainText('Уничтожена');
@@ -1821,6 +1877,7 @@ test('keeps every recent match reachable through the session list scroll', async
   const sessionList = page.locator('.journal-session-list');
   const lastSession = page.getByTestId('journal-session-session-scroll-10');
   await expect(sessionList.locator('.journal-session-button')).toHaveCount(10);
+  await expect(page.locator('.journal-sidebar-head strong')).toHaveText('10 матчей');
   await expect(lastSession).not.toBeInViewport();
 
   const scrollMetrics = await sessionList.evaluate((element) => ({
@@ -1831,6 +1888,7 @@ test('keeps every recent match reachable through the session list scroll', async
   expect(scrollMetrics.overflowY).toMatch(/auto|scroll/);
   expect(scrollMetrics.scrollHeight).toBeGreaterThan(scrollMetrics.clientHeight);
 
+  await page.evaluate(() => document.fonts.ready);
   await sessionList.evaluate((element) => {
     element.scrollTop = element.scrollHeight;
   });
