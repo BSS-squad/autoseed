@@ -20,10 +20,9 @@ export type SeedPolicy = {
   timezone: string;
   nightWindowStart: string;
   nightWindowEnd: string;
-  nightPreferredServerId: number;
+  nightPriorityOrder: number[];
   maxSeedPlayers: number;
   priorityOrder: number[];
-  switchDelta: number;
   cooldownMs: number;
   periodicReconnectMs: number;
 };

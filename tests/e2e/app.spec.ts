@@ -16,12 +16,11 @@ const runtimeConfig = {
   },
   policy: {
     timezone: 'Europe/Moscow',
-    nightWindowStart: '23:00',
+    nightWindowStart: '00:00',
     nightWindowEnd: '08:00',
-    nightPreferredServerId: 2,
+    nightPriorityOrder: [3, 2, 1],
     maxSeedPlayers: 80,
     priorityOrder: [1, 2, 3],
-    switchDelta: 10,
     cooldownMs: 600000,
     periodicReconnectMs: 600000
   },
@@ -1599,7 +1598,7 @@ test('normalizes exporter v3 fixtures and follows Mix Spec Ops Invasion day prio
   await expect(page.getByTestId('server-card-3')).toContainText('[RU] BSS Invasion');
 });
 
-test('switches to a stronger server only when switchDelta is exceeded', async ({ page }) => {
+test('keeps strict day priority even when a later server is stronger', async ({ page }) => {
   await page.clock.setFixedTime('2026-07-15T12:00:00.000Z');
   const snapshotState = {
     mixPlayers: 60,
@@ -1614,7 +1613,7 @@ test('switches to a stronger server only when switchDelta is exceeded', async ({
   snapshotState.specOpsPlayers = 71;
   await page.getByTestId('refresh-snapshot-button').click();
 
-  await expect(page.getByTestId('overview-target')).toContainText('[RU] BSS Spec Ops');
+  await expect(page.getByTestId('overview-target')).toContainText('[RU] BSS Mix');
 });
 
 test('skips a priority server that has reached the seed limit', async ({ page }) => {
@@ -1630,7 +1629,7 @@ test('skips a priority server that has reached the seed limit', async ({ page })
   await expect(page.getByTestId('overview-target')).toContainText('[RU] BSS Spec Ops');
 });
 
-test('uses configured night preferred server over day priority order', async ({ page }) => {
+test('uses squadjs3 -> squadjs2 -> squadjs1 priority at night', async ({ page }) => {
   await page.clock.setFixedTime('2026-07-14T22:30:00.000Z');
   await mockPriorityAutoseedApi(page, {
     mixPlayers: 20,
@@ -1640,7 +1639,7 @@ test('uses configured night preferred server over day priority order', async ({ 
 
   await page.goto('./');
 
-  await expect(page.getByTestId('overview-target')).toContainText('[RU] BSS Spec Ops');
+  await expect(page.getByTestId('overview-target')).toContainText('[RU] BSS Invasion');
 });
 
 test('renders an empty Team Balancer state when no fresh report exists', async ({ page }) => {

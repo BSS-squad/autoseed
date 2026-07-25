@@ -14,10 +14,11 @@
 - policy живёт только во frontend runtime-config;
 - страница победителей доступна по GitHub Pages hash-route `/#winners`;
 - текущая BSS policy:
-  - ночью `nightPreferredServerId=2`
-  - днём приоритет `1 -> 2 -> 3` (`Mix -> Spec Ops -> Invasion`)
+  - с `00:00` до `08:00` по Москве строгий приоритет
+    `3 -> 2 -> 1` (`Invasion -> Spec Ops -> Mix`)
+  - в остальное время строгий приоритет
+    `1 -> 2 -> 3` (`Mix -> Spec Ops -> Invasion`)
   - лимит `maxSeedPlayers=80`
-  - `switchDelta=10`
 
 ## 1. Frontend: GitHub Pages
 
@@ -33,12 +34,11 @@
   },
   "policy": {
     "timezone": "Europe/Moscow",
-    "nightWindowStart": "23:00",
+    "nightWindowStart": "00:00",
     "nightWindowEnd": "08:00",
-    "nightPreferredServerId": 2,
+    "nightPriorityOrder": [3, 2, 1],
     "maxSeedPlayers": 80,
     "priorityOrder": [1, 2, 3],
-    "switchDelta": 10,
     "cooldownMs": 600000
   },
   "exporters": [
@@ -123,10 +123,12 @@
 ### Меняется во frontend secret
 
 - `exporters[].baseUrl`
+- `policy.timezone`
+- `policy.nightWindowStart`
+- `policy.nightWindowEnd`
+- `policy.nightPriorityOrder`
 - `policy.priorityOrder`
-- `policy.nightPreferredServerId`
 - `policy.maxSeedPlayers`
-- `policy.switchDelta`
 - `policy.cooldownMs`
 - `app.vipShopUrl` для публичной ссылки на внешний VIP purchase flow
 - `leaderboards.url` для публичной страницы лидербордов
@@ -219,12 +221,11 @@ networks:
   },
   "policy": {
     "timezone": "Europe/Moscow",
-    "nightWindowStart": "23:00",
+    "nightWindowStart": "00:00",
     "nightWindowEnd": "08:00",
-    "nightPreferredServerId": 2,
+    "nightPriorityOrder": [3, 2, 1],
     "maxSeedPlayers": 80,
     "priorityOrder": [1, 2, 3],
-    "switchDelta": 10,
     "cooldownMs": 600000
   },
   "exporters": [
