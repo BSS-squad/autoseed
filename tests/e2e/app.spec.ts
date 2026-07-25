@@ -1888,6 +1888,7 @@ test('keeps every recent match reachable through the session list scroll', async
   expect(scrollMetrics.overflowY).toMatch(/auto|scroll/);
   expect(scrollMetrics.scrollHeight).toBeGreaterThan(scrollMetrics.clientHeight);
 
+  await page.evaluate(() => document.fonts.ready);
   await sessionList.evaluate((element) => {
     element.scrollTop = element.scrollHeight;
   });
