@@ -7,12 +7,11 @@ import type {
 
 export const DEFAULT_SEED_POLICY: SeedPolicy = {
   timezone: 'Europe/Moscow',
-  nightWindowStart: '23:00',
+  nightWindowStart: '00:00',
   nightWindowEnd: '08:00',
-  nightPreferredServerId: 2,
+  nightPriorityOrder: [3, 2, 1],
   maxSeedPlayers: 80,
   priorityOrder: [1, 2, 3],
-  switchDelta: 10,
   cooldownMs: 10 * 60 * 1000,
   periodicReconnectMs: 10 * 60 * 1000
 };
@@ -35,7 +34,7 @@ function parseTime(value: string): number {
   return hour * 60 + minute;
 }
 
-function isNightWindow(policy: SeedPolicy, date = new Date()): boolean {
+export function isNightWindow(policy: SeedPolicy, date = new Date()): boolean {
   const current = getMinutesInTimezone(policy.timezone, date);
   const start = parseTime(policy.nightWindowStart);
   const end = parseTime(policy.nightWindowEnd);
@@ -52,16 +51,36 @@ function isSuitableSeedCandidate(server: ExporterServerSnapshot): boolean {
 }
 
 export function resolveSeedPolicy(fallbackPolicy?: Partial<SeedPolicy> | null): SeedPolicy {
+  const hasCurrentPrioritySchedule = Array.isArray(fallbackPolicy?.nightPriorityOrder);
+
   return {
     ...DEFAULT_SEED_POLICY,
     ...(fallbackPolicy || {}),
-    priorityOrder: fallbackPolicy?.priorityOrder || DEFAULT_SEED_POLICY.priorityOrder
+    // До перехода на полный ночной порядок конфиг содержал один nightPreferredServerId.
+    // Если нового поля нет, весь старый график игнорируется и применяется актуальная
+    // политика BSS. Это не даёт старому боевому секрету вернуть окно с 23:00.
+    timezone: hasCurrentPrioritySchedule
+      ? fallbackPolicy?.timezone || DEFAULT_SEED_POLICY.timezone
+      : DEFAULT_SEED_POLICY.timezone,
+    nightWindowStart: hasCurrentPrioritySchedule
+      ? fallbackPolicy?.nightWindowStart || DEFAULT_SEED_POLICY.nightWindowStart
+      : DEFAULT_SEED_POLICY.nightWindowStart,
+    nightWindowEnd: hasCurrentPrioritySchedule
+      ? fallbackPolicy?.nightWindowEnd || DEFAULT_SEED_POLICY.nightWindowEnd
+      : DEFAULT_SEED_POLICY.nightWindowEnd,
+    nightPriorityOrder: hasCurrentPrioritySchedule
+      ? fallbackPolicy?.nightPriorityOrder || DEFAULT_SEED_POLICY.nightPriorityOrder
+      : DEFAULT_SEED_POLICY.nightPriorityOrder,
+    priorityOrder: hasCurrentPrioritySchedule
+      ? fallbackPolicy?.priorityOrder || DEFAULT_SEED_POLICY.priorityOrder
+      : DEFAULT_SEED_POLICY.priorityOrder
   };
 }
 
 export function determineTargetServer(
   snapshot: CombinedSnapshot,
-  policy: SeedPolicy
+  policy: SeedPolicy,
+  date = new Date()
 ): ExporterServerSnapshot | null {
   const candidates = snapshot.servers
     .filter((server) => isSuitableSeedCandidate(server))
@@ -69,52 +88,40 @@ export function determineTargetServer(
 
   if (!candidates.length) return null;
 
-  if (isNightWindow(policy)) {
-    const preferredNightServer =
-      candidates.find((server) => server.id === policy.nightPreferredServerId) || null;
-    if (preferredNightServer) return preferredNightServer;
-  }
-
-  const priorityCandidate = policy.priorityOrder
+  const priorityOrder = isNightWindow(policy, date)
+    ? policy.nightPriorityOrder
+    : policy.priorityOrder;
+  const priorityCandidate = priorityOrder
     .map((serverId) => candidates.find((server) => server.id === serverId) || null)
     .find(Boolean) as ExporterServerSnapshot | undefined;
 
-  const strongest = candidates
-    .slice()
-    .sort((left, right) => right.playerCount - left.playerCount)[0];
+  if (priorityCandidate) return priorityCandidate;
 
-  if (!priorityCandidate) {
-    return strongest || null;
-  }
-
-  if (
-    strongest &&
-    strongest.id !== priorityCandidate.id &&
-    strongest.playerCount - priorityCandidate.playerCount > policy.switchDelta
-  ) {
-    return strongest;
-  }
-
-  return priorityCandidate;
+  return (
+    candidates
+      .slice()
+      .sort((left, right) => right.playerCount - left.playerCount)[0] || null
+  );
 }
 
 export function buildSelectionState(
   snapshot: CombinedSnapshot,
-  policy: SeedPolicy
+  policy: SeedPolicy,
+  date = new Date()
 ): SelectionState {
-  const targetServer = determineTargetServer(snapshot, policy);
+  const targetServer = determineTargetServer(snapshot, policy, date);
   if (!targetServer) {
     return {
       targetServer: null,
       reason: 'no_suitable_server',
-      nightMode: isNightWindow(policy)
+      nightMode: isNightWindow(policy, date)
     };
   }
 
   return {
     targetServer,
     reason: 'target_found',
-    nightMode: isNightWindow(policy)
+    nightMode: isNightWindow(policy, date)
   };
 }
 

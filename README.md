@@ -9,7 +9,9 @@
 - exporter отдаёт `healthz` и расширенный `snapshot` с общим онлайном, составом сторон, squad-структурой и часами из `PlaytimeTracker`;
 - `joinLink` больше не живёт в snapshot: frontend запрашивает его у exporter-а только по факту redirect/direct join, а exporter уже делает lookup в `Squadbrowser API` по exact server name;
 - policy живёт только во frontend runtime-config;
-- текущий приоритет выбора: ночью `serverId=2`, днём `1 -> 2 -> 3` (`Mix -> Spec Ops -> Invasion`).
+- текущий приоритет выбора по московскому времени: с `00:00` до `08:00`
+  `3 -> 2 -> 1` (`Invasion -> Spec Ops -> Mix`), в остальное время
+  `1 -> 2 -> 3` (`Mix -> Spec Ops -> Invasion`).
 
 ## Что реализовано
 
@@ -18,7 +20,8 @@
 - fully-static архитектура без backend и без Steam auth;
 - realtime-подписка на публичные exporter endpoint-ы через `SSE /events`;
 - просмотр онлайна серверов, состава сторон и баланса часов по игрокам;
-- выбор target server по frontend policy: ночному окну, приоритетам, лимиту онлайна и `switchDelta`;
+- выбор целевого сервера по строгому дневному или ночному порядку с учётом
+  доступности, признака `isSeedCandidate` и лимита онлайна;
 - опциональный test-sequence через runtime-config, например `1 -> 2 -> 3` с задержкой `60 s`;
 - хранение `enabled`, `lastProcessedTimestamp`, `cooldown` и permissions в `localStorage`;
 - локальный preflight-check на странице: popup, `steam://`, и явная подсказка оставить Squad в главном меню;
@@ -49,12 +52,11 @@ npm run dev
   },
   "policy": {
     "timezone": "Europe/Moscow",
-    "nightWindowStart": "23:00",
+    "nightWindowStart": "00:00",
     "nightWindowEnd": "08:00",
-    "nightPreferredServerId": 2,
+    "nightPriorityOrder": [3, 2, 1],
     "maxSeedPlayers": 80,
     "priorityOrder": [1, 2, 3],
-    "switchDelta": 10,
     "cooldownMs": 600000
   },
   "exporters": [

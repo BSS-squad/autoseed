@@ -18,6 +18,7 @@ const allowedPolicyKeys = new Set([
   'timezone',
   'nightWindowStart',
   'nightWindowEnd',
+  'nightPriorityOrder',
   'nightPreferredServerId',
   'maxSeedPlayers',
   'priorityOrder',
@@ -120,11 +121,11 @@ function assertRuntimeConfig(config) {
     for (const [key, value] of Object.entries(config.policy)) {
       if (key === 'timezone' || key === 'nightWindowStart' || key === 'nightWindowEnd') {
         assertNonEmptyString(value, `policy.${key}`);
-      } else if (key === 'priorityOrder') {
+      } else if (key === 'priorityOrder' || key === 'nightPriorityOrder') {
         if (!Array.isArray(value)) {
-          throw new Error('Public runtime config has invalid policy.priorityOrder.');
+          throw new Error(`Public runtime config has invalid policy.${key}.`);
         }
-        for (const serverId of value) assertFiniteNumber(serverId, 'policy.priorityOrder');
+        for (const serverId of value) assertFiniteNumber(serverId, `policy.${key}`);
       } else {
         assertFiniteNumber(value, `policy.${key}`);
       }
