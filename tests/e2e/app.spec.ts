@@ -199,6 +199,7 @@ function buildSnapshot({
   maxPlayers,
   queueLength,
   online,
+  isSeedCandidate = true,
   timestamp = BASE_TIME,
   raffles = null,
   teamBalancer = null,
@@ -211,6 +212,7 @@ function buildSnapshot({
   maxPlayers: number;
   queueLength: number;
   online: boolean;
+  isSeedCandidate?: boolean;
   timestamp?: number;
   raffles?: unknown;
   teamBalancer?: unknown;
@@ -231,7 +233,7 @@ function buildSnapshot({
         queueLength,
         currentLayer: 'Narva RAAS v2',
         gameMode: 'RAAS',
-        isSeedCandidate: true,
+        isSeedCandidate,
         online,
         teams: [buildTeam(1, 'Vanguard', 342.6), buildTeam(2, 'Nomad', 287.4)],
         players: [],
@@ -1512,6 +1514,49 @@ test('renders the localized control room from exporter snapshots', async ({ page
   await expect(page.getByTestId('active-server-board')).toContainText('вход по запросу');
   await expect(page.getByText('Как запустить')).toBeVisible();
   await expect(page.getByText('Выбор сервера')).toBeVisible();
+});
+
+test('keeps a private event server in the journal but out of autoseed controls', async ({
+  page
+}) => {
+  const privateEventRuntimeConfig = {
+    ...runtimeConfig,
+    exporters: [
+      ...runtimeConfig.exporters,
+      {
+        name: 'squadjs6',
+        baseUrl: 'http://127.0.0.1:4173/mock/squadjs6'
+      }
+    ]
+  };
+
+  await mockAutoseedApi(page, undefined, privateEventRuntimeConfig);
+  await page.route('**/mock/squadjs6/snapshot', (route) =>
+    fulfillJson(
+      route,
+      buildSnapshot({
+        id: 6,
+        code: 'squadjs6',
+        name: 'MDC Custom',
+        playerCount: 0,
+        maxPlayers: 100,
+        queueLength: 0,
+        online: true,
+        isSeedCandidate: false
+      })
+    )
+  );
+
+  await page.goto('./');
+
+  await expect(page.getByTestId('server-card-6')).toHaveCount(0);
+  await expect(page.getByTestId('overview-target')).toContainText('[RU] BSS Spec Ops');
+
+  await page.goto('./#journal?server=squadjs6');
+
+  await expect(page.getByTestId('journal-server-6')).toBeVisible();
+  await expect(page.getByTestId('journal-server-6')).toContainText('MDC CUSTOM');
+  await expect(page.getByText('Завершённых матчей ещё нет')).toBeVisible();
 });
 
 test('hides the VIP purchase link when the runtime config does not provide a URL', async ({
