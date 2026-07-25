@@ -897,7 +897,10 @@ function mapActivityRoundTotals(value: unknown): ExporterActivityRoundTotalsSnap
     kills: Math.max(0, Math.round(toNumber(totals.kills))),
     deaths: Math.max(0, Math.round(toNumber(totals.deaths))),
     revives: Math.max(0, Math.round(toNumber(totals.revives))),
-    knockdowns: Math.max(0, Math.round(toNumber(totals.knockdowns)))
+    knockdowns: Math.max(0, Math.round(toNumber(totals.knockdowns))),
+    teamkills: Math.max(0, Math.round(toNumber(totals.teamkills))),
+    vehicleKills: Math.max(0, Math.round(toNumber(totals.vehicleKills))),
+    vehicleDamage: Math.max(0, toNumber(totals.vehicleDamage))
   };
 }
 
@@ -927,7 +930,10 @@ function mapActivityScoreboardPlayer(
     kills: totals.kills,
     deaths: totals.deaths ?? 0,
     revives: totals.revives ?? 0,
-    knockdowns: totals.knockdowns
+    knockdowns: totals.knockdowns,
+    teamkills: totals.teamkills ?? 0,
+    vehicleKills: totals.vehicleKills ?? 0,
+    vehicleDamage: totals.vehicleDamage ?? 0
   };
 }
 
@@ -1192,6 +1198,9 @@ function mapActivitySessionResponse(value: unknown): ExporterActivitySessionResp
     generatedAt: toIsoStringOrNull(payload.generatedAt),
     session: {
       ...session,
+      matchExportAvailable: payload.session
+        ? Boolean(getRecord(payload.session)?.matchExportAvailable)
+        : false,
       eventCounts: {
         ...session.eventCounts,
         vehicles: events.vehicles.length

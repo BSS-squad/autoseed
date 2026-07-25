@@ -366,7 +366,15 @@ test('keeps public activity fields and drops private ids from exporter snapshots
                         teamID: '1',
                         name: 'Winner',
                         result: 'winner',
-                        totals: { kills: 30, deaths: 20, revives: 5, knockdowns: 41 },
+                        totals: {
+                          kills: 30,
+                          deaths: 20,
+                          revives: 5,
+                          knockdowns: 41,
+                          teamkills: 2,
+                          vehicleKills: 3,
+                          vehicleDamage: 1250.5
+                        },
                         players: [
                           {
                             name: 'Winner Player',
@@ -376,6 +384,9 @@ test('keeps public activity fields and drops private ids from exporter snapshots
                             deaths: 2,
                             revives: 3,
                             knockdowns: 5,
+                            teamkills: 1,
+                            vehicleKills: 2,
+                            vehicleDamage: 750.5,
                             eosID: 'private-scoreboard-player'
                           }
                         ]
@@ -471,7 +482,10 @@ test('keeps public activity fields and drops private ids from exporter snapshots
     kills: 8,
     deaths: 2,
     revives: 3,
-    knockdowns: 5
+    knockdowns: 5,
+    teamkills: 1,
+    vehicleKills: 2,
+    vehicleDamage: 750.5
   });
   assert.equal(activity?.teamBalancerHistory[0]?.plannedPlayers, 2);
   assert.equal(activity?.teamBalancerHistory[0]?.mode, 'execute');
@@ -560,6 +574,7 @@ test('loads a complete journal for one finished session without exposing private
             endedAt: '2026-07-13T17:55:00.000Z',
             layer: 'Narva RAAS v3',
             playerCount: 91,
+            matchExportAvailable: true,
             totals: { kills: 83, deaths: 87, revives: 14, knockdowns: 106 },
             eventCounts: { kills: 1, damage: 1, knockdowns: 1, revives: 1, vehicles: 4 },
             scoreboard: {
@@ -568,7 +583,15 @@ test('loads a complete journal for one finished session without exposing private
                   teamID: '1',
                   name: 'Победители',
                   result: 'winner',
-                  totals: { kills: 1, deaths: 0, revives: 1, knockdowns: 1 },
+                  totals: {
+                    kills: 1,
+                    deaths: 0,
+                    revives: 1,
+                    knockdowns: 1,
+                    teamkills: 1,
+                    vehicleKills: 1,
+                    vehicleDamage: 480.75
+                  },
                   players: [
                     {
                       name: 'Игрок',
@@ -578,6 +601,9 @@ test('loads a complete journal for one finished session without exposing private
                       deaths: 0,
                       revives: 1,
                       knockdowns: 1,
+                      teamkills: 1,
+                      vehicleKills: 1,
+                      vehicleDamage: 480.75,
                       steamID: 'private-steam-id'
                     }
                   ]
@@ -683,6 +709,10 @@ test('loads a complete journal for one finished session without exposing private
 
   const detail = await fetchActivitySession(server, 's2_0123456789abcdef01234567');
   assert.equal(detail.session.scoreboard?.teams[0]?.players[0]?.name, 'Игрок');
+  assert.equal(detail.session.scoreboard?.teams[0]?.players[0]?.teamkills, 1);
+  assert.equal(detail.session.scoreboard?.teams[0]?.players[0]?.vehicleKills, 1);
+  assert.equal(detail.session.scoreboard?.teams[0]?.players[0]?.vehicleDamage, 480.75);
+  assert.equal(detail.session.matchExportAvailable, true);
   assert.equal(detail.events.damage[0]?.damage, 37.5);
   assert.equal(detail.events.knockdowns[0]?.type, 'knockdown');
   assert.equal(detail.events.revives[0]?.type, 'revive');

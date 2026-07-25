@@ -134,6 +134,9 @@ function formatServerName(server: ExporterServerSnapshot): string {
   ) {
     return 'INVASION';
   }
+  if (identity.includes('squadjs6') || identity.includes('mdc') || identity.includes('мдц')) {
+    return 'MDC CUSTOM';
+  }
   return server.name;
 }
 
@@ -269,6 +272,7 @@ function buildLegacyResponse(
     generatedAt: server.activity?.generatedAt || null,
     session: {
       ...session,
+      matchExportAvailable: false,
       journalAvailable: session.journalAvailable || hasEvents,
       journalComplete: false,
       eventCounts
@@ -349,7 +353,13 @@ function SessionTopSummary({ topWindow }: { topWindow: ExporterActivityTopWindow
   );
 }
 
-function ScoreboardView({ response }: { response: ExporterActivitySessionResponse }) {
+function ScoreboardView({
+  response,
+  server
+}: {
+  response: ExporterActivitySessionResponse;
+  server: ExporterServerSnapshot | null;
+}) {
   const teams = response.session.scoreboard?.teams || [];
   if (!teams.length) {
     return (
@@ -367,6 +377,17 @@ function ScoreboardView({ response }: { response: ExporterActivitySessionRespons
           <strong>Итоговая таблица</strong>
           <span>По убийствам, затем по меньшему числу смертей и поднятиям</span>
         </div>
+        {response.session.matchExportAvailable && server ? (
+          <a
+            className="button button-small"
+            data-testid="journal-match-export"
+            href={`${server.activitySessionBaseUrl}/${encodeURIComponent(
+              response.session.sessionId
+            )}/export?format=csv`}
+          >
+            Скачать CSV
+          </a>
+        ) : null}
       </div>
 
       <div className="journal-scoreboard-teams">
@@ -384,7 +405,9 @@ function ScoreboardView({ response }: { response: ExporterActivitySessionRespons
                 </div>
                 <p>
                   {team.totals.revives || 0} поднятий · {team.totals.knockdowns} нокаутов ·{' '}
-                  {team.totals.kills} убийств · {team.totals.deaths || 0} смертей
+                  {team.totals.kills} убийств · {team.totals.deaths || 0} смертей ·{' '}
+                  {team.totals.teamkills || 0} тимкиллов · {team.totals.vehicleKills || 0}{' '}
+                  единиц техники · {formatNumber(team.totals.vehicleDamage)} урона технике
                 </p>
               </header>
               {unknown ? (
@@ -1001,7 +1024,7 @@ export function JournalWorkspace({ servers }: JournalWorkspaceProps) {
                     <p>{activeDetail?.error || 'Сервер ещё не подготовил архив выбранного матча.'}</p>
                   </div>
                 ) : tab === 'scoreboard' ? (
-                  <ScoreboardView response={response} />
+                  <ScoreboardView response={response} server={selectedServer} />
                 ) : (
                   <EventJournal
                     events={response.events || EMPTY_EVENTS}

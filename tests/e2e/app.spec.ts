@@ -653,6 +653,7 @@ function buildActivitySessionDetail(sessionId = NARVA_SESSION_ID) {
       winner: { team: '1', faction: 'Winner', tickets: 123 },
       loser: { team: '2', faction: 'Loser', tickets: 20 },
       playerCount: 80,
+      matchExportAvailable: true,
       totals: { kills: 42, deaths: 40, revives: 7, knockdowns: 61 },
       eventCounts: { kills: 1, damage: 105, knockdowns: 1, revives: 1, vehicles: 4 },
       scoreboard: {
@@ -661,7 +662,15 @@ function buildActivitySessionDetail(sessionId = NARVA_SESSION_ID) {
             teamID: '1',
             name: 'Winner',
             result: 'winner',
-            totals: { kills: 30, deaths: 20, revives: 5, knockdowns: 41 },
+            totals: {
+              kills: 30,
+              deaths: 20,
+              revives: 5,
+              knockdowns: 41,
+              teamkills: 2,
+              vehicleKills: 3,
+              vehicleDamage: 1250.5
+            },
             players: [
               {
                 name: 'Winner Player',
@@ -671,6 +680,9 @@ function buildActivitySessionDetail(sessionId = NARVA_SESSION_ID) {
                 deaths: 2,
                 revives: 3,
                 knockdowns: 5,
+                teamkills: 1,
+                vehicleKills: 2,
+                vehicleDamage: 750.5,
                 eosID: 'private-scoreboard-player'
               }
             ]
@@ -1649,11 +1661,28 @@ test('renders one completed session with separate full journal categories', asyn
   await expect(page.getByTestId('journal-scoreboard')).toContainText('Winner Player');
   await expect(page.getByTestId('journal-scoreboard')).toContainText('Orange · Rifleman');
   await expect(page.getByTestId('journal-scoreboard')).toContainText('Победа');
-  const scoreboardHeaders = ['Игрок', 'Отряд / роль', 'Поднятия', 'Нокауты', 'Убийства', 'Смерти'];
+  const scoreboardHeaders = [
+    'Игрок',
+    'Отряд / роль',
+    'Поднятия',
+    'Нокауты',
+    'Убийства',
+    'Смерти',
+    'Тимкиллы',
+    'Выбито техники',
+    'Урон технике'
+  ];
   await expect(page.getByTestId('journal-scoreboard').locator('thead th')).toHaveText([
     ...scoreboardHeaders,
     ...scoreboardHeaders
   ]);
+  await expect(page.getByTestId('journal-scoreboard')).toContainText('1 250,5 урона технике');
+  await expect(page.getByTestId('journal-match-export')).toHaveAttribute(
+    'href',
+    new RegExp(
+      `/mock/squadjs2/activity/sessions/${NARVA_SESSION_ID}/export\\?format=csv$`
+    )
+  );
   await expect.poll(() => sessionRequests).toContain(NARVA_SESSION_ID);
   await expect(page).toHaveURL(
     new RegExp(`#journal\\?server=squadjs2&session=${NARVA_SESSION_ID}&tab=scoreboard$`)
