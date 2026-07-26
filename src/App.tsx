@@ -8,6 +8,7 @@ import {
   type ChangeEvent
 } from 'react';
 
+import { resolveAchievementIconUrl } from './lib/achievement-icons';
 import { runPermissionCheck } from './lib/permissions';
 import {
   buildRoleLeaderboardHash,
@@ -212,30 +213,6 @@ const EMPTY_SNAPSHOT: CombinedSnapshot = {
 };
 
 const APP_DISPLAY_NAME = 'Автосид BSS';
-
-const ACHIEVEMENT_ICON_FILES: Record<string, string> = {
-  godlike: 'godlike.webp',
-  tactician: 'tactician.webp',
-  underdog: 'underdog.webp',
-  dominator: 'dominator.webp',
-  close_call: 'close-call.webp',
-  flexible_strategist: 'flexible-strategist.webp',
-  stabilizer: 'stabilizer.webp',
-  strike_fist: 'strike-fist.webp',
-  no_one_left: 'no-one-left.webp',
-  mentor: 'mentor.webp',
-  backbone: 'backbone.webp',
-  squad_armor_piercer: 'squad-armor-piercer.webp',
-  locomotive: 'locomotive.webp',
-  last_stand: 'last-stand.webp',
-  reviver: 'reviver.webp',
-  armor_piercer: 'armor-piercer.webp',
-  survivor: 'survivor.webp',
-  clean_work: 'clean-work.webp',
-  against_odds: 'against-odds.webp',
-  butcher: 'butcher.webp',
-  versatile: 'versatile.webp'
-};
 
 const ROLE_METRIC_LABELS: Record<string, string> = {
   resourceSwingPer90: 'Вклад / 90 мин',
@@ -1290,7 +1267,7 @@ function AchievementBadge({
   achievement: RoleLeaderboardAchievement;
   tooltipId: string;
 }) {
-  const iconFile = ACHIEVEMENT_ICON_FILES[achievement.code];
+  const iconUrl = resolveAchievementIconUrl(achievement.code, import.meta.env.BASE_URL);
   return (
     <button
       type="button"
@@ -1299,9 +1276,9 @@ function AchievementBadge({
       aria-describedby={tooltipId}
       data-testid={`achievement-${achievement.code}`}
     >
-      {iconFile ? (
+      {iconUrl ? (
         <img
-          src={`${import.meta.env.BASE_URL}achievements/${iconFile}`}
+          src={iconUrl}
           alt=""
           loading="lazy"
           width="48"
