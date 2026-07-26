@@ -134,8 +134,9 @@ function assertRuntimeConfig(config) {
 
   if (config.leaderboards !== undefined) {
     assertPlainObject(config.leaderboards, 'leaderboards');
-    assertAllowedKeys(config.leaderboards, new Set(['url']), 'leaderboards');
+    assertAllowedKeys(config.leaderboards, new Set(['url', 'roleUrl']), 'leaderboards');
     assertOptionalPublicUrl(config.leaderboards.url, 'leaderboards.url');
+    assertOptionalPublicUrl(config.leaderboards.roleUrl, 'leaderboards.roleUrl');
   }
 
   if (!Array.isArray(config.exporters) || config.exporters.length === 0) {

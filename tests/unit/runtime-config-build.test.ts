@@ -35,6 +35,10 @@ test('runtime config generator writes only the approved public shape', (t) => {
     policy: {
       priorityOrder: [1, 2, 3]
     },
+    leaderboards: {
+      url: 'https://statistics.example.test/api/leaderboards',
+      roleUrl: 'https://statistics.example.test/api/leaderboards/v2'
+    },
     exporters: [
       {
         name: 'squadjs1',

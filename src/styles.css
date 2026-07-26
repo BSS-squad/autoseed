@@ -3584,17 +3584,50 @@ input {
 
 .leaderboards-hero {
   display: grid;
+  gap: 18px;
+  overflow: visible;
+  padding: 22px;
+}
+
+.leaderboards-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
   gap: 24px;
 }
 
-.leaderboard-periods {
+.leaderboards-heading h1 {
+  margin: 4px 0 0;
+  font-size: clamp(2rem, 5vw, 3.2rem);
+  line-height: 0.98;
+  letter-spacing: -0.04em;
+}
+
+.leaderboards-heading .hero-copy {
+  max-width: 620px;
+  margin: 0;
+}
+
+.leaderboard-control-stack {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.leaderboard-periods,
+.leaderboard-role-row,
+.leaderboard-squad-size-row {
+  display: grid;
   gap: 10px;
   padding: 6px;
   border-radius: 22px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.03);
+}
+
+.leaderboard-periods,
+.leaderboard-role-row,
+.leaderboard-squad-size-row {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .leaderboard-period-button {
@@ -3603,15 +3636,104 @@ input {
   min-height: 58px;
 }
 
-.leaderboard-period-button small {
+.leaderboard-period-button small,
+.leaderboard-squad-size-button small {
   color: inherit;
   opacity: 0.68;
   font-size: 0.72rem;
 }
 
+.leaderboard-role-button {
+  min-height: 44px;
+}
+
+.leaderboard-squad-size-button {
+  display: grid;
+  gap: 3px;
+  min-height: 50px;
+}
+
+.leaderboard-archive-row {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 10px;
+}
+
+.leaderboard-archive-row > strong {
+  min-width: 0;
+  color: var(--muted-strong);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.84rem;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.leaderboard-archive-button {
+  width: 44px;
+  min-height: 40px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.leaderboard-archive-button:disabled {
+  opacity: 0.32;
+  cursor: default;
+}
+
+.leaderboard-context-strip {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(110px, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: var(--shadow-lg);
+}
+
+.leaderboard-context-strip > span {
+  min-width: 0;
+  padding: 14px 16px;
+  background: var(--panel);
+}
+
+.leaderboard-context-strip small,
+.role-metric small,
+.role-match-progress,
+.role-table-person small {
+  display: block;
+  color: var(--muted);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem;
+}
+
+.leaderboard-context-strip strong {
+  display: block;
+  margin-top: 5px;
+  overflow-wrap: anywhere;
+}
+
+.leaderboard-context-strip em {
+  grid-column: 1 / -1;
+  padding: 8px 14px;
+  background: rgba(255, 178, 78, 0.12);
+  color: #ffd393;
+  font-size: 0.78rem;
+  font-style: normal;
+  text-align: center;
+}
+
+.leaderboard-context-strip-warning {
+  border-color: rgba(255, 178, 78, 0.35);
+}
+
 .leaderboard-section {
   display: grid;
-  gap: 14px;
+  gap: 16px;
 }
 
 .leaderboard-empty-state,
@@ -3643,7 +3765,7 @@ input {
 }
 
 .leaderboard-table-wrap {
-  overflow: hidden;
+  overflow: visible;
 }
 
 .leaderboard-table-head {
@@ -3677,36 +3799,6 @@ input {
   display: grid;
 }
 
-.leaderboard-row {
-  display: grid;
-  grid-template-columns: 86px minmax(170px, 1fr) repeat(4, minmax(86px, 0.46fr));
-  gap: 14px;
-  align-items: center;
-  min-height: 58px;
-  padding: 14px 22px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
-  color: var(--muted-strong);
-}
-
-.leaderboard-row:last-child {
-  border-bottom: 0;
-}
-
-.leaderboard-row-header {
-  min-height: 48px;
-  color: rgba(255, 255, 255, 0.54);
-  font-size: 0.72rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.leaderboard-row strong {
-  min-width: 0;
-  color: var(--text);
-  font-family: 'Manrope', sans-serif;
-  overflow-wrap: anywhere;
-}
-
 .leaderboard-rank {
   display: inline-flex;
   align-items: center;
@@ -3718,6 +3810,272 @@ input {
   border-radius: 999px;
   background: rgba(255, 211, 108, 0.14);
   color: var(--gold);
+}
+
+.role-podium {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.role-podium-card {
+  position: relative;
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at top right, rgba(118, 210, 255, 0.09), transparent 42%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.015)),
+    var(--panel);
+  box-shadow: var(--shadow-lg);
+}
+
+.role-podium-card-1 {
+  border-color: rgba(255, 211, 108, 0.42);
+  background:
+    radial-gradient(circle at top right, rgba(255, 211, 108, 0.2), transparent 44%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015)),
+    var(--panel);
+}
+
+.role-podium-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 52px;
+}
+
+.role-entry-name {
+  display: block;
+  margin-top: 10px;
+  color: var(--text);
+  font-size: 1.34rem;
+  overflow-wrap: anywhere;
+}
+
+.role-match-progress {
+  margin-top: 5px;
+}
+
+.role-metric-set {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.role-metric {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.role-metric strong {
+  display: block;
+  margin-top: 5px;
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.88rem;
+  overflow-wrap: anywhere;
+}
+
+.achievement-list {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.achievement-badge {
+  position: relative;
+  display: inline-grid;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: 0;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--text);
+  cursor: help;
+}
+
+.achievement-badge img {
+  display: block;
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+}
+
+.achievement-badge:hover,
+.achievement-badge:focus,
+.achievement-badge:focus-visible {
+  z-index: 20;
+  outline: 2px solid rgba(118, 210, 255, 0.7);
+  outline-offset: 2px;
+}
+
+.achievement-tooltip {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 9px);
+  left: 50%;
+  display: none;
+  width: min(280px, calc(100vw - 36px));
+  padding: 13px;
+  border: 1px solid rgba(118, 210, 255, 0.3);
+  border-radius: 14px;
+  background: #101923;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.48);
+  color: var(--text);
+  text-align: left;
+  transform: translateX(-50%);
+}
+
+.achievement-tooltip strong,
+.achievement-tooltip span,
+.achievement-tooltip small {
+  display: block;
+}
+
+.achievement-tooltip span {
+  margin-top: 6px;
+  color: var(--muted-strong);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.achievement-tooltip small {
+  margin-top: 8px;
+  color: #9ddfff;
+  font-size: 0.72rem;
+  line-height: 1.42;
+}
+
+.achievement-badge:hover .achievement-tooltip,
+.achievement-badge:focus .achievement-tooltip,
+.achievement-badge:focus-visible .achievement-tooltip {
+  display: block;
+}
+
+.achievement-empty {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.achievement-fallback {
+  place-self: center;
+  color: var(--accent);
+}
+
+.role-entry-explanation {
+  margin-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  padding-top: 12px;
+}
+
+.role-entry-explanation > summary {
+  width: fit-content;
+  color: #9ddfff;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.role-entry-explanation-body {
+  display: grid;
+  gap: 14px;
+  margin-top: 13px;
+  color: var(--muted-strong);
+  font-size: 0.78rem;
+}
+
+.role-entry-explanation ol {
+  margin: 9px 0 0;
+  padding-left: 18px;
+}
+
+.role-entry-explanation dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px 14px;
+  margin: 0;
+}
+
+.role-entry-explanation dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding-bottom: 5px;
+}
+
+.role-entry-explanation dd {
+  margin: 0;
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.role-achievement-reasons {
+  display: grid;
+  gap: 8px;
+}
+
+.role-achievement-reasons p {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 9px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.role-achievement-reasons span,
+.role-achievement-reasons small {
+  color: var(--muted);
+  line-height: 1.42;
+}
+
+.role-leaderboard-row {
+  display: grid;
+  grid-template-columns: 64px minmax(150px, 0.8fr) minmax(320px, 1.35fr) minmax(150px, auto);
+  gap: 14px;
+  align-items: center;
+  min-height: 72px;
+  padding: 15px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  color: var(--muted-strong);
+}
+
+.role-leaderboard-row:last-child {
+  border-bottom: 0;
+}
+
+.role-table-person {
+  min-width: 0;
+}
+
+.role-table-person strong {
+  display: block;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.role-table-person small {
+  margin-top: 4px;
+}
+
+.role-metric-set-compact {
+  margin-top: 0;
+}
+
+.role-leaderboard-row > .role-entry-explanation {
+  grid-column: 1 / -1;
+  width: 100%;
+  margin-top: 0;
 }
 
 .hero,
@@ -4329,5 +4687,120 @@ input {
 
   .journal-match-metrics > div {
     padding: 10px;
+  }
+}
+
+@media (max-width: 1240px) {
+  .leaderboard-context-strip {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .role-podium {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .role-metric {
+    padding: 8px;
+  }
+}
+
+@media (max-width: 860px) {
+  .leaderboards-heading {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .leaderboard-periods,
+  .leaderboard-role-row,
+  .leaderboard-squad-size-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .leaderboard-context-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .role-podium {
+    grid-template-columns: 1fr;
+  }
+
+  .role-leaderboard-row {
+    grid-template-columns: 58px minmax(0, 1fr);
+  }
+
+  .role-leaderboard-row > .role-metric-set,
+  .role-leaderboard-row > .achievement-list,
+  .role-leaderboard-row > .role-entry-explanation {
+    grid-column: 1 / -1;
+  }
+
+  .role-leaderboard-row > .achievement-list {
+    justify-content: flex-start;
+  }
+
+  .leaderboard-table-head {
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 560px) {
+  .leaderboards-hero {
+    padding: 14px;
+  }
+
+  .leaderboard-periods,
+  .leaderboard-role-row,
+  .leaderboard-squad-size-row {
+    gap: 5px;
+    padding: 4px;
+    border-radius: 16px;
+  }
+
+  .leaderboard-period-button,
+  .leaderboard-role-button,
+  .leaderboard-squad-size-button {
+    min-width: 0;
+    min-height: 48px;
+    padding-inline: 6px;
+    font-size: 0.78rem;
+  }
+
+  .leaderboard-context-strip {
+    border-radius: 16px;
+  }
+
+  .leaderboard-context-strip > span {
+    padding: 11px;
+  }
+
+  .role-podium-card {
+    padding: 16px;
+    border-radius: 18px;
+  }
+
+  .role-metric-set {
+    gap: 5px;
+  }
+
+  .role-metric {
+    padding: 7px;
+  }
+
+  .role-metric small {
+    font-size: 0.62rem;
+  }
+
+  .role-metric strong {
+    font-size: 0.76rem;
+  }
+
+  .role-entry-explanation dl {
+    grid-template-columns: 1fr;
+  }
+
+  .achievement-tooltip {
+    right: -8px;
+    left: auto;
+    transform: none;
   }
 }
