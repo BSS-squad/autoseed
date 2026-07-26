@@ -2799,9 +2799,19 @@ test('renders role leaderboards, achievements and restores controls from the lin
     .toBeGreaterThan(0);
   await achievement.hover();
   await expect(achievement.getByRole('tooltip')).toContainText(
-    'Высокий результат на более слабой стороне.'
+    'Сильный результат на стороне, у которой в среднем было меньше часов в Squad.'
   );
   await expect(achievement.getByRole('tooltip')).toContainText('Разрыв часов');
+
+  const methodology = page.getByTestId('leaderboards-methodology');
+  await methodology.locator('summary').click();
+  await expect(methodology).toContainText(
+    'засчитанные убийства + поднятия − смерти − тимкиллы'
+  );
+  await expect(methodology).toContainText('Нокауты без смерти / 90 мин');
+  await expect(methodology).toContainText('Все ачивки этой роли');
+  await expect(methodology.getByText('Локомотив', { exact: true })).toBeVisible();
+  await expect(methodology.getByText('Бронебойщик', { exact: true })).toBeVisible();
 
   await page.getByTestId('leaderboards-expand').click();
   await expect(page.getByTestId('leaderboards-row-6')).toContainText('Fast Driver');
@@ -2844,10 +2854,10 @@ test('uses player-friendly language for unavailable leaderboards', async ({ page
   await page.goto('./#leaderboards');
 
   await expect(page.getByTestId('leaderboards-empty')).toContainText(
-    'Источник статистики ещё не подключён'
+    'Топы пока готовятся к показу'
   );
   await expect(page.getByTestId('leaderboards-empty')).toContainText(
-    'После подключения публичного API'
+    'Статистика уже собирается'
   );
   await expectPlayerFriendlyLanguage(page);
 });
@@ -2862,7 +2872,9 @@ test('shows empty, partial and stale role leaderboard states without treating th
   await expect(page.getByTestId('leaderboards-empty')).toContainText(
     'Пока никто не прошёл порог 50 матчей'
   );
-  await expect(page.getByTestId('leaderboards-empty')).toContainText('штатно');
+  await expect(page.getByTestId('leaderboards-empty')).toContainText(
+    'Сейчас участвуют'
+  );
 });
 
 test('keeps achievement descriptions reachable by keyboard on a narrow screen', async ({
@@ -2873,8 +2885,12 @@ test('keeps achievement descriptions reachable by keyboard on a narrow screen', 
   await mockLeaderboardApi(page, { status: 'partial', stale: true });
   await page.goto('./#leaderboards');
 
-  await expect(page.getByTestId('leaderboard-context')).toContainText('Данные неполные');
-  await expect(page.getByTestId('leaderboard-context')).toContainText('Данные устарели');
+  await expect(page.getByTestId('leaderboard-context')).toContainText(
+    'Часть матчей записана неполно'
+  );
+  await expect(page.getByTestId('leaderboard-context')).toContainText(
+    'Обновление задерживается'
+  );
   const achievement = page.getByTestId('achievement-against_odds');
   await achievement.focus();
   await expect(achievement.getByRole('tooltip')).toBeVisible();

@@ -11,6 +11,11 @@ import {
 import { resolveAchievementIconUrl } from './lib/achievement-icons';
 import { runPermissionCheck } from './lib/permissions';
 import {
+  getAchievementCopy,
+  getRoleMetricCopy,
+  ROLE_LEADERBOARD_GUIDES
+} from './lib/role-leaderboard-copy';
+import {
   buildRoleLeaderboardHash,
   fetchRoleLeaderboard,
   getCurrentRolePeriodId,
@@ -213,42 +218,6 @@ const EMPTY_SNAPSHOT: CombinedSnapshot = {
 };
 
 const APP_DISPLAY_NAME = 'Автосид BSS';
-
-const ROLE_METRIC_LABELS: Record<string, string> = {
-  resourceSwingPer90: 'Вклад / 90 мин',
-  resourceSwing: 'Ресурс',
-  temporaryPressurePer90: 'Давление / 90 мин',
-  combatConversion: 'Конверсия',
-  kd: 'K/D',
-  knockdownsPer100PersonHours: 'Нокауты / 100 ч',
-  revivesPer100PersonHours: 'Поднятия / 100 ч',
-  winRate: 'Победы',
-  averageSurprise: 'Неожиданность',
-  averageHoursGap: 'Разрыв часов',
-  confirmedEnemyDeaths: 'Подтверждённые смерти врага',
-  successfulRevives: 'Поднятия',
-  ownDeaths: 'Смерти',
-  teamkills: 'Тимкиллы',
-  knockdowns: 'Нокауты',
-  temporaryPressure: 'Временное давление',
-  vehicleDamage: 'Урон технике',
-  vehicleKills: 'Уничтожено техники',
-  wins: 'Победы',
-  losses: 'Поражения',
-  strengthMatches: 'Матчи с оценкой силы',
-  underdogMatches: 'Матчи андердога',
-  underdogWins: 'Победы андердога',
-  averageTeamKd: 'Средний K/D стороны',
-  averageDeaths: 'Средние потери стороны',
-  averageWinningTicketMargin: 'Средний перевес билетов',
-  combinations: 'Сочетания режимов и фракций',
-  squadHoursMatches: 'Матчи с часами отряда',
-  vehicleDamageAvailable: 'Атрибуция урона технике',
-  vehicleKillsAvailable: 'Атрибуция уничтожений',
-  hoursCoverageSufficient: 'Покрытие часов достаточно',
-  matches: 'Зачётные матчи',
-  name: 'Имя'
-};
 
 const ROLE_PRIMARY_METRICS: Record<RoleLeaderboardRole, string[]> = {
   player: ['resourceSwingPer90', 'resourceSwing', 'temporaryPressurePer90'],
@@ -1260,6 +1229,10 @@ function formatRolePeriodRange(response: RoleLeaderboardResponse | null): string
   return `${formatter.format(start)} — ${formatter.format(end)}`;
 }
 
+function roleMetricLabel(key: string): string {
+  return getRoleMetricCopy(key)?.label || 'Дополнительный показатель';
+}
+
 function AchievementBadge({
   achievement,
   tooltipId
@@ -1268,11 +1241,14 @@ function AchievementBadge({
   tooltipId: string;
 }) {
   const iconUrl = resolveAchievementIconUrl(achievement.code, import.meta.env.BASE_URL);
+  const copy = getAchievementCopy(achievement.code);
+  const title = copy?.title || achievement.title;
+  const description = copy?.description || achievement.description;
   return (
     <button
       type="button"
       className="achievement-badge"
-      aria-label={`${achievement.title}. Показать описание`}
+      aria-label={`${title}. Показать, за что выдана ачивка`}
       aria-describedby={tooltipId}
       data-testid={`achievement-${achievement.code}`}
     >
@@ -1290,9 +1266,9 @@ function AchievementBadge({
         </span>
       )}
       <span className="achievement-tooltip" role="tooltip" id={tooltipId}>
-        <strong>{achievement.title}</strong>
-        <span>{achievement.description}</span>
-        <small>{achievement.reason}</small>
+        <strong>{title}</strong>
+        <span>{description}</span>
+        <small>Почему выдано: {achievement.reason}</small>
       </span>
     </button>
   );
@@ -1306,10 +1282,10 @@ function AchievementList({
   prefix: string;
 }) {
   if (!entry.achievements.length) {
-    return <span className="achievement-empty">Без характеристики</span>;
+    return <span className="achievement-empty">Ачивок пока нет</span>;
   }
   return (
-    <span className="achievement-list" aria-label="Характеристики игрока">
+    <span className="achievement-list" aria-label="Ачивки участника">
       {entry.achievements.map((achievement, index) => (
         <AchievementBadge
           key={achievement.code}
@@ -1334,7 +1310,7 @@ function RoleMetricSet({
     <span className={classNames('role-metric-set', compact && 'role-metric-set-compact')}>
       {ROLE_PRIMARY_METRICS[role].map((key) => (
         <span className="role-metric" key={key}>
-          <small>{ROLE_METRIC_LABELS[key]}</small>
+          <small>{roleMetricLabel(key)}</small>
           <strong>{formatRoleMetric(key, roleMetricValue(entry, key))}</strong>
         </span>
       ))}
@@ -1353,42 +1329,130 @@ function RoleEntryExplanation({
     ...Object.entries(entry.totals),
     ...Object.entries(entry.style),
     ...Object.entries(entry.dataQuality)
-  ].filter(([key]) => ROLE_METRIC_LABELS[key]);
+  ].filter(([key]) => getRoleMetricCopy(key));
 
   return (
     <details className="role-entry-explanation">
-      <summary>Почему здесь</summary>
+      <summary>Как получено место</summary>
       <div className="role-entry-explanation-body">
         <div>
-          <span className="overview-label">Порядок сравнения</span>
+          <span className="overview-label">Показатели сравниваются по порядку</span>
           <ol>
-            {response.ranking.sortKeys.map((key) => (
-              <li key={key}>{ROLE_METRIC_LABELS[key] || key}</li>
-            ))}
+            {response.ranking.sortKeys.map((key) => {
+              const metric = getRoleMetricCopy(key);
+              return (
+                <li key={key}>
+                  <strong>{metric?.label || 'Дополнительный показатель'}</strong>
+                  {metric?.explanation ? <span>{metric.explanation}</span> : null}
+                </li>
+              );
+            })}
           </ol>
         </div>
         {detailMetrics.length ? (
           <dl>
-            {detailMetrics.map(([key, value]) => (
-              <div key={key}>
-                <dt>{ROLE_METRIC_LABELS[key]}</dt>
-                <dd>{formatRoleMetric(key, value)}</dd>
-              </div>
-            ))}
+            {detailMetrics.map(([key, value]) => {
+              const metric = getRoleMetricCopy(key);
+              return (
+                <div key={key}>
+                  <dt>
+                    {metric?.label}
+                    <small>{metric?.explanation}</small>
+                  </dt>
+                  <dd>{formatRoleMetric(key, value)}</dd>
+                </div>
+              );
+            })}
           </dl>
         ) : null}
         {entry.achievements.length ? (
           <div className="role-achievement-reasons">
-            <span className="overview-label">Характеристики</span>
-            {entry.achievements.map((achievement) => (
-              <p key={achievement.code}>
-                <strong>{achievement.title}</strong>
-                <span>{achievement.description}</span>
-                <small>{achievement.reason}</small>
-              </p>
-            ))}
+            <span className="overview-label">Ачивки не влияют на место</span>
+            {entry.achievements.map((achievement) => {
+              const copy = getAchievementCopy(achievement.code);
+              return (
+                <p key={achievement.code}>
+                  <strong>{copy?.title || achievement.title}</strong>
+                  <span>{copy?.description || achievement.description}</span>
+                  <small>Почему выдано: {achievement.reason}</small>
+                </p>
+              );
+            })}
           </div>
         ) : null}
+      </div>
+    </details>
+  );
+}
+
+function RoleLeaderboardMethodology({
+  response
+}: {
+  response: RoleLeaderboardResponse;
+}) {
+  const guide = ROLE_LEADERBOARD_GUIDES[response.role];
+  return (
+    <details className="role-methodology" data-testid="leaderboards-methodology">
+      <summary>Как считаются места и ачивки</summary>
+      <div className="role-methodology-body">
+        <section>
+          <span className="overview-label">{guide.title}</span>
+          <p>{guide.admission}</p>
+          <p>{guide.ranking}</p>
+          {response.role === 'player' ? (
+            <p className="role-formula">
+              <strong>Полезный размен</strong>
+              <span>
+                засчитанные убийства + поднятия − смерти − тимкиллы
+              </span>
+            </p>
+          ) : null}
+          <p className="role-methodology-note">{guide.limitation}</p>
+        </section>
+
+        <section>
+          <span className="overview-label">Показатели этого топа</span>
+          <ol className="role-methodology-metrics">
+            {response.ranking.sortKeys.map((key) => {
+              const metric = getRoleMetricCopy(key);
+              return (
+                <li key={key}>
+                  <strong>{metric?.label || 'Дополнительный показатель'}</strong>
+                  <span>{metric?.explanation}</span>
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+
+        <section>
+          <span className="overview-label">Все ачивки этой роли</span>
+          <p>
+            Ачивки считаются по накопленной истории до конца выбранного периода и не
+            меняют место в топе. Порог «топ-10%» или «топ-25%» сравнивает участника
+            только с той же ролью и размером отряда. Нужна группа минимум из{' '}
+            {response.achievements.minimumComparisonGroup} участников; у одного
+            участника показывается не больше трёх ачивок.
+          </p>
+          <div className="role-achievement-catalog">
+            {guide.achievements.map(({ code, rule }) => {
+              const copy = getAchievementCopy(code);
+              const iconUrl = resolveAchievementIconUrl(code, import.meta.env.BASE_URL);
+              return (
+                <article key={code}>
+                  {iconUrl ? (
+                    <img src={iconUrl} alt="" loading="lazy" width="48" height="48" />
+                  ) : null}
+                  <div>
+                    <strong>{copy?.title || 'Ачивка'}</strong>
+                    <span>{copy?.description}</span>
+                    <small>{rule}</small>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </section>
       </div>
     </details>
   );
@@ -1508,12 +1572,12 @@ function LeaderboardsPage({ config, route, vipShopUrl }: LeaderboardsPageProps) 
       <header className="winners-hero leaderboards-hero">
         <div className="leaderboards-heading">
           <div>
-            <p className="eyebrow">Объяснимые игровые срезы</p>
+            <p className="eyebrow">Топы по ролям</p>
             <h1 data-testid="leaderboards-title">Ролевые топы BSS</h1>
           </div>
           <p className="hero-copy">
-            Место определяется сервером по матчам выбранного периода. Характеристики
-            описывают накопленный стиль и не добавляют скрытых очков.
+            Место даёт статистика выбранного периода. Ачивки показывают стиль игры по
+            накопленной истории и не дают скрытых очков.
           </p>
         </div>
 
@@ -1614,62 +1678,66 @@ function LeaderboardsPage({ config, route, vipShopUrl }: LeaderboardsPageProps) 
           data-testid="leaderboard-context"
         >
           <span>
-            <small>Матчей в источнике</small>
+            <small>Матчей за период</small>
             <strong>{response.dataQuality.sourceMatches}</strong>
           </span>
           <span>
-            <small>Зачётных матчей нужно</small>
+            <small>Минимум для входа</small>
             <strong>{response.minimumMatches}</strong>
           </span>
           <span>
-            <small>Прошли порог</small>
+            <small>В топе / участвуют</small>
             <strong>
               {response.progress.qualified} / {response.progress.candidates}
             </strong>
           </span>
           <span>
-            <small>История характеристик</small>
+            <small>Матчей для ачивок</small>
             <strong>{response.dataQuality.achievementHistoryMatches}</strong>
           </span>
           <span>
-            <small>Полнота фактов</small>
+            <small>Матчей с обеими сторонами</small>
             <strong>{formatCoverage(response.dataQuality.factsCoverage)}</strong>
           </span>
           <span>
-            <small>Покрытие часов</small>
+            <small>Игроков с известными часами</small>
             <strong>{formatCoverage(response.dataQuality.hoursCoverage)}</strong>
           </span>
           <span>
             <small>Обновлено</small>
             <strong>{formatCompactTimestamp(response.generatedAt || undefined)}</strong>
           </span>
-          {response.stale ? <em>Данные устарели</em> : null}
-          {response.status === 'partial' ? <em>Данные неполные</em> : null}
+          {response.stale ? <em>Обновление задерживается — показан последний расчёт</em> : null}
+          {response.status === 'partial' ? (
+            <em>Часть матчей записана неполно — доступные места всё равно показаны</em>
+          ) : null}
         </section>
       ) : null}
+
+      {response ? <RoleLeaderboardMethodology response={response} /> : null}
 
       <section className="section-shell leaderboard-section">
         {loadState === 'unavailable' ? (
           <article className="leaderboard-empty-state" data-testid="leaderboards-empty">
             <span className="overview-label">Ролевые топы</span>
-            <strong>Источник статистики ещё не подключён</strong>
-            <p>После подключения публичного API топы появятся здесь без обновления сайта.</p>
+            <strong>Топы пока готовятся к показу</strong>
+            <p>Статистика уже собирается. Здесь появятся места и ачивки, как только подготовка закончится.</p>
           </article>
         ) : null}
 
         {loadState === 'loading' ? (
           <article className="leaderboard-empty-state" data-testid="leaderboards-loading">
             <span className="overview-label">Ролевые топы</span>
-            <strong>Загружаем готовый рейтинг</strong>
-            <p>Формулы считаются на сервере; страница только показывает результат.</p>
+            <strong>Загружаем места и ачивки</strong>
+            <p>Обычно это занимает несколько секунд.</p>
           </article>
         ) : null}
 
         {loadState === 'error' ? (
           <article className="leaderboard-empty-state" data-testid="leaderboards-error">
             <span className="overview-label">Ролевые топы</span>
-            <strong>Источник временно недоступен</strong>
-            <p>Выбор сохранён в ссылке. Попробуйте обновить страницу позже.</p>
+            <strong>Не удалось обновить топ</strong>
+            <p>Последний выбор сохранён в ссылке. Обновите страницу через несколько минут.</p>
           </article>
         ) : null}
 
@@ -1684,8 +1752,8 @@ function LeaderboardsPage({ config, route, vipShopUrl }: LeaderboardsPageProps) 
                 : 'Рейтинг этого периода ещё не рассчитан'}
             </strong>
             <p>
-              Это штатно, особенно в начале месяца. В раскрытии видно, кому и сколько
-              матчей осталось. Сейчас кандидатов: {response.progress.candidates}.
+              Сейчас участвуют: {response.progress.candidates}. Разверните список,
+              чтобы увидеть, кому и сколько матчей осталось до входа.
             </p>
           </article>
         ) : null}
@@ -1710,7 +1778,7 @@ function LeaderboardsPage({ config, route, vipShopUrl }: LeaderboardsPageProps) 
                     <strong>{formatRolePeriodRange(response)}</strong>
                   </div>
                   <span>
-                    Матчи показаны как факт / порог: {response.minimumMatches}
+                    Сыграно / минимум для входа: {response.minimumMatches}
                   </span>
                 </div>
                 <div className="leaderboard-table role-leaderboard-table" role="table">
