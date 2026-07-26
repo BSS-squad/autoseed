@@ -1259,6 +1259,19 @@ function formatCoverage(value: number | null): string {
   return value === null ? '—' : `${Math.round(value * 100)}%`;
 }
 
+function formatCountLabel(
+  value: number,
+  forms: [singular: string, few: string, many: string]
+): string {
+  const absolute = Math.abs(Math.trunc(value));
+  const lastTwo = absolute % 100;
+  if (lastTwo >= 11 && lastTwo <= 14) return forms[2];
+  const last = absolute % 10;
+  if (last === 1) return forms[0];
+  if (last >= 2 && last <= 4) return forms[1];
+  return forms[2];
+}
+
 function formatRolePeriodRange(response: RoleLeaderboardResponse | null): string {
   if (!response?.startAt || !response?.endAt) return response?.periodId || 'Текущий период';
   const start = new Date(response.startAt);
@@ -1373,8 +1386,15 @@ function RoleEntryExplanation({
 
   return (
     <details className="role-entry-explanation">
-      <summary>Почему здесь</summary>
+      <summary>{entry.qualified ? 'Почему здесь' : 'Почему пока без места'}</summary>
       <div className="role-entry-explanation-body">
+        {!entry.qualified ? (
+          <p className="role-qualification-note">
+            Для зачётного места не хватает {entry.missingMatches}{' '}
+            {formatCountLabel(entry.missingMatches, ['матча', 'матчей', 'матчей'])}.
+            Показатели уже видны, но в рейтинг войдут только после достижения порога.
+          </p>
+        ) : null}
         <div>
           <span className="overview-label">Порядок сравнения</span>
           <ol>
@@ -1436,6 +1456,45 @@ function RolePodiumCard({
   );
 }
 
+function RoleLeaderboardRow({
+  entry,
+  response,
+  testId
+}: {
+  entry: RoleLeaderboardEntry;
+  response: RoleLeaderboardResponse;
+  testId: string;
+}) {
+  return (
+    <article
+      className={classNames(
+        'leaderboard-row role-leaderboard-row',
+        !entry.qualified && 'role-leaderboard-row-pending'
+      )}
+      data-testid={testId}
+      role="row"
+    >
+      <span className={classNames('leaderboard-rank', !entry.qualified && 'leaderboard-rank-pending')}>
+        {entry.rank === null ? '—' : `#${entry.rank}`}
+      </span>
+      <span className="role-table-person">
+        <strong>{entry.name}</strong>
+        <small>
+          {entry.qualified
+            ? `${entry.matches} / ${response.minimumMatches} матчей`
+            : `Не хватает ${entry.missingMatches} ${formatCountLabel(
+                entry.missingMatches,
+                ['матча', 'матчей', 'матчей']
+              )}`}
+        </small>
+      </span>
+      <RoleMetricSet entry={entry} role={response.role} compact />
+      <AchievementList entry={entry} prefix={testId} />
+      <RoleEntryExplanation entry={entry} response={response} />
+    </article>
+  );
+}
+
 function LeaderboardsPage({ config, route, vipShopUrl }: LeaderboardsPageProps) {
   const sourceUrl = useMemo(
     () => getSafeHttpUrl(resolveRoleLeaderboardUrl(config.leaderboards)),
@@ -1485,8 +1544,18 @@ function LeaderboardsPage({ config, route, vipShopUrl }: LeaderboardsPageProps) 
   const currentPeriodId = getCurrentRolePeriodId(selection.period);
   const activePeriodId = selection.periodId || response?.periodId || currentPeriodId;
   const hasEntries = loadState === 'ready' && Boolean(response?.entries.length);
-  const podiumEntries = response?.entries.slice(0, 3) || [];
-  const tableEntries = response?.entries.slice(3) || [];
+  const primarySize = response?.ranking.primarySize || 5;
+  const primaryEntries = response?.entries.slice(0, primarySize) || [];
+  const podiumEntries = primaryEntries.slice(0, 3);
+  const tableEntries = primaryEntries.slice(3);
+  const fullEntries = response?.fullEntries || [];
+  const supplementalEntries = fullEntries.filter(
+    (entry) => !entry.qualified || entry.rank === null || entry.rank > primarySize
+  );
+  const hasFullList =
+    loadState === 'ready' &&
+    Boolean(response) &&
+    supplementalEntries.length > 0;
 
   const updateSelection = (values: Partial<RoleLeaderboardSelection>) => {
     setSelection((current) => ({ ...current, ...values }));
@@ -1512,8 +1581,8 @@ function LeaderboardsPage({ config, route, vipShopUrl }: LeaderboardsPageProps) 
             <h1 data-testid="leaderboards-title">Ролевые топы BSS</h1>
           </div>
           <p className="hero-copy">
-            Место определяется сервером по поматчевым фактам. Ачивки объясняют стиль и не
-            добавляют скрытых очков.
+            Место определяется сервером по поматчевым фактам. Характеристики объясняют
+            стиль, используют накопленную историю и не добавляют скрытых очков.
           </p>
         </div>
 
@@ -1702,7 +1771,7 @@ function LeaderboardsPage({ config, route, vipShopUrl }: LeaderboardsPageProps) 
               <div className="leaderboard-table-wrap" data-testid="leaderboards-table">
                 <div className="leaderboard-table-head">
                   <div>
-                    <span className="overview-label">Остальные места</span>
+                    <span className="overview-label">Топ-5</span>
                     <strong>{formatRolePeriodRange(response)}</strong>
                   </div>
                   <span>
@@ -1711,28 +1780,51 @@ function LeaderboardsPage({ config, route, vipShopUrl }: LeaderboardsPageProps) 
                 </div>
                 <div className="leaderboard-table role-leaderboard-table" role="table">
                   {tableEntries.map((entry) => (
-                    <article
-                      className="leaderboard-row role-leaderboard-row"
-                      data-testid={`leaderboards-row-${entry.rank}`}
-                      role="row"
+                    <RoleLeaderboardRow
                       key={`${entry.rank}-${entry.name}`}
-                    >
-                      <span className="leaderboard-rank">#{entry.rank}</span>
-                      <span className="role-table-person">
-                        <strong>{entry.name}</strong>
-                        <small>
-                          {entry.matches} / {response.minimumMatches} матчей
-                        </small>
-                      </span>
-                      <RoleMetricSet entry={entry} role={response.role} compact />
-                      <AchievementList entry={entry} prefix={`row-${entry.rank}`} />
-                      <RoleEntryExplanation entry={entry} response={response} />
-                    </article>
+                      entry={entry}
+                      response={response}
+                      testId={`leaderboards-row-${entry.rank}`}
+                    />
                   ))}
                 </div>
               </div>
             ) : null}
           </>
+        ) : null}
+
+        {response && hasFullList ? (
+          <details className="leaderboard-full-list" data-testid="leaderboards-full-list">
+            <summary data-testid="leaderboards-full-list-toggle">
+              <span>
+                <strong>Показать полный список</strong>
+                <small>
+                  {response.totalCandidates || fullEntries.length} кандидатов · основной
+                  вид показывает топ-{primarySize}
+                </small>
+              </span>
+              <span aria-hidden="true">⌄</span>
+            </summary>
+            <div className="leaderboard-full-list-body">
+              <p>
+                Характеристики рассчитаны по последним{' '}
+                {response.achievementContext.days || 90} дням: минимум{' '}
+                {response.achievementContext.minimumMatches || 3} личных матча и{' '}
+                {response.achievementContext.minimumComparisonGroup || 10} участников
+                сравнения.
+              </p>
+              <div className="leaderboard-table role-leaderboard-table" role="table">
+                {supplementalEntries.map((entry, index) => (
+                  <RoleLeaderboardRow
+                    key={`${entry.rank ?? 'pending'}-${entry.name}-${index}`}
+                    entry={entry}
+                    response={response}
+                    testId={`leaderboards-full-row-${index + 1}`}
+                  />
+                ))}
+              </div>
+            </div>
+          </details>
         ) : null}
       </section>
     </div>

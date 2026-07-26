@@ -4056,6 +4056,16 @@ input {
   font-size: 0.78rem;
 }
 
+.role-qualification-note {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 178, 78, 0.18);
+  border-radius: 12px;
+  background: rgba(255, 178, 78, 0.07);
+  color: #ffd393;
+  line-height: 1.5;
+}
+
 .role-entry-explanation ol {
   margin: 9px 0 0;
   padding-left: 18px;
@@ -4117,6 +4127,15 @@ input {
   border-bottom: 0;
 }
 
+.role-leaderboard-row-pending {
+  background: rgba(255, 178, 78, 0.025);
+}
+
+.leaderboard-rank-pending {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--muted);
+}
+
 .role-table-person {
   min-width: 0;
 }
@@ -4139,6 +4158,67 @@ input {
   grid-column: 1 / -1;
   width: 100%;
   margin-top: 0;
+}
+
+.leaderboard-full-list {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.012)),
+    var(--panel);
+  box-shadow: var(--shadow-lg);
+}
+
+.leaderboard-full-list > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 22px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.leaderboard-full-list > summary::-webkit-details-marker {
+  display: none;
+}
+
+.leaderboard-full-list > summary span:first-child {
+  display: grid;
+  gap: 5px;
+}
+
+.leaderboard-full-list > summary strong {
+  color: var(--text);
+  font-size: 1.05rem;
+}
+
+.leaderboard-full-list > summary small,
+.leaderboard-full-list-body > p {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.leaderboard-full-list > summary span:last-child {
+  color: #9ddfff;
+  font-size: 1.3rem;
+  transition: transform 180ms ease;
+}
+
+.leaderboard-full-list[open] > summary span:last-child {
+  transform: rotate(180deg);
+}
+
+.leaderboard-full-list-body {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.leaderboard-full-list-body > p {
+  margin: 0;
+  padding: 14px 20px;
+  background: rgba(118, 210, 255, 0.035);
+  font-size: 0.78rem;
 }
 
 .hero,

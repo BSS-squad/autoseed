@@ -263,10 +263,27 @@ function normalizeAchievement(value: unknown): RoleLeaderboardAchievement | null
   };
 }
 
-function normalizeRoleEntry(value: unknown, index: number): RoleLeaderboardEntry {
+function normalizeRoleEntry(value: unknown): RoleLeaderboardEntry {
   const entry = getRecord(value) || {};
+  const rankValue = toNumberOrNull(entry.rank);
+  const rank =
+    rankValue !== null && Number.isInteger(rankValue) && rankValue > 0
+      ? rankValue
+      : null;
   return {
-    rank: normalizeRank(entry.rank, index + 1),
+    rank,
+    qualified: entry.qualified === true || (entry.qualified !== false && rank !== null),
+    missingMatches: Math.max(
+      0,
+      Math.round(toNumberOrNull(entry.missingMatches) || 0)
+    ),
+    exclusionReasons: (Array.isArray(entry.exclusionReasons)
+      ? entry.exclusionReasons
+      : []
+    )
+      .map(toStringOrNull)
+      .filter((reason): reason is string => reason === 'insufficient_matches')
+      .slice(0, 3),
     name: (toStringOrNull(entry.name) || 'Игрок').slice(0, 96),
     matches: Math.max(0, Math.round(toNumberOrNull(entry.matches) || 0)),
     activeMinutes: toNumberOrNull(entry.activeMinutes),
@@ -295,6 +312,7 @@ function normalizeRoleResponse(
   const dataQuality = getRecord(record.dataQuality) || {};
   const progress = getRecord(record.progress) || {};
   const ranking = getRecord(record.ranking) || {};
+  const achievementContext = getRecord(record.achievementContext) || {};
   const statusValue = toStringOrNull(record.status) as RoleLeaderboardStatus | null;
   const roleValue = toStringOrNull(record.role) as RoleLeaderboardRole | null;
   const squadSizeValue = toStringOrNull(record.squadSize) as RoleLeaderboardSquadSize | null;
@@ -332,6 +350,24 @@ function normalizeRoleResponse(
       hoursCoverageThreshold: toRatioOrNull(dataQuality.hoursCoverageThreshold),
       vehicleAttribution: normalizeMetricGroup(dataQuality.vehicleAttribution)
     },
+    achievementContext: {
+      kind: achievementContext.kind === 'rolling_days' ? 'rolling_days' : null,
+      days: Math.max(0, Math.round(toNumberOrNull(achievementContext.days) || 0)),
+      startAt: toStringOrNull(achievementContext.startAt),
+      endAt: toStringOrNull(achievementContext.endAt),
+      sourceMatches: Math.max(
+        0,
+        Math.round(toNumberOrNull(achievementContext.sourceMatches) || 0)
+      ),
+      minimumMatches: Math.max(
+        0,
+        Math.round(toNumberOrNull(achievementContext.minimumMatches) || 0)
+      ),
+      minimumComparisonGroup: Math.max(
+        0,
+        Math.round(toNumberOrNull(achievementContext.minimumComparisonGroup) || 0)
+      )
+    },
     progress: {
       candidates: Math.max(0, Math.round(toNumberOrNull(progress.candidates) || 0)),
       qualified: Math.max(0, Math.round(toNumberOrNull(progress.qualified) || 0)),
@@ -346,11 +382,28 @@ function normalizeRoleResponse(
             .map(toStringOrNull)
             .filter((key): key is string => key !== null)
             .slice(0, 8)
-        : []
+        : [],
+      primarySize: Math.max(
+        1,
+        Math.min(10, Math.round(toNumberOrNull(ranking.primarySize) || 5))
+      )
     },
     totalEntries: Math.max(0, Math.round(toNumberOrNull(record.totalEntries) || 0)),
     truncated: record.truncated === true,
     entries: (Array.isArray(record.entries) ? record.entries : [])
+      .slice(0, 100)
+      .map(normalizeRoleEntry),
+    totalCandidates: Math.max(
+      0,
+      Math.round(toNumberOrNull(record.totalCandidates) || 0)
+    ),
+    fullListTruncated: record.fullListTruncated === true,
+    fullEntries: (Array.isArray(record.fullEntries)
+      ? record.fullEntries
+      : Array.isArray(record.entries)
+        ? record.entries
+        : []
+    )
       .slice(0, 100)
       .map(normalizeRoleEntry)
   };

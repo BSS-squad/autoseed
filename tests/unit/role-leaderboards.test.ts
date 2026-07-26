@@ -81,7 +81,7 @@ test('adapter reads only allowed public fields and preserves API order', async (
         status: 'partial',
         available: true,
         stale: true,
-        rulesVersion: 'observed-impact-v1',
+        rulesVersion: 'observed-impact-v2',
         revision: 'safe-revision',
         scope: 'public',
         period: 'day',
@@ -91,7 +91,7 @@ test('adapter reads only allowed public fields and preserves API order', async (
         timeZone: 'Europe/Moscow',
         startAt: '2026-07-25T21:00:00.000Z',
         endAt: '2026-07-26T21:00:00.000Z',
-        minimumMatches: 3,
+        minimumMatches: 2,
         generatedAt: '2026-07-26T11:55:00.000Z',
         dataThrough: '2026-07-26T11:50:00.000Z',
         dataQuality: {
@@ -105,13 +105,23 @@ test('adapter reads only allowed public fields and preserves API order', async (
           },
           factsRevisions: [{ serverId: 'must-not-enter-state' }]
         },
+        achievementContext: {
+          kind: 'rolling_days',
+          days: 90,
+          startAt: '2026-04-27T21:00:00.000Z',
+          endAt: '2026-07-26T21:00:00.000Z',
+          sourceMatches: 120,
+          minimumMatches: 3,
+          minimumComparisonGroup: 10
+        },
         progress: {
           candidates: 20,
           qualified: 2,
-          minimumMatches: 3
+          minimumMatches: 2
         },
         ranking: {
-          sortKeys: ['resourceSwingPer90', 'resourceSwing']
+          sortKeys: ['resourceSwingPer90', 'resourceSwing'],
+          primarySize: 5
         },
         entries: [
           {
@@ -146,6 +156,20 @@ test('adapter reads only allowed public fields and preserves API order', async (
             matches: 3,
             indicators: { resourceSwingPer90: 5 }
           }
+        ],
+        totalCandidates: 3,
+        fullListTruncated: false,
+        fullEntries: [
+          {
+            rank: null,
+            qualified: false,
+            missingMatches: 1,
+            exclusionReasons: ['insufficient_matches', 'hidden_reason'],
+            playerId: 'hidden-candidate',
+            name: 'Почти прошёл',
+            matches: 1,
+            indicators: { resourceSwingPer90: 6 }
+          }
         ]
       }),
       {
@@ -175,6 +199,11 @@ test('adapter reads only allowed public fields and preserves API order', async (
     assert.equal(result.entries[1]?.rank, 1);
     assert.equal(result.entries[0]?.indicators.resourceSwingPer90, 4);
     assert.equal(result.entries[0]?.achievements[0]?.description, 'Описание.');
+    assert.equal(result.ranking.primarySize, 5);
+    assert.equal(result.achievementContext.days, 90);
+    assert.equal(result.fullEntries[0]?.rank, null);
+    assert.equal(result.fullEntries[0]?.missingMatches, 1);
+    assert.deepEqual(result.fullEntries[0]?.exclusionReasons, ['insufficient_matches']);
     assert.equal(serialized.includes('playerId'), false);
     assert.equal(serialized.includes('sessionId'), false);
     assert.equal(serialized.includes('serverId'), false);

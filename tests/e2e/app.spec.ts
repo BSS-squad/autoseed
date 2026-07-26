@@ -1068,13 +1068,41 @@ async function mockLeaderboardApi(
       '2026-07-26';
     const playerNames =
       period === 'week'
-        ? ['Weekly Hero', 'Weekly Medic', 'Weekly Anchor', 'Weekly Scout']
-        : ['Top Fragger', 'Helpful Medic', 'Steady Rifleman', 'Armor Hunter'];
+        ? [
+            'Weekly Hero',
+            'Weekly Medic',
+            'Weekly Anchor',
+            'Weekly Scout',
+            'Weekly Driver',
+            'Weekly Support'
+          ]
+        : [
+            'Top Fragger',
+            'Helpful Medic',
+            'Steady Rifleman',
+            'Armor Hunter',
+            'Patient LAT',
+            'Reliable Crewman'
+          ];
     const names =
       role === 'commander'
-        ? ['Commander Atlas', 'Commander Nova', 'Commander Mira', 'Commander Fox']
+        ? [
+            'Commander Atlas',
+            'Commander Nova',
+            'Commander Mira',
+            'Commander Fox',
+            'Commander Vega',
+            'Commander Orion'
+          ]
         : role === 'squad_leader'
-          ? ['Squad Lead Alpha', 'Squad Lead Bravo', 'Squad Lead Charlie', 'Squad Lead Delta']
+          ? [
+              'Squad Lead Alpha',
+              'Squad Lead Bravo',
+              'Squad Lead Charlie',
+              'Squad Lead Delta',
+              'Squad Lead Echo',
+              'Squad Lead Foxtrot'
+            ]
           : playerNames;
     const achievements =
       role === 'commander'
@@ -1161,14 +1189,25 @@ async function mockLeaderboardApi(
         : period === 'week'
           ? '2026-07-26T21:00:00.000Z'
           : '2026-07-26T21:00:00.000Z';
-    const minimumMatches = period === 'month' ? 50 : period === 'week' ? 9 : 3;
+    const minimumMatches = period === 'month' ? 50 : period === 'week' ? 9 : 2;
 
     const responseEntries = options.empty ? [] : entries;
+    const pendingEntry = {
+      ...(entries.at(-1) || {}),
+      rank: null,
+      qualified: false,
+      missingMatches: 1,
+      exclusionReasons: ['insufficient_matches'],
+      name: 'Почти в топе',
+      matches: Math.max(0, minimumMatches - 1),
+      achievements: []
+    };
+    const fullEntries = options.empty ? [] : [...entries, pendingEntry];
     return fulfillJson(route, {
       status: options.status || 'ok',
       available: true,
       stale: options.stale === true,
-      rulesVersion: 'observed-impact-v1',
+      rulesVersion: 'observed-impact-v2',
       revision: 'e2e-role-snapshot',
       scope: 'public',
       period,
@@ -1193,12 +1232,22 @@ async function mockLeaderboardApi(
           killsAvailable: true
         }
       },
+      achievementContext: {
+        kind: 'rolling_days',
+        days: 90,
+        startAt: '2026-04-27T21:00:00.000Z',
+        endAt,
+        sourceMatches: 180,
+        minimumMatches: 3,
+        minimumComparisonGroup: 10
+      },
       progress: {
-        candidates: 24,
+        candidates: fullEntries.length,
         qualified: responseEntries.length,
         minimumMatches
       },
       ranking: {
+        primarySize: 5,
         sortKeys:
           role === 'commander'
             ? ['winRate', 'averageSurprise', 'averageHoursGap', 'matches', 'name']
@@ -1221,7 +1270,10 @@ async function mockLeaderboardApi(
       },
       totalEntries: responseEntries.length,
       truncated: false,
-      entries: responseEntries
+      entries: responseEntries,
+      totalCandidates: fullEntries.length,
+      fullListTruncated: false,
+      fullEntries
     });
   });
 }
@@ -2727,6 +2779,8 @@ test('renders role leaderboards, achievements and restores controls from the lin
   await expect(page.getByTestId('leaderboards-title')).toHaveText('Ролевые топы BSS');
   await expect(page.getByTestId('leaderboards-podium')).toContainText('Top Fragger');
   await expect(page.getByTestId('leaderboards-row-1')).toContainText('5,40');
+  await expect(page.getByTestId('leaderboards-row-5')).toContainText('Patient LAT');
+  await expect(page.getByTestId('leaderboards-row-6')).toHaveCount(0);
   await expect(page.getByTestId('leaderboard-context')).toContainText('64');
   await expect(page.getByTestId('leaderboard-context')).toContainText('88%');
 
@@ -2736,6 +2790,20 @@ test('renders role leaderboards, achievements and restores controls from the lin
     'Высокий результат на более слабой стороне.'
   );
   await expect(achievement.getByRole('tooltip')).toContainText('Разрыв часов');
+
+  await page.getByTestId('leaderboards-full-list-toggle').click();
+  await expect(page.getByTestId('leaderboards-full-row-1')).toContainText(
+    'Reliable Crewman'
+  );
+  await expect(page.getByTestId('leaderboards-full-row-2')).toContainText(
+    'Почти в топе'
+  );
+  await expect(page.getByTestId('leaderboards-full-row-2')).toContainText(
+    'Не хватает 1 матча'
+  );
+  await expect(page.getByTestId('leaderboards-full-list')).toContainText(
+    'последним 90 дням'
+  );
 
   await page.getByTestId('leaderboard-period-week').click();
   await expect(page.getByTestId('leaderboards-row-1')).toContainText('Weekly Hero');
