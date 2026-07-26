@@ -918,6 +918,11 @@ async function mockAutoseedApi(
     squadjs2Activity?: unknown;
     squadjs2ActivitySessions?: Record<string, unknown>;
     squadjs2ActivitySessionRequests?: string[];
+    matchExportRequests?: Array<{
+      sessionId: string;
+      format: 'json' | 'csv';
+      authorization: string | null;
+    }>;
   } = {}
 ) {
   await page.route('**/runtime-config.json', (route) => fulfillJson(route, config));
@@ -958,8 +963,42 @@ async function mockAutoseedApi(
       })
     )
   );
-  await page.route('**/mock/squadjs2/activity/sessions/*', async (route) => {
-    const sessionId = decodeURIComponent(new URL(route.request().url()).pathname.split('/').pop() || '');
+  await page.route('**/mock/squadjs2/activity/sessions/**', async (route) => {
+    const requestUrl = new URL(route.request().url());
+    const pathParts = requestUrl.pathname.split('/').filter(Boolean);
+    const isExport = pathParts.at(-1) === 'export';
+    const sessionId = decodeURIComponent(pathParts.at(isExport ? -2 : -1) || '');
+
+    if (isExport) {
+      const format = requestUrl.searchParams.get('format') === 'csv' ? 'csv' : 'json';
+      const authorization = route.request().headers().authorization || null;
+      options.matchExportRequests?.push({ sessionId, format, authorization });
+      if (authorization !== 'Bearer test-export-password') {
+        await route.fulfill({
+          status: 401,
+          contentType: 'application/json',
+          body: JSON.stringify({ ok: false, error: 'Unauthorized' })
+        });
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: format === 'csv' ? 'text/csv' : 'application/json',
+        headers: {
+          'Content-Disposition': `attachment; filename="match-${sessionId}.${format}"`
+        },
+        body:
+          format === 'csv'
+            ? '"SteamID","Nickname"\r\n"76561190000000001","Winner Player"\r\n'
+            : JSON.stringify({
+                ok: true,
+                players: [{ steamID: '76561190000000001', name: 'Winner Player' }],
+                events: { kills: [], damage: [], knockdowns: [], revives: [], vehicles: [] }
+              })
+      });
+      return;
+    }
+
     options.squadjs2ActivitySessionRequests?.push(sessionId);
     const payload = options.squadjs2ActivitySessions?.[sessionId];
     if (!payload) {
@@ -1825,13 +1864,19 @@ test('renders healthy Team Balancer state without proposal rows', async ({ page 
 test('renders one completed session with separate full journal categories', async ({ page }) => {
   await page.clock.setFixedTime('2026-07-06T12:02:00.000Z');
   const sessionRequests: string[] = [];
+  const matchExportRequests: Array<{
+    sessionId: string;
+    format: 'json' | 'csv';
+    authorization: string | null;
+  }> = [];
   await mockAutoseedApi(page, undefined, runtimeConfig, {
     squadjs2Activity: buildActivitySnapshot(),
     squadjs2ActivitySessions: {
       [NARVA_SESSION_ID]: buildActivitySessionDetail(),
       [GORODOK_SESSION_ID]: buildActivitySessionDetail(GORODOK_SESSION_ID)
     },
-    squadjs2ActivitySessionRequests: sessionRequests
+    squadjs2ActivitySessionRequests: sessionRequests,
+    matchExportRequests
   });
 
   await page.goto('./#journal');
@@ -1869,12 +1914,31 @@ test('renders one completed session with separate full journal categories', asyn
     ...scoreboardHeaders
   ]);
   await expect(page.getByTestId('journal-scoreboard')).toContainText('1 250,5 урона технике');
-  await expect(page.getByTestId('journal-match-export')).toHaveAttribute(
-    'href',
-    new RegExp(
-      `/mock/squadjs2/activity/sessions/${NARVA_SESSION_ID}/export\\?format=csv$`
-    )
+  await expect(page.getByTestId('journal-match-export')).toContainText(
+    'SteamID доступен только в защищённых файлах'
   );
+  await page.getByTestId('journal-match-export-password').fill('test-export-password');
+  const csvDownloadPromise = page.waitForEvent('download');
+  await page.getByTestId('journal-match-export-csv').click();
+  const csvDownload = await csvDownloadPromise;
+  expect(csvDownload.suggestedFilename()).toBe(`match-${NARVA_SESSION_ID}.csv`);
+
+  const jsonDownloadPromise = page.waitForEvent('download');
+  await page.getByTestId('journal-match-export-json').click();
+  const jsonDownload = await jsonDownloadPromise;
+  expect(jsonDownload.suggestedFilename()).toBe(`match-${NARVA_SESSION_ID}.json`);
+  expect(matchExportRequests).toEqual([
+    {
+      sessionId: NARVA_SESSION_ID,
+      format: 'csv',
+      authorization: 'Bearer test-export-password'
+    },
+    {
+      sessionId: NARVA_SESSION_ID,
+      format: 'json',
+      authorization: 'Bearer test-export-password'
+    }
+  ]);
   await expect.poll(() => sessionRequests).toContain(NARVA_SESSION_ID);
   await expect(page).toHaveURL(
     new RegExp(`#journal\\?server=squadjs2&session=${NARVA_SESSION_ID}&tab=scoreboard$`)

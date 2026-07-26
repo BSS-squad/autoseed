@@ -1,7 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { fetchActivitySession, fetchCombinedSnapshot } from '../../src/lib/snapshot.ts';
+import {
+  fetchActivitySession,
+  fetchCombinedSnapshot,
+  fetchMatchExport,
+  MatchExportError
+} from '../../src/lib/snapshot.ts';
 
 const ORIGINAL_FETCH = globalThis.fetch;
 
@@ -731,5 +736,54 @@ test('loads a complete journal for one finished session without exposing private
   assert.doesNotMatch(
     JSON.stringify(detail),
     /steamID|playerId|controllerId|private-steam-id|private-player-id|private-controller-id/
+  );
+});
+
+test('downloads a protected match export without placing the password in the URL', async () => {
+  const server = {
+    activitySessionBaseUrl: 'https://exporter.example.test/v1/autoseed/activity/sessions'
+  } as Parameters<typeof fetchMatchExport>[0];
+  const requestedUrls: string[] = [];
+
+  globalThis.fetch = async (input, init) => {
+    requestedUrls.push(String(input));
+    const headers = new Headers(init?.headers);
+    assert.equal(headers.get('Authorization'), 'Bearer test-export-password');
+    assert.equal(headers.get('Accept'), 'application/json');
+    return new Response('{"ok":true}', {
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Disposition': 'attachment; filename="match-session-1.json"'
+      }
+    });
+  };
+
+  const result = await fetchMatchExport(
+    server,
+    'session-1',
+    'json',
+    'test-export-password'
+  );
+  assert.equal(result.filename, 'match-session-1.json');
+  assert.equal(await result.blob.text(), '{"ok":true}');
+  assert.deepEqual(requestedUrls, [
+    'https://exporter.example.test/v1/autoseed/activity/sessions/session-1/export'
+  ]);
+  assert.doesNotMatch(requestedUrls[0] || '', /test-export-password/);
+});
+
+test('preserves the exporter status for a rejected match export password', async () => {
+  const server = {
+    activitySessionBaseUrl: 'https://exporter.example.test/v1/autoseed/activity/sessions'
+  } as Parameters<typeof fetchMatchExport>[0];
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ ok: false, error: 'Unauthorized' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+  await assert.rejects(
+    fetchMatchExport(server, 'session-1', 'csv', 'wrong-password'),
+    (error) => error instanceof MatchExportError && error.status === 401
   );
 });

@@ -1406,6 +1406,56 @@ export async function fetchActivitySession(
   return payload;
 }
 
+export type MatchExportFormat = 'json' | 'csv';
+
+export class MatchExportError extends Error {
+  status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = 'MatchExportError';
+    this.status = status;
+  }
+}
+
+function matchExportFilename(value: string | null, fallback: string): string {
+  const match = value?.match(/filename="([A-Za-z0-9._-]+)"/i);
+  return match?.[1] || fallback;
+}
+
+export async function fetchMatchExport(
+  server: ExporterServerSnapshot,
+  sessionId: string,
+  format: MatchExportFormat,
+  password: string
+): Promise<{ blob: Blob; filename: string }> {
+  const normalizedSessionId = sessionId.trim();
+  if (!normalizedSessionId) throw new Error('Session id is required.');
+
+  const suffix = format === 'csv' ? '?format=csv' : '';
+  const response = await fetch(
+    `${server.activitySessionBaseUrl}/${encodeURIComponent(normalizedSessionId)}/export${suffix}`,
+    {
+      headers: {
+        Accept: format === 'csv' ? 'text/csv' : 'application/json',
+        Authorization: `Bearer ${password}`
+      },
+      cache: 'no-store'
+    }
+  );
+  if (!response.ok) {
+    throw new MatchExportError(response.status, await buildHttpError(response));
+  }
+
+  return {
+    blob: await response.blob(),
+    filename: matchExportFilename(
+      response.headers.get('Content-Disposition'),
+      `match-${normalizedSessionId}.${format}`
+    )
+  };
+}
+
 export async function fetchCombinedSnapshot(
   exporters: ExporterEndpointConfig[]
 ): Promise<CombinedSnapshot> {

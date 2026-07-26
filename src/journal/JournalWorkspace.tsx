@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { collapseTerminalVehicleEvents, fetchActivitySession } from '../lib/snapshot';
+import {
+  collapseTerminalVehicleEvents,
+  fetchActivitySession,
+  fetchMatchExport,
+  MatchExportError,
+  type MatchExportFormat
+} from '../lib/snapshot';
 import {
   buildVehicleDisplayNames,
   formatDamageSource,
@@ -378,17 +384,6 @@ function ScoreboardView({
           <strong>Итоговая таблица</strong>
           <span>По убийствам, затем по меньшему числу смертей и поднятиям</span>
         </div>
-        {response.session.matchExportAvailable && server ? (
-          <a
-            className="button button-small"
-            data-testid="journal-match-export"
-            href={`${server.activitySessionBaseUrl}/${encodeURIComponent(
-              response.session.sessionId
-            )}/export?format=csv`}
-          >
-            Скачать CSV
-          </a>
-        ) : null}
       </div>
 
       <div className="journal-scoreboard-teams">
@@ -750,6 +745,105 @@ function EventJournal({
   );
 }
 
+function MatchExportActions({
+  response,
+  server
+}: {
+  response: ExporterActivitySessionResponse;
+  server: ExporterServerSnapshot | null;
+}) {
+  const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle');
+  const [message, setMessage] = useState('');
+  const passwordRef = useRef<HTMLInputElement>(null);
+
+  if (!response.session.matchExportAvailable || !server) return null;
+
+  const download = async (format: MatchExportFormat) => {
+    const password = passwordRef.current?.value || '';
+    if (!password) {
+      setStatus('error');
+      setMessage('Введите пароль.');
+      passwordRef.current?.focus();
+      return;
+    }
+
+    setStatus('loading');
+    setMessage('Готовим файл…');
+    try {
+      const result = await fetchMatchExport(
+        server,
+        response.session.sessionId,
+        format,
+        password
+      );
+      const objectUrl = URL.createObjectURL(result.blob);
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = result.filename;
+      anchor.hidden = true;
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+      setStatus('idle');
+      setMessage('');
+    } catch (error) {
+      setStatus('error');
+      setMessage(
+        error instanceof MatchExportError && error.status === 401
+          ? 'Неверный пароль.'
+          : error instanceof MatchExportError && error.status === 503
+            ? 'Выгрузка на сервере пока не настроена.'
+            : 'Не удалось скачать выгрузку.'
+      );
+    }
+  };
+
+  return (
+    <div className="journal-export-actions" data-testid="journal-match-export">
+      <div>
+        <strong>Выгрузка MDC</strong>
+        <span>SteamID доступен только в защищённых файлах.</span>
+      </div>
+      <label className="journal-export-password">
+        <span>Пароль</span>
+        <input
+          ref={passwordRef}
+          type="password"
+          autoComplete="off"
+          disabled={status === 'loading'}
+          data-testid="journal-match-export-password"
+        />
+      </label>
+      <div className="journal-export-buttons">
+        <button
+          className="button button-small"
+          type="button"
+          disabled={status === 'loading'}
+          onClick={() => void download('csv')}
+          data-testid="journal-match-export-csv"
+        >
+          Скачать CSV
+        </button>
+        <button
+          className="button button-small"
+          type="button"
+          disabled={status === 'loading'}
+          onClick={() => void download('json')}
+          data-testid="journal-match-export-json"
+        >
+          Полный журнал JSON
+        </button>
+      </div>
+      {message ? (
+        <p className={status === 'error' ? 'journal-export-error' : ''} role="status">
+          {message}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 export function JournalWorkspace({ servers }: JournalWorkspaceProps) {
   const initialSelection = useMemo(parseJournalSelection, []);
   const [selectedServerCode, setSelectedServerCode] = useState(initialSelection.server);
@@ -996,6 +1090,8 @@ export function JournalWorkspace({ servers }: JournalWorkspaceProps) {
                 <div><span>Убийств</span><strong>{selectedSession.totals.kills}</strong></div>
                 <div><span>Смертей</span><strong>{selectedSession.totals.deaths || 0}</strong></div>
               </div>
+
+              {response ? <MatchExportActions response={response} server={selectedServer} /> : null}
 
               {response && !response.session.journalAvailable ? (
                 <div className="journal-legacy-note" role="status">
