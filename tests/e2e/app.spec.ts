@@ -2865,7 +2865,7 @@ test('keeps achievement descriptions reachable by keyboard on a narrow screen', 
   await page.goto('./#leaderboards');
 
   await expect(page.getByTestId('leaderboard-context')).toContainText('Данные неполные');
-  await expect(page.getByTestId('leaderboard-context')).toContainText('Снимок устарел');
+  await expect(page.getByTestId('leaderboard-context')).toContainText('Данные устарели');
   const achievement = page.getByTestId('achievement-against_odds');
   await achievement.focus();
   await expect(achievement.getByRole('tooltip')).toBeVisible();

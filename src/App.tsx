@@ -1666,7 +1666,7 @@ function LeaderboardsPage({ config, route, vipShopUrl }: LeaderboardsPageProps) 
             <small>Обновлено</small>
             <strong>{formatCompactTimestamp(response.generatedAt || undefined)}</strong>
           </span>
-          {response.stale ? <em>Снимок устарел</em> : null}
+          {response.stale ? <em>Данные устарели</em> : null}
           {response.status === 'partial' ? <em>Данные неполные</em> : null}
         </section>
       ) : null}
@@ -1683,7 +1683,7 @@ function LeaderboardsPage({ config, route, vipShopUrl }: LeaderboardsPageProps) 
         {loadState === 'loading' ? (
           <article className="leaderboard-empty-state" data-testid="leaderboards-loading">
             <span className="overview-label">Ролевые топы</span>
-            <strong>Загружаем готовый снимок</strong>
+            <strong>Загружаем готовый рейтинг</strong>
             <p>Формулы считаются на сервере; страница только показывает результат.</p>
           </article>
         ) : null}
@@ -1704,7 +1704,7 @@ function LeaderboardsPage({ config, route, vipShopUrl }: LeaderboardsPageProps) 
             <strong>
               {response.available
                 ? `Пока никто не прошёл порог ${response.minimumMatches} матчей`
-                : 'Снимок этого периода ещё не рассчитан'}
+                : 'Рейтинг этого периода ещё не рассчитан'}
             </strong>
             <p>
               Это штатно, особенно в начале месяца. В раскрытии видно, кому и сколько
