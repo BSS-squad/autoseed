@@ -2788,6 +2788,15 @@ test('renders role leaderboards, achievements and restores controls from the lin
   await expect(page.getByTestId('leaderboards-row-6')).toHaveCount(0);
 
   const achievement = page.getByTestId('achievement-against_odds');
+  const achievementIcon = achievement.locator('img');
+  await expect(achievementIcon).toBeVisible();
+  await expect(achievementIcon).toHaveAttribute(
+    'src',
+    /\/achievements\/against-odds\.webp$/
+  );
+  await expect
+    .poll(() => achievementIcon.evaluate((image: HTMLImageElement) => image.naturalWidth))
+    .toBeGreaterThan(0);
   await achievement.hover();
   await expect(achievement.getByRole('tooltip')).toContainText(
     'Высокий результат на более слабой стороне.'
