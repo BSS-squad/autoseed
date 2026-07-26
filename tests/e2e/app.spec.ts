@@ -1068,13 +1068,45 @@ async function mockLeaderboardApi(
       '2026-07-26';
     const playerNames =
       period === 'week'
-        ? ['Weekly Hero', 'Weekly Medic', 'Weekly Anchor', 'Weekly Scout']
-        : ['Top Fragger', 'Helpful Medic', 'Steady Rifleman', 'Armor Hunter'];
+        ? [
+            'Weekly Hero',
+            'Weekly Medic',
+            'Weekly Anchor',
+            'Weekly Scout',
+            'Weekly Driver',
+            'Weekly Sapper',
+            'Weekly Rifleman'
+          ]
+        : [
+            'Top Fragger',
+            'Helpful Medic',
+            'Steady Rifleman',
+            'Armor Hunter',
+            'Patient Sapper',
+            'Fast Driver',
+            'Careful Scout'
+          ];
     const names =
       role === 'commander'
-        ? ['Commander Atlas', 'Commander Nova', 'Commander Mira', 'Commander Fox']
+        ? [
+            'Commander Atlas',
+            'Commander Nova',
+            'Commander Mira',
+            'Commander Fox',
+            'Commander Wolf',
+            'Commander Eagle',
+            'Commander Raven'
+          ]
         : role === 'squad_leader'
-          ? ['Squad Lead Alpha', 'Squad Lead Bravo', 'Squad Lead Charlie', 'Squad Lead Delta']
+          ? [
+              'Squad Lead Alpha',
+              'Squad Lead Bravo',
+              'Squad Lead Charlie',
+              'Squad Lead Delta',
+              'Squad Lead Echo',
+              'Squad Lead Foxtrot',
+              'Squad Lead Golf'
+            ]
           : playerNames;
     const achievements =
       role === 'commander'
@@ -1161,14 +1193,30 @@ async function mockLeaderboardApi(
         : period === 'week'
           ? '2026-07-26T21:00:00.000Z'
           : '2026-07-26T21:00:00.000Z';
-    const minimumMatches = period === 'month' ? 50 : period === 'week' ? 9 : 3;
+    const minimumMatches = period === 'month' ? 50 : period === 'week' ? 9 : 2;
 
     const responseEntries = options.empty ? [] : entries;
+    const pendingEntries = options.empty
+      ? []
+      : [
+          {
+            rank: null,
+            name: 'Almost Qualified',
+            matches: Math.max(0, minimumMatches - 1),
+            qualified: false,
+            matchesNeeded: 1,
+            indicators: entries[0]?.indicators || {},
+            totals: {},
+            style: {},
+            dataQuality: {},
+            achievements: []
+          }
+        ];
     return fulfillJson(route, {
       status: options.status || 'ok',
       available: true,
       stale: options.stale === true,
-      rulesVersion: 'observed-impact-v1',
+      rulesVersion: 'observed-impact-v2',
       revision: 'e2e-role-snapshot',
       scope: 'public',
       period,
@@ -1183,6 +1231,7 @@ async function mockLeaderboardApi(
       dataThrough: '2026-07-26T11:50:00.000Z',
       dataQuality: {
         sourceMatches: 64,
+        achievementHistoryMatches: 180,
         factsCoverage: 1,
         hoursCoverage: 0.88,
         hoursCoverageThreshold: 0.8,
@@ -1219,9 +1268,16 @@ async function mockLeaderboardApi(
                   'name'
                 ]
       },
+      achievements: {
+        comparisonGroupSize: 42,
+        minimumComparisonGroup: 10
+      },
       totalEntries: responseEntries.length,
       truncated: false,
-      entries: responseEntries
+      entries: responseEntries,
+      totalPendingEntries: pendingEntries.length,
+      pendingTruncated: false,
+      pendingEntries
     });
   });
 }
@@ -2729,6 +2785,7 @@ test('renders role leaderboards, achievements and restores controls from the lin
   await expect(page.getByTestId('leaderboards-row-1')).toContainText('5,40');
   await expect(page.getByTestId('leaderboard-context')).toContainText('64');
   await expect(page.getByTestId('leaderboard-context')).toContainText('88%');
+  await expect(page.getByTestId('leaderboards-row-6')).toHaveCount(0);
 
   const achievement = page.getByTestId('achievement-against_odds');
   await achievement.hover();
@@ -2736,6 +2793,15 @@ test('renders role leaderboards, achievements and restores controls from the lin
     'Высокий результат на более слабой стороне.'
   );
   await expect(achievement.getByRole('tooltip')).toContainText('Разрыв часов');
+
+  await page.getByTestId('leaderboards-expand').click();
+  await expect(page.getByTestId('leaderboards-row-6')).toContainText('Fast Driver');
+  await expect(page.getByTestId('leaderboards-pending')).toContainText('Almost Qualified');
+  await expect(page.getByTestId('leaderboards-pending')).toContainText(
+    'Осталось матчей: 1'
+  );
+  await page.getByTestId('leaderboards-expand').click();
+  await expect(page.getByTestId('leaderboards-row-6')).toHaveCount(0);
 
   await page.getByTestId('leaderboard-period-week').click();
   await expect(page.getByTestId('leaderboards-row-1')).toContainText('Weekly Hero');
