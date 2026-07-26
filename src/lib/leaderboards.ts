@@ -6,6 +6,7 @@ import type {
   RoleLeaderboardAchievement,
   RoleLeaderboardEntry,
   RoleLeaderboardMetricGroup,
+  RoleLeaderboardPendingEntry,
   RoleLeaderboardPeriod,
   RoleLeaderboardResponse,
   RoleLeaderboardRole,
@@ -141,7 +142,7 @@ export const ROLE_LEADERBOARD_PERIODS: Array<{
   label: string;
   description: string;
 }> = [
-  { value: 'day', label: 'День', description: 'от 3 матчей' },
+  { value: 'day', label: 'День', description: 'от 2 матчей' },
   { value: 'week', label: 'Неделя', description: 'от 9 матчей' },
   { value: 'month', label: 'Месяц', description: 'от 50 матчей' }
 ];
@@ -267,6 +268,11 @@ function normalizeRoleEntry(value: unknown, index: number): RoleLeaderboardEntry
   const entry = getRecord(value) || {};
   return {
     rank: normalizeRank(entry.rank, index + 1),
+    qualified: entry.qualified !== false,
+    matchesNeeded: Math.max(
+      0,
+      Math.round(toNumberOrNull(entry.matchesNeeded) || 0)
+    ),
     name: (toStringOrNull(entry.name) || 'Игрок').slice(0, 96),
     matches: Math.max(0, Math.round(toNumberOrNull(entry.matches) || 0)),
     activeMinutes: toNumberOrNull(entry.activeMinutes),
@@ -279,6 +285,23 @@ function normalizeRoleEntry(value: unknown, index: number): RoleLeaderboardEntry
       .map(normalizeAchievement)
       .filter((achievement): achievement is RoleLeaderboardAchievement => achievement !== null)
       .slice(0, 3)
+  };
+}
+
+function normalizePendingRoleEntry(
+  value: unknown,
+  index: number
+): RoleLeaderboardPendingEntry {
+  const normalized = normalizeRoleEntry(value, index);
+  const entry = getRecord(value) || {};
+  return {
+    ...normalized,
+    rank: null,
+    qualified: false,
+    matchesNeeded: Math.max(
+      0,
+      Math.round(toNumberOrNull(entry.matchesNeeded) || 0)
+    )
   };
 }
 
@@ -295,6 +318,7 @@ function normalizeRoleResponse(
   const dataQuality = getRecord(record.dataQuality) || {};
   const progress = getRecord(record.progress) || {};
   const ranking = getRecord(record.ranking) || {};
+  const achievements = getRecord(record.achievements) || {};
   const statusValue = toStringOrNull(record.status) as RoleLeaderboardStatus | null;
   const roleValue = toStringOrNull(record.role) as RoleLeaderboardRole | null;
   const squadSizeValue = toStringOrNull(record.squadSize) as RoleLeaderboardSquadSize | null;
@@ -330,6 +354,10 @@ function normalizeRoleResponse(
       factsCoverage: toRatioOrNull(dataQuality.factsCoverage),
       hoursCoverage: toRatioOrNull(dataQuality.hoursCoverage),
       hoursCoverageThreshold: toRatioOrNull(dataQuality.hoursCoverageThreshold),
+      achievementHistoryMatches: Math.max(
+        0,
+        Math.round(toNumberOrNull(dataQuality.achievementHistoryMatches) || 0)
+      ),
       vehicleAttribution: normalizeMetricGroup(dataQuality.vehicleAttribution)
     },
     progress: {
@@ -348,11 +376,31 @@ function normalizeRoleResponse(
             .slice(0, 8)
         : []
     },
+    achievements: {
+      comparisonGroupSize: Math.max(
+        0,
+        Math.round(toNumberOrNull(achievements.comparisonGroupSize) || 0)
+      ),
+      minimumComparisonGroup: Math.max(
+        0,
+        Math.round(toNumberOrNull(achievements.minimumComparisonGroup) || 10)
+      )
+    },
     totalEntries: Math.max(0, Math.round(toNumberOrNull(record.totalEntries) || 0)),
     truncated: record.truncated === true,
     entries: (Array.isArray(record.entries) ? record.entries : [])
-      .slice(0, 100)
-      .map(normalizeRoleEntry)
+      .slice(0, 500)
+      .map(normalizeRoleEntry),
+    totalPendingEntries: Math.max(
+      0,
+      Math.round(toNumberOrNull(record.totalPendingEntries) || 0)
+    ),
+    pendingTruncated: record.pendingTruncated === true,
+    pendingEntries: (
+      Array.isArray(record.pendingEntries) ? record.pendingEntries : []
+    )
+      .slice(0, 500)
+      .map(normalizePendingRoleEntry)
   };
 }
 
@@ -470,7 +518,7 @@ function buildRoleLeaderboardUrl(
   url.searchParams.set('period', selection.period);
   url.searchParams.set('role', selection.role);
   url.searchParams.set('scope', 'public');
-  url.searchParams.set('limit', '100');
+  url.searchParams.set('limit', '500');
   if (selection.role === 'squad_leader') {
     url.searchParams.set('squadSize', selection.squadSize);
   }

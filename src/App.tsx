@@ -64,6 +64,7 @@ import type {
   ExporterTeamSnapshot,
   RoleLeaderboardAchievement,
   RoleLeaderboardEntry,
+  RoleLeaderboardPendingEntry,
   RoleLeaderboardResponse,
   RoleLeaderboardRole,
   RoleLeaderboardSelection,
@@ -88,6 +89,9 @@ type RefreshSnapshotOptions = {
 };
 
 type SnapshotUpdateSource = 'manual' | 'stream';
+type RoleLeaderboardDisplayEntry =
+  | RoleLeaderboardEntry
+  | RoleLeaderboardPendingEntry;
 
 type TeamPanelProps = {
   team: ExporterTeamSnapshot;
@@ -1221,7 +1225,10 @@ function getPrimaryRaffleServer(raffleServers: RaffleServerSnapshot[]): RaffleSe
   );
 }
 
-function roleMetricValue(entry: RoleLeaderboardEntry, key: string): number | boolean | null {
+function roleMetricValue(
+  entry: RoleLeaderboardDisplayEntry,
+  key: string
+): number | boolean | null {
   const groups = [entry.indicators, entry.totals, entry.style, entry.dataQuality];
   for (const group of groups) {
     if (key in group) return group[key] ?? null;
@@ -1318,7 +1325,7 @@ function AchievementList({
   entry,
   prefix
 }: {
-  entry: RoleLeaderboardEntry;
+  entry: RoleLeaderboardDisplayEntry;
   prefix: string;
 }) {
   if (!entry.achievements.length) {
@@ -1342,7 +1349,7 @@ function RoleMetricSet({
   role,
   compact = false
 }: {
-  entry: RoleLeaderboardEntry;
+  entry: RoleLeaderboardDisplayEntry;
   role: RoleLeaderboardRole;
   compact?: boolean;
 }) {
@@ -1362,7 +1369,7 @@ function RoleEntryExplanation({
   entry,
   response
 }: {
-  entry: RoleLeaderboardEntry;
+  entry: RoleLeaderboardDisplayEntry;
   response: RoleLeaderboardResponse;
 }) {
   const detailMetrics = [
@@ -1445,6 +1452,7 @@ function LeaderboardsPage({ config, route, vipShopUrl }: LeaderboardsPageProps) 
     readRoleLeaderboardSelection(window.location.hash)
   );
   const [response, setResponse] = useState<RoleLeaderboardResponse | null>(null);
+  const [expanded, setExpanded] = useState(false);
   const [loadState, setLoadState] = useState<LeaderboardLoadState>(
     sourceUrl ? 'loading' : 'unavailable'
   );
@@ -1455,6 +1463,15 @@ function LeaderboardsPage({ config, route, vipShopUrl }: LeaderboardsPageProps) 
       window.history.replaceState(null, '', nextHash);
     }
   }, [selection]);
+
+  useEffect(() => {
+    setExpanded(false);
+  }, [
+    selection.period,
+    selection.periodId,
+    selection.role,
+    selection.squadSize
+  ]);
 
   useEffect(() => {
     if (!sourceUrl) {
@@ -1485,8 +1502,14 @@ function LeaderboardsPage({ config, route, vipShopUrl }: LeaderboardsPageProps) 
   const currentPeriodId = getCurrentRolePeriodId(selection.period);
   const activePeriodId = selection.periodId || response?.periodId || currentPeriodId;
   const hasEntries = loadState === 'ready' && Boolean(response?.entries.length);
-  const podiumEntries = response?.entries.slice(0, 3) || [];
-  const tableEntries = response?.entries.slice(3) || [];
+  const visibleEntries =
+    response?.entries.slice(0, expanded ? response.entries.length : 5) || [];
+  const podiumEntries = visibleEntries.slice(0, 3);
+  const tableEntries = visibleEntries.slice(3);
+  const hasExpandableEntries = Boolean(
+    response &&
+      (response.totalEntries > 5 || response.totalPendingEntries > 0)
+  );
 
   const updateSelection = (values: Partial<RoleLeaderboardSelection>) => {
     setSelection((current) => ({ ...current, ...values }));
@@ -1512,8 +1535,8 @@ function LeaderboardsPage({ config, route, vipShopUrl }: LeaderboardsPageProps) 
             <h1 data-testid="leaderboards-title">Ролевые топы BSS</h1>
           </div>
           <p className="hero-copy">
-            Место определяется сервером по поматчевым фактам. Ачивки объясняют стиль и не
-            добавляют скрытых очков.
+            Место определяется сервером по матчам выбранного периода. Характеристики
+            описывают накопленный стиль и не добавляют скрытых очков.
           </p>
         </div>
 
@@ -1628,6 +1651,10 @@ function LeaderboardsPage({ config, route, vipShopUrl }: LeaderboardsPageProps) 
             </strong>
           </span>
           <span>
+            <small>История характеристик</small>
+            <strong>{response.dataQuality.achievementHistoryMatches}</strong>
+          </span>
+          <span>
             <small>Полнота фактов</small>
             <strong>{formatCoverage(response.dataQuality.factsCoverage)}</strong>
           </span>
@@ -1680,8 +1707,8 @@ function LeaderboardsPage({ config, route, vipShopUrl }: LeaderboardsPageProps) 
                 : 'Снимок этого периода ещё не рассчитан'}
             </strong>
             <p>
-              Это штатно, особенно в начале месяца. Сейчас кандидатов:{' '}
-              {response.progress.candidates}.
+              Это штатно, особенно в начале месяца. В раскрытии видно, кому и сколько
+              матчей осталось. Сейчас кандидатов: {response.progress.candidates}.
             </p>
           </article>
         ) : null}
@@ -1733,6 +1760,70 @@ function LeaderboardsPage({ config, route, vipShopUrl }: LeaderboardsPageProps) 
               </div>
             ) : null}
           </>
+        ) : null}
+
+        {loadState === 'ready' && response && hasExpandableEntries ? (
+          <button
+            type="button"
+            className="leaderboard-expand-button"
+            aria-expanded={expanded}
+            data-testid="leaderboards-expand"
+            onClick={() => setExpanded((value) => !value)}
+          >
+            {expanded
+              ? 'Свернуть до топ-5'
+              : `Развернуть весь топ (${response.totalEntries}) и кандидатов (${response.totalPendingEntries})`}
+          </button>
+        ) : null}
+
+        {loadState === 'ready' &&
+        response &&
+        expanded &&
+        response.pendingEntries.length ? (
+          <div
+            className="leaderboard-table-wrap leaderboard-pending-wrap"
+            data-testid="leaderboards-pending"
+          >
+            <div className="leaderboard-table-head">
+              <div>
+                <span className="overview-label">Ещё набирают матчи</span>
+                <strong>{response.totalPendingEntries} кандидатов</strong>
+              </div>
+              <span>Без места до прохождения порога</span>
+            </div>
+            <div className="leaderboard-table role-leaderboard-table" role="table">
+              {response.pendingEntries.map((entry, index) => (
+                <article
+                  className="leaderboard-row role-leaderboard-row role-leaderboard-row-pending"
+                  data-testid={`leaderboards-pending-${index + 1}`}
+                  role="row"
+                  key={`${entry.name}-${entry.matches}-${index}`}
+                >
+                  <span className="leaderboard-rank">—</span>
+                  <span className="role-table-person">
+                    <strong>{entry.name}</strong>
+                    <small>
+                      {entry.matches} / {response.minimumMatches} матчей
+                    </small>
+                    <em>Осталось матчей: {entry.matchesNeeded}</em>
+                  </span>
+                  <RoleMetricSet entry={entry} role={response.role} compact />
+                  <AchievementList entry={entry} prefix={`pending-${index + 1}`} />
+                </article>
+              ))}
+            </div>
+            {response.pendingTruncated ? (
+              <p className="leaderboard-limit-note">
+                Показаны первые {response.pendingEntries.length} кандидатов.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+
+        {loadState === 'ready' && response && expanded && response.truncated ? (
+          <p className="leaderboard-limit-note">
+            Показаны первые {response.entries.length} зачётных мест.
+          </p>
         ) : null}
       </section>
     </div>

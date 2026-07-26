@@ -74,6 +74,8 @@ export type RoleLeaderboardMetricGroup = Record<string, number | boolean | null>
 
 export type RoleLeaderboardEntry = {
   rank: number;
+  qualified: boolean;
+  matchesNeeded: number;
   name: string;
   matches: number;
   activeMinutes: number | null;
@@ -83,6 +85,10 @@ export type RoleLeaderboardEntry = {
   style: RoleLeaderboardMetricGroup;
   dataQuality: RoleLeaderboardMetricGroup;
   achievements: RoleLeaderboardAchievement[];
+};
+
+export type RoleLeaderboardPendingEntry = Omit<RoleLeaderboardEntry, 'rank'> & {
+  rank: null;
 };
 
 export type RoleLeaderboardResponse = {
@@ -107,6 +113,7 @@ export type RoleLeaderboardResponse = {
     factsCoverage: number | null;
     hoursCoverage: number | null;
     hoursCoverageThreshold: number | null;
+    achievementHistoryMatches: number;
     vehicleAttribution: RoleLeaderboardMetricGroup;
   };
   progress: {
@@ -117,9 +124,16 @@ export type RoleLeaderboardResponse = {
   ranking: {
     sortKeys: string[];
   };
+  achievements: {
+    comparisonGroupSize: number;
+    minimumComparisonGroup: number;
+  };
   totalEntries: number;
   truncated: boolean;
   entries: RoleLeaderboardEntry[];
+  totalPendingEntries: number;
+  pendingTruncated: boolean;
+  pendingEntries: RoleLeaderboardPendingEntry[];
 };
 
 export type RoleLeaderboardSelection = {

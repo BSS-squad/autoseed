@@ -3831,6 +3831,35 @@ input {
   overflow: visible;
 }
 
+.leaderboard-expand-button {
+  justify-self: center;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1px solid rgba(255, 211, 108, 0.36);
+  border-radius: 999px;
+  background: rgba(255, 211, 108, 0.09);
+  color: var(--gold);
+  font: 700 0.82rem 'JetBrains Mono', monospace;
+  cursor: pointer;
+}
+
+.leaderboard-expand-button:hover,
+.leaderboard-expand-button:focus-visible {
+  border-color: rgba(255, 211, 108, 0.72);
+  background: rgba(255, 211, 108, 0.15);
+}
+
+.leaderboard-pending-wrap {
+  border-color: rgba(255, 178, 78, 0.24);
+}
+
+.leaderboard-limit-note {
+  margin: 0;
+  padding: 12px 20px;
+  color: var(--muted);
+  text-align: center;
+}
+
 .leaderboard-table-head {
   display: flex;
   align-items: flex-end;
@@ -4129,6 +4158,18 @@ input {
 
 .role-table-person small {
   margin-top: 4px;
+}
+
+.role-table-person em {
+  display: block;
+  margin-top: 4px;
+  color: #ffd393;
+  font-size: 0.75rem;
+  font-style: normal;
+}
+
+.role-leaderboard-row-pending {
+  background: rgba(255, 178, 78, 0.025);
 }
 
 .role-metric-set-compact {

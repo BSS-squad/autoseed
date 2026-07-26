@@ -81,7 +81,7 @@ test('adapter reads only allowed public fields and preserves API order', async (
         status: 'partial',
         available: true,
         stale: true,
-        rulesVersion: 'observed-impact-v1',
+        rulesVersion: 'observed-impact-v2',
         revision: 'safe-revision',
         scope: 'public',
         period: 'day',
@@ -91,11 +91,12 @@ test('adapter reads only allowed public fields and preserves API order', async (
         timeZone: 'Europe/Moscow',
         startAt: '2026-07-25T21:00:00.000Z',
         endAt: '2026-07-26T21:00:00.000Z',
-        minimumMatches: 3,
+        minimumMatches: 2,
         generatedAt: '2026-07-26T11:55:00.000Z',
         dataThrough: '2026-07-26T11:50:00.000Z',
         dataQuality: {
           sourceMatches: 12,
+          achievementHistoryMatches: 120,
           factsCoverage: 0.9,
           hoursCoverage: 0.85,
           hoursCoverageThreshold: 0.8,
@@ -108,7 +109,7 @@ test('adapter reads only allowed public fields and preserves API order', async (
         progress: {
           candidates: 20,
           qualified: 2,
-          minimumMatches: 3
+          minimumMatches: 2
         },
         ranking: {
           sortKeys: ['resourceSwingPer90', 'resourceSwing']
@@ -118,7 +119,7 @@ test('adapter reads only allowed public fields and preserves API order', async (
             rank: 2,
             playerId: 'hidden-player',
             name: 'Второй',
-            matches: 3,
+            matches: 2,
             indicators: {
               resourceSwingPer90: 4,
               hiddenMetric: 999
@@ -143,8 +144,22 @@ test('adapter reads only allowed public fields and preserves API order', async (
           {
             rank: 1,
             name: 'Первый',
-            matches: 3,
+            matches: 2,
             indicators: { resourceSwingPer90: 5 }
+          }
+        ],
+        totalPendingEntries: 1,
+        pendingTruncated: false,
+        pendingEntries: [
+          {
+            rank: null,
+            playerId: 'hidden-pending-player',
+            name: 'Почти прошёл',
+            matches: 1,
+            qualified: false,
+            matchesNeeded: 1,
+            indicators: { resourceSwingPer90: 3 },
+            achievements: []
           }
         ]
       }),
@@ -170,11 +185,15 @@ test('adapter reads only allowed public fields and preserves API order', async (
     assert.equal(requestedUrl.includes('period=day'), true);
     assert.equal(requestedUrl.includes('role=player'), true);
     assert.equal(requestedUrl.includes('scope=public'), true);
+    assert.equal(requestedUrl.includes('limit=500'), true);
     assert.equal(requestedUrl.includes('squadSize'), false);
     assert.equal(result.entries[0]?.rank, 2);
     assert.equal(result.entries[1]?.rank, 1);
     assert.equal(result.entries[0]?.indicators.resourceSwingPer90, 4);
     assert.equal(result.entries[0]?.achievements[0]?.description, 'Описание.');
+    assert.equal(result.pendingEntries[0]?.rank, null);
+    assert.equal(result.pendingEntries[0]?.matchesNeeded, 1);
+    assert.equal(result.dataQuality.achievementHistoryMatches, 120);
     assert.equal(serialized.includes('playerId'), false);
     assert.equal(serialized.includes('sessionId'), false);
     assert.equal(serialized.includes('serverId'), false);
