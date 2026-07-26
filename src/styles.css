@@ -511,6 +511,69 @@ input {
   font-size: 1.05rem;
 }
 
+.journal-export-actions {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(160px, 220px) auto;
+  gap: 8px 16px;
+  align-items: center;
+  margin-bottom: 14px;
+  padding: 14px;
+  border: 1px solid rgba(103, 215, 255, 0.18);
+  border-radius: 14px;
+  background: rgba(103, 215, 255, 0.05);
+}
+
+.journal-export-actions > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.journal-export-actions strong {
+  font-size: 0.92rem;
+}
+
+.journal-export-actions span,
+.journal-export-actions p {
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.journal-export-password {
+  display: grid;
+  gap: 4px;
+}
+
+.journal-export-password input {
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid rgba(103, 215, 255, 0.22);
+  border-radius: 9px;
+  background: rgba(4, 9, 15, 0.72);
+  color: var(--text);
+}
+
+.journal-export-password input:focus {
+  border-color: rgba(103, 215, 255, 0.56);
+  outline: 2px solid rgba(103, 215, 255, 0.12);
+}
+
+.journal-export-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.journal-export-actions > p {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.journal-export-actions .journal-export-error {
+  color: #ff9b8b;
+}
+
 .journal-legacy-note {
   margin-bottom: 12px;
   padding: 10px 12px;
@@ -4590,6 +4653,15 @@ input {
 
   .journal-match-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .journal-export-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .journal-export-buttons {
+    display: grid;
+    width: 100%;
   }
 
   .journal-tabs {
