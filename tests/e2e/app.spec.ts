@@ -1002,59 +1002,187 @@ async function mockAutoseedApi(
   );
 }
 
-async function mockLeaderboardApi(page: Page) {
+async function mockLeaderboardApi(
+  page: Page,
+  options: {
+    status?: 'ok' | 'partial' | 'empty';
+    stale?: boolean;
+    empty?: boolean;
+  } = {}
+) {
   await mockAutoseedApi(page, undefined, leaderboardsRuntimeConfig);
   await page.route('**/mock/leaderboards**', (route) => {
     const requestUrl = new URL(route.request().url());
-    const period = requestUrl.searchParams.get('period') || 'overall';
-    const entriesByPeriod = {
-      overall: [
-        {
-          rank: 1,
-          name: 'Top Fragger',
-          score: 4200,
-          kills: 320,
-          deaths: 140,
-          kd: 2.29,
-          playtimeHours: 186.5
-        },
-        {
-          rank: 2,
-          name: 'Helpful Medic',
-          score: 3950,
-          kills: 120,
-          deaths: 80,
-          kd: 1.5,
-          playtimeHours: 142
-        }
-      ],
-      week: [
-        {
-          rank: 1,
-          name: 'Weekly Hero',
-          score: 680,
-          kills: 62,
-          deaths: 28,
-          kd: 2.21,
-          playtimeHours: 22.4
-        }
-      ],
-      month: [
-        {
-          rank: 1,
-          name: 'Monthly Leader',
-          score: 2100,
-          kills: 180,
-          deaths: 72,
-          kd: 2.5,
-          playtimeHours: 74.8
-        }
-      ]
-    } as const;
+    const period = requestUrl.searchParams.get('period') || 'day';
+    const role = requestUrl.searchParams.get('role') || 'player';
+    const squadSize = role === 'squad_leader'
+      ? requestUrl.searchParams.get('squadSize') || 'full'
+      : null;
+    const defaultPeriodIds = {
+      day: '2026-07-26',
+      week: '2026-07-20',
+      month: '2026-07'
+    };
+    const periodId =
+      requestUrl.searchParams.get('periodId') ||
+      defaultPeriodIds[period as keyof typeof defaultPeriodIds] ||
+      '2026-07-26';
+    const playerNames =
+      period === 'week'
+        ? ['Weekly Hero', 'Weekly Medic', 'Weekly Anchor', 'Weekly Scout']
+        : ['Top Fragger', 'Helpful Medic', 'Steady Rifleman', 'Armor Hunter'];
+    const names =
+      role === 'commander'
+        ? ['Commander Atlas', 'Commander Nova', 'Commander Mira', 'Commander Fox']
+        : role === 'squad_leader'
+          ? ['Squad Lead Alpha', 'Squad Lead Bravo', 'Squad Lead Charlie', 'Squad Lead Delta']
+          : playerNames;
+    const achievements =
+      role === 'commander'
+        ? [
+            {
+              code: 'godlike',
+              title: 'Богоподобный',
+              description: 'Побеждает более сильную по часам сторону.',
+              reason: 'Разрыв часов −430, неожиданность +18 п.п.',
+              value: 0.18,
+              threshold: 0.14,
+              comparison: 'gte'
+            }
+          ]
+        : [
+            {
+              code: 'against_odds',
+              title: 'Вопреки',
+              description: 'Высокий результат на более слабой стороне.',
+              reason: 'Разрыв часов −380, вклад 5,4 за 90 минут.',
+              value: 5.4,
+              threshold: 4.8,
+              comparison: 'gte'
+            }
+          ];
+    const entries = names.map((name, index) => ({
+      rank: index + 1,
+      name,
+      matches: period === 'month' ? 52 + index : period === 'week' ? 10 + index : 4 + index,
+      activeMinutes: role === 'player' ? 240 + index * 20 : null,
+      personHours: role === 'squad_leader' ? 40 + index * 5 : null,
+      indicators:
+        role === 'commander'
+          ? {
+              winRate: 0.75 - index * 0.05,
+              averageSurprise: 0.18 - index * 0.02,
+              averageHoursGap: -430 + index * 100
+            }
+          : role === 'squad_leader'
+            ? {
+                kd: 2.29 - index * 0.1,
+                knockdownsPer100PersonHours: 34 - index,
+                revivesPer100PersonHours: 12 - index
+              }
+            : {
+                resourceSwingPer90: 5.4 - index * 0.3,
+                resourceSwing: 18 - index,
+                temporaryPressurePer90: 2.2 - index * 0.1,
+                combatConversion: 0.78 - index * 0.02
+              },
+      totals:
+        role === 'commander'
+          ? { wins: 3, losses: 1, strengthMatches: 4 }
+          : {
+              confirmedEnemyDeaths: 22 - index,
+              successfulRevives: 8 + index,
+              ownDeaths: 12 + index,
+              teamkills: 0,
+              knockdowns: 28 - index,
+              vehicleDamage: 120 * index,
+              vehicleKills: index === 3 ? 1 : 0
+            },
+      style:
+        role === 'commander'
+          ? {
+              averageTeamKd: 1.2,
+              averageDeaths: 104,
+              averageWinningTicketMargin: 64,
+              combinations: 3
+            }
+          : {},
+      dataQuality: { strengthMatches: 4 },
+      achievements: index === 0 ? achievements : []
+    }));
+    const startAt =
+      period === 'month'
+        ? '2026-06-30T21:00:00.000Z'
+        : period === 'week'
+          ? '2026-07-19T21:00:00.000Z'
+          : '2026-07-25T21:00:00.000Z';
+    const endAt =
+      period === 'month'
+        ? '2026-07-31T21:00:00.000Z'
+        : period === 'week'
+          ? '2026-07-26T21:00:00.000Z'
+          : '2026-07-26T21:00:00.000Z';
+    const minimumMatches = period === 'month' ? 50 : period === 'week' ? 9 : 3;
 
+    const responseEntries = options.empty ? [] : entries;
     return fulfillJson(route, {
-      generatedAt: new Date(BASE_TIME).toISOString(),
-      entries: entriesByPeriod[period as keyof typeof entriesByPeriod] || []
+      status: options.status || 'ok',
+      available: true,
+      stale: options.stale === true,
+      rulesVersion: 'observed-impact-v1',
+      revision: 'e2e-role-snapshot',
+      scope: 'public',
+      period,
+      periodId,
+      role,
+      squadSize,
+      timeZone: 'Europe/Moscow',
+      startAt,
+      endAt,
+      minimumMatches,
+      generatedAt: '2026-07-26T11:55:00.000Z',
+      dataThrough: '2026-07-26T11:50:00.000Z',
+      dataQuality: {
+        sourceMatches: 64,
+        factsCoverage: 1,
+        hoursCoverage: 0.88,
+        hoursCoverageThreshold: 0.8,
+        vehicleAttribution: {
+          eventCoverage: 0.84,
+          destructionCoverage: 0.82,
+          damageAvailable: true,
+          killsAvailable: true
+        }
+      },
+      progress: {
+        candidates: 24,
+        qualified: responseEntries.length,
+        minimumMatches
+      },
+      ranking: {
+        sortKeys:
+          role === 'commander'
+            ? ['winRate', 'averageSurprise', 'averageHoursGap', 'matches', 'name']
+            : role === 'squad_leader'
+              ? [
+                  'kd',
+                  'knockdownsPer100PersonHours',
+                  'revivesPer100PersonHours',
+                  'matches',
+                  'name'
+                ]
+              : [
+                  'resourceSwingPer90',
+                  'resourceSwing',
+                  'temporaryPressurePer90',
+                  'combatConversion',
+                  'matches',
+                  'name'
+                ]
+      },
+      totalEntries: responseEntries.length,
+      truncated: false,
+      entries: responseEntries
     });
   });
 }
@@ -2523,22 +2651,51 @@ test('uses player-friendly language for the empty winners state', async ({ page 
   await expectPlayerFriendlyLanguage(page);
 });
 
-test('renders public leaderboards and switches periods', async ({ page }) => {
+test('renders role leaderboards, achievements and restores controls from the link', async ({
+  page
+}) => {
+  await page.clock.setFixedTime('2026-07-26T12:00:00.000Z');
   await mockLeaderboardApi(page);
 
   await page.goto('./#leaderboards');
 
   await expect(page.getByTestId('leaderboards-page')).toBeVisible();
-  await expect(page.getByTestId('leaderboards-title')).toHaveText('Топ игроков BSS');
-  await expect(page.getByTestId('leaderboards-table')).toContainText('Top Fragger');
-  await expect(page.getByTestId('leaderboards-row-1')).toContainText('4 200');
-  await expect(page.getByTestId('leaderboards-row-1')).toContainText('2,29');
+  await expect(page.getByTestId('leaderboards-title')).toHaveText('Ролевые топы BSS');
+  await expect(page.getByTestId('leaderboards-podium')).toContainText('Top Fragger');
+  await expect(page.getByTestId('leaderboards-row-1')).toContainText('5,40');
+  await expect(page.getByTestId('leaderboard-context')).toContainText('64');
+  await expect(page.getByTestId('leaderboard-context')).toContainText('88%');
+
+  const achievement = page.getByTestId('achievement-against_odds');
+  await achievement.hover();
+  await expect(achievement.getByRole('tooltip')).toContainText(
+    'Высокий результат на более слабой стороне.'
+  );
+  await expect(achievement.getByRole('tooltip')).toContainText('Разрыв часов');
 
   await page.getByTestId('leaderboard-period-week').click();
-
   await expect(page.getByTestId('leaderboards-row-1')).toContainText('Weekly Hero');
-  await expect(page.getByTestId('leaderboards-row-1')).toContainText('680');
-  await expect(page.getByTestId('leaderboards-table')).not.toContainText('Top Fragger');
+
+  await page.getByTestId('leaderboard-role-squad_leader').click();
+  await page.getByTestId('leaderboard-squad-size-medium').click();
+  await expect(page.getByTestId('leaderboards-row-1')).toContainText('Squad Lead Alpha');
+  await expect(page).toHaveURL(/period=week&role=squad_leader&squadSize=medium/);
+
+  await page.reload();
+  await expect(page.getByTestId('leaderboard-role-squad_leader')).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  );
+  await expect(page.getByTestId('leaderboard-squad-size-medium')).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  );
+  await expect(page.getByTestId('leaderboards-row-1')).toContainText('Squad Lead Alpha');
+
+  await page.getByTestId('leaderboard-archive-previous').click();
+  await expect(page).toHaveURL(/periodId=2026-07-13/);
+  await page.getByTestId('leaderboard-archive-next').click();
+  await expect(page).not.toHaveURL(/periodId=/);
   await expectPlayerFriendlyLanguage(page);
 });
 
@@ -2547,11 +2704,47 @@ test('uses player-friendly language for unavailable leaderboards', async ({ page
 
   await page.goto('./#leaderboards');
 
-  await expect(page.getByTestId('leaderboards-empty')).toContainText('Лидерборды пока недоступны');
   await expect(page.getByTestId('leaderboards-empty')).toContainText(
-    'Источник статистики ещё не подключён.'
+    'Источник статистики ещё не подключён'
+  );
+  await expect(page.getByTestId('leaderboards-empty')).toContainText(
+    'После подключения публичного API'
   );
   await expectPlayerFriendlyLanguage(page);
+});
+
+test('shows empty, partial and stale role leaderboard states without treating them as a crash', async ({
+  page
+}) => {
+  await page.clock.setFixedTime('2026-07-26T12:00:00.000Z');
+  await mockLeaderboardApi(page, { status: 'empty', empty: true });
+  await page.goto('./#leaderboards?period=month&role=player');
+
+  await expect(page.getByTestId('leaderboards-empty')).toContainText(
+    'Пока никто не прошёл порог 50 матчей'
+  );
+  await expect(page.getByTestId('leaderboards-empty')).toContainText('штатно');
+});
+
+test('keeps achievement descriptions reachable by keyboard on a narrow screen', async ({
+  page
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.clock.setFixedTime('2026-07-26T12:00:00.000Z');
+  await mockLeaderboardApi(page, { status: 'partial', stale: true });
+  await page.goto('./#leaderboards');
+
+  await expect(page.getByTestId('leaderboard-context')).toContainText('Данные неполные');
+  await expect(page.getByTestId('leaderboard-context')).toContainText('Снимок устарел');
+  const achievement = page.getByTestId('achievement-against_odds');
+  await achievement.focus();
+  await expect(achievement.getByRole('tooltip')).toBeVisible();
+  await expect(achievement.getByRole('tooltip')).toContainText('Вопреки');
+  const viewport = await page.evaluate(() => ({
+    documentWidth: document.documentElement.scrollWidth,
+    viewportWidth: window.innerWidth
+  }));
+  expect(viewport.documentWidth).toBeLessThanOrEqual(viewport.viewportWidth);
 });
 
 test('keeps the public page selector and content width stable while switching sections', async ({

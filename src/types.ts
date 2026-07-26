@@ -34,6 +34,7 @@ export type ExporterEndpointConfig = {
 
 export type LeaderboardsEndpointConfig = {
   url?: string;
+  roleUrl?: string;
 };
 
 export type LeaderboardPeriod = 'overall' | 'week' | 'month';
@@ -52,6 +53,80 @@ export type LeaderboardResponse = {
   period: LeaderboardPeriod;
   generatedAt: string | null;
   entries: LeaderboardEntry[];
+};
+
+export type RoleLeaderboardPeriod = 'day' | 'week' | 'month';
+export type RoleLeaderboardRole = 'player' | 'squad_leader' | 'commander';
+export type RoleLeaderboardSquadSize = 'small' | 'medium' | 'full';
+export type RoleLeaderboardStatus = 'ok' | 'partial' | 'empty';
+
+export type RoleLeaderboardAchievement = {
+  code: string;
+  title: string;
+  description: string;
+  reason: string;
+  value: number | null;
+  threshold: number | null;
+  comparison: 'gte' | 'lte' | 'lt' | 'gt' | 'eq';
+};
+
+export type RoleLeaderboardMetricGroup = Record<string, number | boolean | null>;
+
+export type RoleLeaderboardEntry = {
+  rank: number;
+  name: string;
+  matches: number;
+  activeMinutes: number | null;
+  personHours: number | null;
+  indicators: RoleLeaderboardMetricGroup;
+  totals: RoleLeaderboardMetricGroup;
+  style: RoleLeaderboardMetricGroup;
+  dataQuality: RoleLeaderboardMetricGroup;
+  achievements: RoleLeaderboardAchievement[];
+};
+
+export type RoleLeaderboardResponse = {
+  status: RoleLeaderboardStatus;
+  available: boolean;
+  stale: boolean;
+  rulesVersion: string;
+  revision: string | null;
+  scope: 'public' | 'custom';
+  period: RoleLeaderboardPeriod;
+  periodId: string;
+  role: RoleLeaderboardRole;
+  squadSize: RoleLeaderboardSquadSize | null;
+  timeZone: string;
+  startAt: string;
+  endAt: string;
+  minimumMatches: number;
+  generatedAt: string | null;
+  dataThrough: string | null;
+  dataQuality: {
+    sourceMatches: number;
+    factsCoverage: number | null;
+    hoursCoverage: number | null;
+    hoursCoverageThreshold: number | null;
+    vehicleAttribution: RoleLeaderboardMetricGroup;
+  };
+  progress: {
+    candidates: number;
+    qualified: number;
+    minimumMatches: number;
+  };
+  ranking: {
+    sortKeys: string[];
+  };
+  totalEntries: number;
+  truncated: boolean;
+  entries: RoleLeaderboardEntry[];
+};
+
+export type RoleLeaderboardSelection = {
+  period: RoleLeaderboardPeriod;
+  role: RoleLeaderboardRole;
+  squadSize: RoleLeaderboardSquadSize;
+  periodId: string | null;
 };
 
 export type ExporterPlayerSnapshot = {

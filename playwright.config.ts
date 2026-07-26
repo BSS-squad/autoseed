@@ -8,7 +8,7 @@ const baseURL = `http://${host}:${port}${normalizedBasePath}`;
 const serverCommand =
   process.env.PLAYWRIGHT_SERVER === 'preview'
     ? `npm run preview -- --host ${host} --port ${port} --strictPort`
-    : `npm run dev -- --host ${host} --port ${port}`;
+    : `npm run dev -- --host ${host} --port ${port} --strictPort`;
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -24,7 +24,7 @@ export default defineConfig({
   webServer: {
     command: serverCommand,
     url: baseURL,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 120_000
   }
 });

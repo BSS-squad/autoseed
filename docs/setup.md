@@ -64,7 +64,13 @@
 
 Опционально можно добавить `app.vipShopUrl` с абсолютным `http`/`https` URL внешнего VIP-сервиса. Тогда в навигации появится ссылка `VIP`; если значение пустое или не `http`/`https`, ссылка не показывается. В этот URL нельзя класть секреты или пользовательские токены, потому что runtime-config публичен.
 
-Опционально можно добавить `leaderboards.url` с абсолютным `http`/`https` URL публичного read-only endpoint-а лидербордов. Страница `/#leaderboards` вызывает его как `GET {url}?period=overall|week|month` и поддерживает JSON с массивом `entries`, `players` или `items`. Если URL не задан или endpoint недоступен, сайт показывает понятное состояние без падения. В этот URL нельзя класть секреты или пользовательские токены, потому что runtime-config публичен.
+Для страницы `/#leaderboards` можно добавить `leaderboards.roleUrl` с
+абсолютным `http`/`https` URL публичного read-only API V2. Если указан только
+старый `leaderboards.url`, сайт автоматически добавит к нему `/v2`. Страница
+передаёт `period`, `role`, `squadSize`, `periodId` и `scope=public`, но не
+пересчитывает формулы. Пустой, частичный, устаревший и недоступный снимки
+показываются как отдельные штатные состояния. В URL нельзя класть секреты или
+пользовательские токены, потому что runtime-config публичен.
 
 Опционально можно добавить `app.testMode`:
 
@@ -131,7 +137,8 @@
 - `policy.maxSeedPlayers`
 - `policy.cooldownMs`
 - `app.vipShopUrl` для публичной ссылки на внешний VIP purchase flow
-- `leaderboards.url` для публичной страницы лидербордов
+- `leaderboards.url` как совместимая основа адреса топов
+- `leaderboards.roleUrl` для явного адреса ролевого API V2
 
 ### Меняется на каждом сервере SquadJS
 

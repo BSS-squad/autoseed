@@ -9,7 +9,17 @@ import {
 } from 'react';
 
 import { runPermissionCheck } from './lib/permissions';
-import { fetchLeaderboard, LEADERBOARD_PERIODS } from './lib/leaderboards';
+import {
+  buildRoleLeaderboardHash,
+  fetchRoleLeaderboard,
+  getCurrentRolePeriodId,
+  readRoleLeaderboardSelection,
+  resolveRoleLeaderboardUrl,
+  ROLE_LEADERBOARD_PERIODS,
+  ROLE_LEADERBOARD_ROLES,
+  ROLE_LEADERBOARD_SQUAD_SIZES,
+  shiftRolePeriodId
+} from './lib/leaderboards';
 import {
   buildSelectionState,
   getSelectionStatusLabel,
@@ -52,8 +62,11 @@ import type {
   ExporterTeamBalancerHistoryEntrySnapshot,
   ExporterTeamBalancerSnapshot,
   ExporterTeamSnapshot,
-  LeaderboardEntry,
-  LeaderboardPeriod,
+  RoleLeaderboardAchievement,
+  RoleLeaderboardEntry,
+  RoleLeaderboardResponse,
+  RoleLeaderboardRole,
+  RoleLeaderboardSelection,
   SelectionState,
   TeamBalancerProposalMode
 } from './types';
@@ -195,6 +208,72 @@ const EMPTY_SNAPSHOT: CombinedSnapshot = {
 };
 
 const APP_DISPLAY_NAME = 'Автосид BSS';
+
+const ACHIEVEMENT_ICON_FILES: Record<string, string> = {
+  godlike: 'godlike.webp',
+  tactician: 'tactician.webp',
+  underdog: 'underdog.webp',
+  dominator: 'dominator.webp',
+  close_call: 'close-call.webp',
+  flexible_strategist: 'flexible-strategist.webp',
+  stabilizer: 'stabilizer.webp',
+  strike_fist: 'strike-fist.webp',
+  no_one_left: 'no-one-left.webp',
+  mentor: 'mentor.webp',
+  backbone: 'backbone.webp',
+  squad_armor_piercer: 'squad-armor-piercer.webp',
+  locomotive: 'locomotive.webp',
+  last_stand: 'last-stand.webp',
+  reviver: 'reviver.webp',
+  armor_piercer: 'armor-piercer.webp',
+  survivor: 'survivor.webp',
+  clean_work: 'clean-work.webp',
+  against_odds: 'against-odds.webp',
+  butcher: 'butcher.webp',
+  versatile: 'versatile.webp'
+};
+
+const ROLE_METRIC_LABELS: Record<string, string> = {
+  resourceSwingPer90: 'Вклад / 90 мин',
+  resourceSwing: 'Ресурс',
+  temporaryPressurePer90: 'Давление / 90 мин',
+  combatConversion: 'Конверсия',
+  kd: 'K/D',
+  knockdownsPer100PersonHours: 'Нокауты / 100 ч',
+  revivesPer100PersonHours: 'Поднятия / 100 ч',
+  winRate: 'Победы',
+  averageSurprise: 'Неожиданность',
+  averageHoursGap: 'Разрыв часов',
+  confirmedEnemyDeaths: 'Подтверждённые смерти врага',
+  successfulRevives: 'Поднятия',
+  ownDeaths: 'Смерти',
+  teamkills: 'Тимкиллы',
+  knockdowns: 'Нокауты',
+  temporaryPressure: 'Временное давление',
+  vehicleDamage: 'Урон технике',
+  vehicleKills: 'Уничтожено техники',
+  wins: 'Победы',
+  losses: 'Поражения',
+  strengthMatches: 'Матчи с оценкой силы',
+  underdogMatches: 'Матчи андердога',
+  underdogWins: 'Победы андердога',
+  averageTeamKd: 'Средний K/D стороны',
+  averageDeaths: 'Средние потери стороны',
+  averageWinningTicketMargin: 'Средний перевес билетов',
+  combinations: 'Сочетания режимов и фракций',
+  squadHoursMatches: 'Матчи с часами отряда',
+  vehicleDamageAvailable: 'Атрибуция урона технике',
+  vehicleKillsAvailable: 'Атрибуция уничтожений',
+  hoursCoverageSufficient: 'Покрытие часов достаточно',
+  matches: 'Зачётные матчи',
+  name: 'Имя'
+};
+
+const ROLE_PRIMARY_METRICS: Record<RoleLeaderboardRole, string[]> = {
+  player: ['resourceSwingPer90', 'resourceSwing', 'temporaryPressurePer90'],
+  squad_leader: ['kd', 'knockdownsPer100PersonHours', 'revivesPer100PersonHours'],
+  commander: ['winRate', 'averageSurprise', 'averageHoursGap']
+};
 
 const EMPTY_RAFFLE_BUDGET: RaffleBudgetView = {
   limitRubles: 0,
@@ -1142,46 +1221,282 @@ function getPrimaryRaffleServer(raffleServers: RaffleServerSnapshot[]): RaffleSe
   );
 }
 
+function roleMetricValue(entry: RoleLeaderboardEntry, key: string): number | boolean | null {
+  const groups = [entry.indicators, entry.totals, entry.style, entry.dataQuality];
+  for (const group of groups) {
+    if (key in group) return group[key] ?? null;
+  }
+  return null;
+}
+
+function formatRoleMetric(key: string, value: number | boolean | null | undefined): string {
+  if (typeof value === 'boolean') return value ? 'Да' : 'Нет';
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '—';
+  if (key === 'winRate' || key === 'combatConversion') {
+    return `${formatLeaderboardDecimal(value * 100)}%`;
+  }
+  if (key === 'averageSurprise') {
+    const prefix = value > 0 ? '+' : '';
+    return `${prefix}${formatLeaderboardDecimal(value * 100)} п.п.`;
+  }
+  if (key === 'averageHoursGap') {
+    const prefix = value > 0 ? '+' : '';
+    return `${prefix}${formatLeaderboardNumber(value)} ч`;
+  }
+  if (
+    key === 'kd' ||
+    key.includes('Per') ||
+    key === 'resourceSwing' ||
+    key === 'vehicleDamage' ||
+    key.startsWith('average')
+  ) {
+    return formatLeaderboardDecimal(value);
+  }
+  return formatLeaderboardNumber(value);
+}
+
+function formatCoverage(value: number | null): string {
+  return value === null ? '—' : `${Math.round(value * 100)}%`;
+}
+
+function formatRolePeriodRange(response: RoleLeaderboardResponse | null): string {
+  if (!response?.startAt || !response?.endAt) return response?.periodId || 'Текущий период';
+  const start = new Date(response.startAt);
+  const end = new Date(new Date(response.endAt).getTime() - 1);
+  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())) {
+    return response.periodId;
+  }
+  const formatter = new Intl.DateTimeFormat('ru-RU', {
+    timeZone: response.timeZone,
+    day: 'numeric',
+    month: 'short',
+    year: response.period === 'month' ? 'numeric' : undefined
+  });
+  if (response.period === 'day') return formatter.format(start);
+  return `${formatter.format(start)} — ${formatter.format(end)}`;
+}
+
+function AchievementBadge({
+  achievement,
+  tooltipId
+}: {
+  achievement: RoleLeaderboardAchievement;
+  tooltipId: string;
+}) {
+  const iconFile = ACHIEVEMENT_ICON_FILES[achievement.code];
+  return (
+    <button
+      type="button"
+      className="achievement-badge"
+      aria-label={`${achievement.title}. Показать описание`}
+      aria-describedby={tooltipId}
+      data-testid={`achievement-${achievement.code}`}
+    >
+      {iconFile ? (
+        <img
+          src={`${import.meta.env.BASE_URL}achievements/${iconFile}`}
+          alt=""
+          loading="lazy"
+          width="48"
+          height="48"
+        />
+      ) : (
+        <span className="achievement-fallback" aria-hidden="true">
+          ◆
+        </span>
+      )}
+      <span className="achievement-tooltip" role="tooltip" id={tooltipId}>
+        <strong>{achievement.title}</strong>
+        <span>{achievement.description}</span>
+        <small>{achievement.reason}</small>
+      </span>
+    </button>
+  );
+}
+
+function AchievementList({
+  entry,
+  prefix
+}: {
+  entry: RoleLeaderboardEntry;
+  prefix: string;
+}) {
+  if (!entry.achievements.length) {
+    return <span className="achievement-empty">Без характеристики</span>;
+  }
+  return (
+    <span className="achievement-list" aria-label="Характеристики игрока">
+      {entry.achievements.map((achievement, index) => (
+        <AchievementBadge
+          key={achievement.code}
+          achievement={achievement}
+          tooltipId={`${prefix}-${achievement.code}-${index}`}
+        />
+      ))}
+    </span>
+  );
+}
+
+function RoleMetricSet({
+  entry,
+  role,
+  compact = false
+}: {
+  entry: RoleLeaderboardEntry;
+  role: RoleLeaderboardRole;
+  compact?: boolean;
+}) {
+  return (
+    <span className={classNames('role-metric-set', compact && 'role-metric-set-compact')}>
+      {ROLE_PRIMARY_METRICS[role].map((key) => (
+        <span className="role-metric" key={key}>
+          <small>{ROLE_METRIC_LABELS[key]}</small>
+          <strong>{formatRoleMetric(key, roleMetricValue(entry, key))}</strong>
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function RoleEntryExplanation({
+  entry,
+  response
+}: {
+  entry: RoleLeaderboardEntry;
+  response: RoleLeaderboardResponse;
+}) {
+  const detailMetrics = [
+    ...Object.entries(entry.totals),
+    ...Object.entries(entry.style),
+    ...Object.entries(entry.dataQuality)
+  ].filter(([key]) => ROLE_METRIC_LABELS[key]);
+
+  return (
+    <details className="role-entry-explanation">
+      <summary>Почему здесь</summary>
+      <div className="role-entry-explanation-body">
+        <div>
+          <span className="overview-label">Порядок сравнения</span>
+          <ol>
+            {response.ranking.sortKeys.map((key) => (
+              <li key={key}>{ROLE_METRIC_LABELS[key] || key}</li>
+            ))}
+          </ol>
+        </div>
+        {detailMetrics.length ? (
+          <dl>
+            {detailMetrics.map(([key, value]) => (
+              <div key={key}>
+                <dt>{ROLE_METRIC_LABELS[key]}</dt>
+                <dd>{formatRoleMetric(key, value)}</dd>
+              </div>
+            ))}
+          </dl>
+        ) : null}
+        {entry.achievements.length ? (
+          <div className="role-achievement-reasons">
+            <span className="overview-label">Характеристики</span>
+            {entry.achievements.map((achievement) => (
+              <p key={achievement.code}>
+                <strong>{achievement.title}</strong>
+                <span>{achievement.description}</span>
+                <small>{achievement.reason}</small>
+              </p>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </details>
+  );
+}
+
+function RolePodiumCard({
+  entry,
+  response
+}: {
+  entry: RoleLeaderboardEntry;
+  response: RoleLeaderboardResponse;
+}) {
+  return (
+    <article
+      className={classNames('role-podium-card', `role-podium-card-${entry.rank}`)}
+      data-testid={`leaderboards-row-${entry.rank}`}
+    >
+      <div className="role-podium-head">
+        <span className="leaderboard-rank">#{entry.rank}</span>
+        <AchievementList entry={entry} prefix={`podium-${entry.rank}`} />
+      </div>
+      <strong className="role-entry-name">{entry.name}</strong>
+      <span className="role-match-progress">
+        {entry.matches} / {response.minimumMatches} матчей
+      </span>
+      <RoleMetricSet entry={entry} role={response.role} />
+      <RoleEntryExplanation entry={entry} response={response} />
+    </article>
+  );
+}
+
 function LeaderboardsPage({ config, route, vipShopUrl }: LeaderboardsPageProps) {
-  const sourceUrl = useMemo(() => getSafeHttpUrl(config.leaderboards?.url), [config.leaderboards?.url]);
-  const [period, setPeriod] = useState<LeaderboardPeriod>('overall');
-  const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
-  const [generatedAt, setGeneratedAt] = useState<string | null>(null);
+  const sourceUrl = useMemo(
+    () => getSafeHttpUrl(resolveRoleLeaderboardUrl(config.leaderboards)),
+    [config.leaderboards]
+  );
+  const [selection, setSelection] = useState<RoleLeaderboardSelection>(() =>
+    readRoleLeaderboardSelection(window.location.hash)
+  );
+  const [response, setResponse] = useState<RoleLeaderboardResponse | null>(null);
   const [loadState, setLoadState] = useState<LeaderboardLoadState>(
     sourceUrl ? 'loading' : 'unavailable'
   );
 
   useEffect(() => {
+    const nextHash = buildRoleLeaderboardHash(selection);
+    if (window.location.hash !== nextHash) {
+      window.history.replaceState(null, '', nextHash);
+    }
+  }, [selection]);
+
+  useEffect(() => {
     if (!sourceUrl) {
-      setEntries([]);
-      setGeneratedAt(null);
+      setResponse(null);
       setLoadState('unavailable');
       return;
     }
 
     let cancelled = false;
+    setResponse(null);
     setLoadState('loading');
-
-    void fetchLeaderboard(sourceUrl, period)
+    void fetchRoleLeaderboard(sourceUrl, selection)
       .then((result) => {
         if (cancelled) return;
-        setEntries(result.entries);
-        setGeneratedAt(result.generatedAt);
+        setResponse(result);
         setLoadState('ready');
       })
       .catch(() => {
         if (cancelled) return;
-        setEntries([]);
-        setGeneratedAt(null);
+        setResponse(null);
         setLoadState('error');
       });
-
     return () => {
       cancelled = true;
     };
-  }, [period, sourceUrl]);
+  }, [selection, sourceUrl]);
 
-  const hasEntries = loadState === 'ready' && entries.length > 0;
+  const currentPeriodId = getCurrentRolePeriodId(selection.period);
+  const activePeriodId = selection.periodId || response?.periodId || currentPeriodId;
+  const hasEntries = loadState === 'ready' && Boolean(response?.entries.length);
+  const podiumEntries = response?.entries.slice(0, 3) || [];
+  const tableEntries = response?.entries.slice(3) || [];
+
+  const updateSelection = (values: Partial<RoleLeaderboardSelection>) => {
+    setSelection((current) => ({ ...current, ...values }));
+  };
+  const moveArchive = (direction: -1 | 1) => {
+    const shifted = shiftRolePeriodId(selection.period, activePeriodId, direction);
+    updateSelection({
+      periodId: shifted >= currentPeriodId ? null : shifted
+    });
+  };
 
   return (
     <div
@@ -1191,114 +1506,233 @@ function LeaderboardsPage({ config, route, vipShopUrl }: LeaderboardsPageProps) 
     >
       <AppTopbar currentRoute={route} vipShopUrl={vipShopUrl} />
       <header className="winners-hero leaderboards-hero">
-        <div className="winners-hero-top">
-          <div className="hero-brand">
-            <div className="hero-logo-shell hero-logo-shell-compact">
-              <img className="hero-logo" src={projectLogo} alt={`Логотип ${APP_DISPLAY_NAME}`} />
-            </div>
-            <div className="hero-brand-copy">
-              <span className="hero-brand-kicker">Mdj BSS</span>
-              <span className="hero-brand-subtitle">статистика игроков</span>
-            </div>
+        <div className="leaderboards-heading">
+          <div>
+            <p className="eyebrow">Объяснимые игровые срезы</p>
+            <h1 data-testid="leaderboards-title">Ролевые топы BSS</h1>
           </div>
-        </div>
-
-        <div className="winners-hero-main">
-          <p className="eyebrow">Лидерборды BSS</p>
-          <h1 data-testid="leaderboards-title">Топ игроков BSS</h1>
           <p className="hero-copy">
-            Смотри лидеров по очкам, киллам и эффективности за выбранный период.
+            Место определяется сервером по поматчевым фактам. Ачивки объясняют стиль и не
+            добавляют скрытых очков.
           </p>
         </div>
 
-        <div className="leaderboard-periods" aria-label="Период лидерборда">
-          {LEADERBOARD_PERIODS.map((entry) => (
+        <div className="leaderboard-control-stack">
+          <div className="leaderboard-periods" aria-label="Период топа">
+            {ROLE_LEADERBOARD_PERIODS.map((entry) => (
+              <button
+                key={entry.value}
+                type="button"
+                className={classNames(
+                  'segment leaderboard-period-button',
+                  selection.period === entry.value && 'segment-active'
+                )}
+                aria-pressed={selection.period === entry.value}
+                data-testid={`leaderboard-period-${entry.value}`}
+                onClick={() => updateSelection({ period: entry.value, periodId: null })}
+              >
+                <span>{entry.label}</span>
+                <small>{entry.description}</small>
+              </button>
+            ))}
+          </div>
+
+          <div className="leaderboard-role-row" aria-label="Роль">
+            {ROLE_LEADERBOARD_ROLES.map((entry) => (
+              <button
+                key={entry.value}
+                type="button"
+                className={classNames(
+                  'segment leaderboard-role-button',
+                  selection.role === entry.value && 'segment-active'
+                )}
+                aria-pressed={selection.role === entry.value}
+                data-testid={`leaderboard-role-${entry.value}`}
+                onClick={() => updateSelection({ role: entry.value, periodId: null })}
+              >
+                {entry.label}
+              </button>
+            ))}
+          </div>
+
+          {selection.role === 'squad_leader' ? (
+            <div className="leaderboard-squad-size-row" aria-label="Размер отряда">
+              {ROLE_LEADERBOARD_SQUAD_SIZES.map((entry) => (
+                <button
+                  key={entry.value}
+                  type="button"
+                  className={classNames(
+                    'segment leaderboard-squad-size-button',
+                    selection.squadSize === entry.value && 'segment-active'
+                  )}
+                  aria-pressed={selection.squadSize === entry.value}
+                  data-testid={`leaderboard-squad-size-${entry.value}`}
+                  onClick={() =>
+                    updateSelection({ squadSize: entry.value, periodId: null })
+                  }
+                >
+                  <span>{entry.label}</span>
+                  <small>{entry.description} человек</small>
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          <div className="leaderboard-archive-row" aria-label="Архивный период">
             <button
-              key={entry.value}
               type="button"
-              className={classNames(
-                'segment leaderboard-period-button',
-                period === entry.value && 'segment-active'
-              )}
-              data-testid={`leaderboard-period-${entry.value}`}
-              onClick={() => setPeriod(entry.value)}
+              className="leaderboard-archive-button"
+              aria-label="Предыдущий период"
+              data-testid="leaderboard-archive-previous"
+              onClick={() => moveArchive(-1)}
             >
-              <span>{entry.label}</span>
-              <small>{entry.description}</small>
+              ←
             </button>
-          ))}
+            <strong data-testid="leaderboard-period-label">
+              {response ? formatRolePeriodRange(response) : activePeriodId}
+            </strong>
+            <button
+              type="button"
+              className="leaderboard-archive-button"
+              aria-label="Следующий период"
+              data-testid="leaderboard-archive-next"
+              disabled={!selection.periodId}
+              onClick={() => moveArchive(1)}
+            >
+              →
+            </button>
+          </div>
         </div>
       </header>
+
+      {response ? (
+        <section
+          className={classNames(
+            'leaderboard-context-strip',
+            response.status === 'partial' && 'leaderboard-context-strip-warning'
+          )}
+          data-testid="leaderboard-context"
+        >
+          <span>
+            <small>Матчей в источнике</small>
+            <strong>{response.dataQuality.sourceMatches}</strong>
+          </span>
+          <span>
+            <small>Зачётных матчей нужно</small>
+            <strong>{response.minimumMatches}</strong>
+          </span>
+          <span>
+            <small>Прошли порог</small>
+            <strong>
+              {response.progress.qualified} / {response.progress.candidates}
+            </strong>
+          </span>
+          <span>
+            <small>Полнота фактов</small>
+            <strong>{formatCoverage(response.dataQuality.factsCoverage)}</strong>
+          </span>
+          <span>
+            <small>Покрытие часов</small>
+            <strong>{formatCoverage(response.dataQuality.hoursCoverage)}</strong>
+          </span>
+          <span>
+            <small>Обновлено</small>
+            <strong>{formatCompactTimestamp(response.generatedAt || undefined)}</strong>
+          </span>
+          {response.stale ? <em>Снимок устарел</em> : null}
+          {response.status === 'partial' ? <em>Данные неполные</em> : null}
+        </section>
+      ) : null}
 
       <section className="section-shell leaderboard-section">
         {loadState === 'unavailable' ? (
           <article className="leaderboard-empty-state" data-testid="leaderboards-empty">
-            <span className="overview-label">Топы игроков</span>
-            <strong>Лидерборды пока недоступны</strong>
-            <p>Источник статистики ещё не подключён. Загляните позже.</p>
+            <span className="overview-label">Ролевые топы</span>
+            <strong>Источник статистики ещё не подключён</strong>
+            <p>После подключения публичного API топы появятся здесь без обновления сайта.</p>
           </article>
         ) : null}
 
         {loadState === 'loading' ? (
           <article className="leaderboard-empty-state" data-testid="leaderboards-loading">
-            <span className="overview-label">Топы игроков</span>
-            <strong>Загружаем лидерборд</strong>
-            <p>Обновляем список лидеров за выбранный период.</p>
+            <span className="overview-label">Ролевые топы</span>
+            <strong>Загружаем готовый снимок</strong>
+            <p>Формулы считаются на сервере; страница только показывает результат.</p>
           </article>
         ) : null}
 
         {loadState === 'error' ? (
           <article className="leaderboard-empty-state" data-testid="leaderboards-error">
-            <span className="overview-label">Топы игроков</span>
-            <strong>Не удалось загрузить лидерборд</strong>
-            <p>Попробуйте обновить страницу позже.</p>
+            <span className="overview-label">Ролевые топы</span>
+            <strong>Источник временно недоступен</strong>
+            <p>Выбор сохранён в ссылке. Попробуйте обновить страницу позже.</p>
           </article>
         ) : null}
 
-        {loadState === 'ready' && !entries.length ? (
+        {loadState === 'ready' && response && !response.entries.length ? (
           <article className="leaderboard-empty-state" data-testid="leaderboards-empty">
-            <span className="overview-label">Топы игроков</span>
-            <strong>В этом периоде пока нет игроков</strong>
-            <p>Как только появится статистика, она отобразится здесь.</p>
+            <span className="overview-label">
+              {response.status === 'empty' ? 'Период ещё пуст' : 'Идёт набор матчей'}
+            </span>
+            <strong>
+              {response.available
+                ? `Пока никто не прошёл порог ${response.minimumMatches} матчей`
+                : 'Снимок этого периода ещё не рассчитан'}
+            </strong>
+            <p>
+              Это штатно, особенно в начале месяца. Сейчас кандидатов:{' '}
+              {response.progress.candidates}.
+            </p>
           </article>
         ) : null}
 
-        {hasEntries ? (
-          <div className="leaderboard-table-wrap" data-testid="leaderboards-table">
-            <div className="leaderboard-table-head">
-              <div>
-                <span className="overview-label">Таблица лидеров</span>
-                <strong>{LEADERBOARD_PERIODS.find((entry) => entry.value === period)?.label}</strong>
-              </div>
-              <span>Обновлено {formatCompactTimestamp(generatedAt || undefined)}</span>
-            </div>
-
-            <div className="leaderboard-table" role="table" aria-label="Топ игроков BSS">
-              <div className="leaderboard-row leaderboard-row-header" role="row">
-                <span>Место</span>
-                <span>Игрок</span>
-                <span>Очки</span>
-                <span>Киллы</span>
-                <span>K/D</span>
-                <span>Часы</span>
-              </div>
-              {entries.map((entry) => (
-                <div
-                  className="leaderboard-row"
-                  data-testid={`leaderboards-row-${entry.rank}`}
-                  role="row"
+        {hasEntries && response ? (
+          <>
+            <div className="role-podium" data-testid="leaderboards-podium">
+              {podiumEntries.map((entry) => (
+                <RolePodiumCard
                   key={`${entry.rank}-${entry.name}`}
-                >
-                  <span className="leaderboard-rank">#{entry.rank}</span>
-                  <strong>{entry.name}</strong>
-                  <span>{formatLeaderboardNumber(entry.score)}</span>
-                  <span>{formatLeaderboardNumber(entry.kills)}</span>
-                  <span>{formatLeaderboardDecimal(entry.kd)}</span>
-                  <span>{formatHours(entry.playtimeHours)}</span>
-                </div>
+                  entry={entry}
+                  response={response}
+                />
               ))}
             </div>
-          </div>
+
+            {tableEntries.length ? (
+              <div className="leaderboard-table-wrap" data-testid="leaderboards-table">
+                <div className="leaderboard-table-head">
+                  <div>
+                    <span className="overview-label">Остальные места</span>
+                    <strong>{formatRolePeriodRange(response)}</strong>
+                  </div>
+                  <span>
+                    Матчи показаны как факт / порог: {response.minimumMatches}
+                  </span>
+                </div>
+                <div className="leaderboard-table role-leaderboard-table" role="table">
+                  {tableEntries.map((entry) => (
+                    <article
+                      className="leaderboard-row role-leaderboard-row"
+                      data-testid={`leaderboards-row-${entry.rank}`}
+                      role="row"
+                      key={`${entry.rank}-${entry.name}`}
+                    >
+                      <span className="leaderboard-rank">#{entry.rank}</span>
+                      <span className="role-table-person">
+                        <strong>{entry.name}</strong>
+                        <small>
+                          {entry.matches} / {response.minimumMatches} матчей
+                        </small>
+                      </span>
+                      <RoleMetricSet entry={entry} role={response.role} compact />
+                      <AchievementList entry={entry} prefix={`row-${entry.rank}`} />
+                      <RoleEntryExplanation entry={entry} response={response} />
+                    </article>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </>
         ) : null}
       </section>
     </div>
