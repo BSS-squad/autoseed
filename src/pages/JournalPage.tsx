@@ -22,7 +22,7 @@ export function JournalPage({ snapshot, route, vipShopUrl }: JournalPageProps) {
       <PageHeader
         eyebrow="После матча"
         title="Журнал матчей"
-        description="Выберите сервер и матч: табы, убийства, урон, техника и поднятия не публикуются до завершения игры."
+        description="Выберите сервер и завершённый матч. Итоги игроков и журнал событий появляются только после конца игры."
         className="section-shell journal-page-intro"
       >
         <div className="journal-privacy-note">

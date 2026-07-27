@@ -815,6 +815,30 @@ function buildActivitySessionDetail(sessionId = NARVA_SESSION_ID) {
   };
 }
 
+function buildActivitySessionDetailWithPlayers(totalPlayers: number) {
+  const response = buildActivitySessionDetail();
+  const teams = response.session.scoreboard.teams;
+  const firstTeamSize = Math.ceil(totalPlayers / 2);
+  const teamSizes = [firstTeamSize, totalPlayers - firstTeamSize];
+
+  teams.forEach((team, teamIndex) => {
+    team.players = Array.from({ length: teamSizes[teamIndex] || 0 }, (_, index) => ({
+      name: `Игрок ${teamIndex + 1}-${String(index + 1).padStart(2, '0')}`,
+      squad: `Отряд ${Math.floor(index / 9) + 1}`,
+      role: index % 3 === 0 ? 'Medic' : 'Rifleman',
+      kills: teamSizes[teamIndex] - index,
+      deaths: index % 8,
+      revives: index % 5,
+      knockdowns: teamSizes[teamIndex] - index + 2,
+      teamkills: index % 17 === 0 ? 1 : 0,
+      vehicleKills: index % 13 === 0 ? 1 : 0,
+      vehicleDamage: index * 25
+    }));
+  });
+  response.session.playerCount = totalPlayers;
+  return response;
+}
+
 function buildRaffleSnapshot(
   overrides: {
     active?: unknown;
@@ -1831,6 +1855,11 @@ test('renders the localized control room from exporter snapshots', async ({ page
 test('keeps a private event server in the journal but out of autoseed controls', async ({
   page
 }) => {
+  const matchExportRequests: Array<{
+    sessionId: string;
+    format: 'json' | 'csv';
+    authorization: string | null;
+  }> = [];
   const privateEventRuntimeConfig = {
     ...runtimeConfig,
     exporters: [
@@ -1854,10 +1883,48 @@ test('keeps a private event server in the journal but out of autoseed controls',
         maxPlayers: 100,
         queueLength: 0,
         online: true,
-        isSeedCandidate: false
+        isSeedCandidate: false,
+        activity: buildActivitySnapshot()
       })
     )
   );
+  await page.route('**/mock/squadjs6/activity/sessions/**', async (route) => {
+    const requestUrl = new URL(route.request().url());
+    const pathParts = requestUrl.pathname.split('/').filter(Boolean);
+    const isExport = pathParts.at(-1) === 'export';
+    const sessionId = decodeURIComponent(pathParts.at(isExport ? -2 : -1) || '');
+    if (!isExport) {
+      await fulfillJson(route, buildActivitySessionDetail(sessionId));
+      return;
+    }
+
+    const format = requestUrl.searchParams.get('format') === 'csv' ? 'csv' : 'json';
+    const authorization = route.request().headers().authorization || null;
+    matchExportRequests.push({ sessionId, format, authorization });
+    if (authorization !== 'Bearer test-export-password') {
+      await route.fulfill({
+        status: 401,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: false, error: 'Unauthorized' })
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: format === 'csv' ? 'text/csv' : 'application/json',
+      headers: {
+        'Content-Disposition': `attachment; filename="match-${sessionId}.${format}"`
+      },
+      body:
+        format === 'csv'
+          ? '"SteamID","Nickname"\r\n"76561190000000001","Winner Player"\r\n'
+          : JSON.stringify({
+              ok: true,
+              players: [{ steamID: '76561190000000001', name: 'Winner Player' }],
+              events: { kills: [], damage: [], knockdowns: [], revives: [], vehicles: [] }
+            })
+    });
+  });
 
   await page.goto('./');
 
@@ -1868,7 +1935,32 @@ test('keeps a private event server in the journal but out of autoseed controls',
 
   await expect(page.getByTestId('journal-server-6')).toBeVisible();
   await expect(page.getByTestId('journal-server-6')).toContainText('MDC CUSTOM');
-  await expect(page.getByText('Завершённых матчей ещё нет')).toBeVisible();
+  await expect(page.getByTestId('journal-match-export')).toContainText(
+    'SteamID доступен только в защищённых файлах'
+  );
+  await page.getByTestId('journal-match-export-password').fill('test-export-password');
+
+  const csvDownloadPromise = page.waitForEvent('download');
+  await page.getByTestId('journal-match-export-csv').click();
+  const csvDownload = await csvDownloadPromise;
+  expect(csvDownload.suggestedFilename()).toBe(`match-${NARVA_SESSION_ID}.csv`);
+
+  const jsonDownloadPromise = page.waitForEvent('download');
+  await page.getByTestId('journal-match-export-json').click();
+  const jsonDownload = await jsonDownloadPromise;
+  expect(jsonDownload.suggestedFilename()).toBe(`match-${NARVA_SESSION_ID}.json`);
+  expect(matchExportRequests).toEqual([
+    {
+      sessionId: NARVA_SESSION_ID,
+      format: 'csv',
+      authorization: 'Bearer test-export-password'
+    },
+    {
+      sessionId: NARVA_SESSION_ID,
+      format: 'json',
+      authorization: 'Bearer test-export-password'
+    }
+  ]);
 });
 
 test('hides the VIP purchase link when the runtime config does not provide a URL', async ({
@@ -2012,19 +2104,13 @@ test('renders healthy Team Balancer state without proposal rows', async ({ page 
 test('renders one completed session with separate full journal categories', async ({ page }) => {
   await page.clock.setFixedTime('2026-07-06T12:02:00.000Z');
   const sessionRequests: string[] = [];
-  const matchExportRequests: Array<{
-    sessionId: string;
-    format: 'json' | 'csv';
-    authorization: string | null;
-  }> = [];
   await mockAutoseedApi(page, undefined, runtimeConfig, {
     squadjs2Activity: buildActivitySnapshot(),
     squadjs2ActivitySessions: {
       [NARVA_SESSION_ID]: buildActivitySessionDetail(),
       [GORODOK_SESSION_ID]: buildActivitySessionDetail(GORODOK_SESSION_ID)
     },
-    squadjs2ActivitySessionRequests: sessionRequests,
-    matchExportRequests
+    squadjs2ActivitySessionRequests: sessionRequests
   });
 
   await page.goto('./#journal');
@@ -2063,37 +2149,28 @@ test('renders one completed session with separate full journal categories', asyn
     ...scoreboardHeaders
   ]);
   await expect(page.getByTestId('journal-scoreboard')).toContainText('1 250,5 урона технике');
-  await expect(page.locator('.ui-responsive-table')).toHaveCount(2);
-  await expect(page.getByTestId('journal-match-export')).toContainText(
-    'SteamID доступен только в защищённых файлах'
+  await expect(page.getByTestId('journal-scoreboard')).toContainText(
+    'Игроки этой стороны не сохранились'
   );
-  await page.getByTestId('journal-match-export-password').fill('test-export-password');
-  const csvDownloadPromise = page.waitForEvent('download');
-  await page.getByTestId('journal-match-export-csv').click();
-  const csvDownload = await csvDownloadPromise;
-  expect(csvDownload.suggestedFilename()).toBe(`match-${NARVA_SESSION_ID}.csv`);
-
-  const jsonDownloadPromise = page.waitForEvent('download');
-  await page.getByTestId('journal-match-export-json').click();
-  const jsonDownload = await jsonDownloadPromise;
-  expect(jsonDownload.suggestedFilename()).toBe(`match-${NARVA_SESSION_ID}.json`);
-  expect(matchExportRequests).toEqual([
-    {
-      sessionId: NARVA_SESSION_ID,
-      format: 'csv',
-      authorization: 'Bearer test-export-password'
-    },
-    {
-      sessionId: NARVA_SESSION_ID,
-      format: 'json',
-      authorization: 'Bearer test-export-password'
-    }
-  ]);
+  await expect(page.locator('.ui-responsive-table')).toHaveCount(2);
+  await expect(page.getByTestId('journal-view-scoreboard')).toHaveAttribute(
+    'aria-selected',
+    'true'
+  );
+  await expect(page.getByTestId('journal-page')).toContainText(
+    'Итоги берутся из финальной таблицы Squad'
+  );
+  await expect(page.getByTestId('journal-match-export')).toHaveCount(0);
   await expect.poll(() => sessionRequests).toContain(NARVA_SESSION_ID);
   await expect(page).toHaveURL(
     new RegExp(`#journal\\?server=squadjs2&session=${NARVA_SESSION_ID}&tab=scoreboard$`)
   );
 
+  await page.getByTestId('journal-view-events').focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('journal-page')).toContainText(
+    'число событий не равно убийствам в итогах'
+  );
   await page.getByTestId('journal-tab-kills').click();
   const kills = page.getByTestId('journal-events-kills');
   await expect(kills).toContainText('Killer Alpha');
@@ -2188,6 +2265,110 @@ test('renders one completed session with separate full journal categories', asyn
   expect(sessionRequests.filter((sessionId) => sessionId === GORODOK_SESSION_ID)).toHaveLength(1);
   await expectPlayerFriendlyLanguage(page);
 });
+
+for (const totalPlayers of [0, 10, 100]) {
+  test(`keeps ${totalPlayers} scoreboard players controlled on a narrow screen`, async ({
+    page
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.clock.setFixedTime('2026-07-06T12:02:00.000Z');
+    await mockAutoseedApi(page, undefined, runtimeConfig, {
+      squadjs2Activity: buildActivitySnapshot(),
+      squadjs2ActivitySessions: {
+        [NARVA_SESSION_ID]: buildActivitySessionDetailWithPlayers(totalPlayers)
+      }
+    });
+
+    await page.goto(
+      `./#journal?server=squadjs2&session=${NARVA_SESSION_ID}&tab=scoreboard`
+    );
+    const scoreboard = page.getByTestId('journal-scoreboard');
+    await expect(scoreboard).toBeVisible({ timeout: 10_000 });
+
+    const playerRows = scoreboard.locator('.journal-scoreboard-player-row');
+    const expectedRows = totalPlayers > 20 ? 20 : totalPlayers;
+    await expect(playerRows).toHaveCount(expectedRows);
+
+    if (totalPlayers === 0) {
+      await expect(scoreboard.locator('.journal-scoreboard-empty-row')).toHaveCount(2);
+      await expect(scoreboard.locator('.journal-scoreboard-controls')).toHaveCount(0);
+    } else if (totalPlayers === 10) {
+      await expect(scoreboard.locator('.journal-scoreboard-controls')).toHaveCount(0);
+    } else {
+      await expect(scoreboard.locator('.journal-scoreboard-controls')).toHaveCount(2);
+      await expect(scoreboard.locator('.journal-scoreboard-pagination')).toHaveCount(2);
+
+      const firstTeam = page.getByTestId('journal-scoreboard-team-1');
+      await firstTeam.getByRole('button', { name: 'Вперёд' }).click();
+      await expect(firstTeam.locator('.journal-scoreboard-pagination')).toContainText(
+        'Страница 2 из 5'
+      );
+
+      const table = firstTeam.locator('.journal-table-wrap');
+      const firstPlayerCell = table.locator('tbody tr').first().locator('td').first();
+      const leftBefore = await firstPlayerCell.evaluate(
+        (element) => element.getBoundingClientRect().left
+      );
+      await table.evaluate((element) => {
+        element.scrollLeft = element.scrollWidth;
+      });
+      const leftAfter = await firstPlayerCell.evaluate(
+        (element) => element.getBoundingClientRect().left
+      );
+      expect(Math.abs(leftAfter - leftBefore)).toBeLessThanOrEqual(1);
+      await expect(page.getByTestId('journal-page')).toContainText(
+        'Листайте таблицу в сторону'
+      );
+      expect(
+        await page.evaluate(() => document.documentElement.scrollHeight)
+      ).toBeLessThan(5000);
+    }
+
+    await page.getByTestId('journal-view-events').click();
+    const eventTabs = page.locator('.journal-tabs .journal-tab');
+    await expect(eventTabs).toHaveCount(4);
+    const layout = await page.evaluate(() => ({
+      fits: document.documentElement.scrollWidth <= window.innerWidth + 1,
+      tabsFit: [...document.querySelectorAll<HTMLElement>('.journal-tabs .journal-tab')].every(
+        (entry) => {
+          const box = entry.getBoundingClientRect();
+          return box.left >= 0 && box.right <= window.innerWidth;
+        }
+      )
+    }));
+    expect(layout.fits).toBe(true);
+    expect(layout.tabsFit).toBe(true);
+    if (totalPlayers === 100) {
+      await page.setViewportSize({ width: 360, height: 800 });
+      await page.evaluate(() => {
+        document.documentElement.style.fontSize = '125%';
+      });
+      const enlargedLayout = await page.evaluate(() => ({
+        fits: document.documentElement.scrollWidth <= window.innerWidth + 1,
+        tabsFit: [...document.querySelectorAll<HTMLElement>('.journal-tabs .journal-tab')].every(
+          (entry) => {
+            const box = entry.getBoundingClientRect();
+            return box.left >= 0 && box.right <= window.innerWidth;
+          }
+        )
+      }));
+      expect(enlargedLayout).toEqual({ fits: true, tabsFit: true });
+
+      await page.evaluate(() => {
+        document.documentElement.style.fontSize = '';
+      });
+      await page.setViewportSize({ width: 1440, height: 1000 });
+      await page.getByTestId('journal-view-scoreboard').click();
+      await expect(scoreboard.locator('.journal-scoreboard-player-row')).toHaveCount(20);
+      const desktopLayout = await page.evaluate(() => ({
+        fits: document.documentElement.scrollWidth <= window.innerWidth + 1,
+        height: document.documentElement.scrollHeight
+      }));
+      expect(desktopLayout.fits).toBe(true);
+      expect(desktopLayout.height).toBeLessThan(4000);
+    }
+  });
+}
 
 const missingLayerScenarios = [
   {
@@ -2335,7 +2516,9 @@ test('keeps the completed-game journal discoverable before session data arrives'
   await expect(workspace).toBeVisible();
   await expect(workspace).toContainText('Завершённых матчей ещё нет');
   await expect(workspace).toContainText('Выберите завершённый матч');
-  await expect(workspace).toContainText('Табы и журнал никогда не показываются до окончания игры');
+  await expect(workspace).toContainText(
+    'Итоги и события никогда не показываются до окончания игры'
+  );
   await expect(workspace).not.toContainText('snapshot');
   await expect(workspace).not.toContainText('exporter');
   await expect(workspace).not.toContainText('endpoint');

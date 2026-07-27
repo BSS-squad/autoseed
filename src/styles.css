@@ -113,10 +113,17 @@ input {
 }
 
 .journal-server-switcher {
+  margin-top: 14px;
+}
+
+.journal-server-track {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
-  margin-top: 14px;
+}
+
+.journal-mobile-scroll-hint {
+  display: none;
 }
 
 .journal-server-button,
@@ -556,13 +563,80 @@ input {
 
 .journal-tabs {
   display: grid;
-  grid-template-columns: repeat(5, minmax(110px, 1fr));
+  grid-template-columns: repeat(4, minmax(110px, 1fr));
   gap: 5px;
   padding: 5px;
   border: 1px solid var(--line);
   border-radius: 15px;
   background: rgba(3, 7, 11, 0.52);
   overflow-x: auto;
+}
+
+.journal-task-switcher {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 17px;
+  background: rgba(3, 7, 11, 0.52);
+}
+
+.journal-task-button {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  min-height: 64px;
+  padding: 11px 14px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--muted);
+  text-align: left;
+  cursor: pointer;
+}
+
+.journal-task-button strong,
+.journal-task-button span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.journal-task-button strong {
+  color: inherit;
+  font-size: 0.9rem;
+}
+
+.journal-task-button span {
+  font-size: 0.74rem;
+  line-height: 1.4;
+}
+
+.journal-task-button:hover,
+.journal-task-button:focus-visible {
+  border-color: rgba(255, 255, 255, 0.12);
+  color: var(--muted-strong);
+}
+
+.journal-task-button.is-active {
+  border-color: rgba(255, 106, 61, 0.22);
+  background: rgba(255, 106, 61, 0.13);
+  color: var(--text);
+}
+
+.journal-data-explainer {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-left: 3px solid rgba(103, 215, 255, 0.48);
+  border-radius: 0 10px 10px 0;
+  background: rgba(103, 215, 255, 0.055);
+  color: var(--muted-strong);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.journal-data-explainer + .journal-tabs {
+  margin-top: 8px;
 }
 
 .journal-tab {
@@ -844,6 +918,42 @@ input {
   gap: 12px;
 }
 
+.journal-scoreboard-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.journal-scoreboard-controls label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.journal-scoreboard-controls select {
+  min-height: 34px;
+  padding: 5px 28px 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: rgba(4, 9, 15, 0.76);
+  color: var(--text);
+}
+
+.journal-table-scroll-hint {
+  display: none;
+  margin: 0;
+  padding: 9px 13px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
 .journal-team-card {
   min-width: 0;
   border: 1px solid var(--line);
@@ -936,12 +1046,45 @@ input {
 }
 
 .journal-table-wrap td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  min-width: 180px;
   max-width: 270px;
   overflow: hidden;
+  background: #121922;
+  box-shadow: 10px 0 18px rgba(3, 7, 11, 0.22);
   color: var(--text);
   font-family: 'Manrope', sans-serif;
   font-weight: 700;
   text-overflow: ellipsis;
+}
+
+.journal-table-wrap th:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  min-width: 180px;
+  background: #151d27;
+  box-shadow: 10px 0 18px rgba(3, 7, 11, 0.22);
+}
+
+.journal-table-wrap .journal-scoreboard-empty-row td {
+  position: static;
+  max-width: none;
+  padding: 18px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted);
+  font-family: 'Manrope', sans-serif;
+  font-weight: 500;
+  text-align: center;
+}
+
+.journal-scoreboard-pagination {
+  margin: 0;
+  padding: 12px 14px;
+  border-top: 1px solid var(--line);
 }
 
 .journal-table-wrap td:nth-child(2) {
@@ -4813,7 +4956,7 @@ input {
     padding: 18px;
   }
 
-  .journal-server-switcher {
+  .journal-server-track {
     grid-template-columns: none;
     grid-auto-flow: column;
     grid-auto-columns: minmax(240px, 72vw);
@@ -4821,6 +4964,17 @@ input {
     overflow-x: auto;
     scroll-snap-type: x proximity;
     scrollbar-width: thin;
+  }
+
+  .journal-mobile-scroll-hint {
+    display: block;
+    margin: 7px 0 0;
+    color: var(--muted);
+    font-size: 0.72rem;
+  }
+
+  .journal-table-scroll-hint {
+    display: block;
   }
 
   .journal-server-button {
@@ -5064,7 +5218,7 @@ input {
     line-height: 1.35;
   }
 
-  .journal-server-switcher {
+  .journal-server-track {
     grid-auto-columns: minmax(230px, 84vw);
   }
 
@@ -5092,12 +5246,20 @@ input {
   }
 
   .journal-tabs {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     padding: 4px;
+    overflow: visible;
   }
 
   .journal-tab {
-    flex: 0 0 auto;
+    min-width: 0;
+    white-space: normal;
+  }
+
+  .journal-scoreboard-controls {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .journal-toolbar label {
