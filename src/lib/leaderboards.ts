@@ -175,6 +175,10 @@ const ROLE_VALUES = new Set(ROLE_LEADERBOARD_ROLES.map(({ value }) => value));
 const SQUAD_SIZE_VALUES = new Set(ROLE_LEADERBOARD_SQUAD_SIZES.map(({ value }) => value));
 const ROLE_STATUS_VALUES = new Set<RoleLeaderboardStatus>(['ok', 'partial', 'empty']);
 
+export function roleLeaderboardUsesSquadSize(role: RoleLeaderboardRole): boolean {
+  return role === 'player' || role === 'squad_leader';
+}
+
 const METRIC_FIELDS = new Set([
   'resourceSwingPer90',
   'resourceSwing',
@@ -432,7 +436,11 @@ function normalizeRoleResponse(
     periodId: toStringOrNull(record.periodId) || selection.periodId || '',
     role,
     squadSize:
-      squadSizeValue && SQUAD_SIZE_VALUES.has(squadSizeValue) ? squadSizeValue : null,
+      squadSizeValue && SQUAD_SIZE_VALUES.has(squadSizeValue)
+        ? squadSizeValue
+        : roleLeaderboardUsesSquadSize(role)
+          ? selection.squadSize
+          : null,
     timeZone: toStringOrNull(record.timeZone) || 'Europe/Moscow',
     startAt: toStringOrNull(record.startAt) || '',
     endAt: toStringOrNull(record.endAt) || '',
@@ -556,7 +564,7 @@ export function buildRoleLeaderboardHash(
   const params = new URLSearchParams();
   params.set('period', selection.period);
   params.set('role', selection.role);
-  if (selection.role === 'squad_leader') {
+  if (roleLeaderboardUsesSquadSize(selection.role)) {
     params.set('squadSize', selection.squadSize);
   }
   if (selection.periodId) params.set('periodId', selection.periodId);
@@ -620,7 +628,7 @@ function buildRoleLeaderboardUrl(
   url.searchParams.set('role', selection.role);
   url.searchParams.set('scope', 'public');
   url.searchParams.set('limit', '500');
-  if (selection.role === 'squad_leader') {
+  if (roleLeaderboardUsesSquadSize(selection.role)) {
     url.searchParams.set('squadSize', selection.squadSize);
   }
   if (selection.periodId) url.searchParams.set('periodId', selection.periodId);

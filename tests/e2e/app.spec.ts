@@ -1054,7 +1054,7 @@ async function mockLeaderboardApi(
     const requestUrl = new URL(route.request().url());
     const period = requestUrl.searchParams.get('period') || 'day';
     const role = requestUrl.searchParams.get('role') || 'player';
-    const squadSize = role === 'squad_leader'
+    const squadSize = role === 'squad_leader' || role === 'player'
       ? requestUrl.searchParams.get('squadSize') || 'full'
       : null;
     const defaultPeriodIds = {
@@ -1278,7 +1278,7 @@ async function mockLeaderboardApi(
       status: options.status || 'ok',
       available: true,
       stale: options.stale === true,
-      rulesVersion: 'observed-impact-v2',
+      rulesVersion: 'observed-impact-v3',
       revision: 'e2e-role-snapshot',
       scope: 'public',
       period,
@@ -1313,7 +1313,7 @@ async function mockLeaderboardApi(
         sortKeys
       },
       methodology: {
-        rulesVersion: 'observed-impact-v2',
+        rulesVersion: 'observed-impact-v3',
         role,
         roleTitle:
           role === 'commander'
@@ -1321,8 +1321,16 @@ async function mockLeaderboardApi(
             : role === 'squad_leader'
               ? 'Сквадные'
               : 'Игроки',
-        summary: 'Место строится только по наблюдаемым событиям выбранной роли.',
-        participation: ['Матч должен пройти условия зачёта роли.'],
+        summary:
+          role === 'player'
+            ? 'Личные показатели сравниваются внутри выбранного размера отряда.'
+            : 'Место строится только по наблюдаемым событиям выбранной роли.',
+        participation:
+          role === 'player'
+            ? [
+                'Время и события остаются в той размерности отряда, где были набраны.'
+              ]
+            : ['Матч должен пройти условия зачёта роли.'],
         achievementRules: [
           'Ачивки не дают очков и не меняют место в топе.'
         ],
@@ -2907,6 +2915,15 @@ test('renders role leaderboards, achievements and restores controls from the lin
   await expect(page.getByTestId('leaderboard-context')).toContainText('64');
   await expect(page.getByTestId('leaderboard-context')).toContainText('88%');
   await expect(page.getByTestId('leaderboards-row-6')).toHaveCount(0);
+  await expect(page.getByTestId('leaderboard-squad-size-full')).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  );
+  await expect(page).toHaveURL(/role=player&squadSize=full/);
+  await page.getByTestId('leaderboard-squad-size-small').click();
+  await expect(page).toHaveURL(/role=player&squadSize=small/);
+  await expect(page.getByTestId('leaderboards-podium')).toContainText('Top Fragger');
+  await page.getByTestId('leaderboard-squad-size-full').click();
 
   const achievement = page.getByTestId('achievement-against_odds');
   const achievementIcon = achievement.locator('.achievement-badge-icon');
@@ -2939,6 +2956,9 @@ test('renders role leaderboards, achievements and restores controls from the lin
     'засчитанные убийства + поднятия − смерти − тимкиллы'
   );
   await expect(methodology).toContainText('Ноки без убийства за 90 минут');
+  await expect(methodology).toContainText(
+    'Время и события остаются в той размерности отряда, где были набраны.'
+  );
   await expect(methodology).toContainText('Все ачивки этой роли');
   await expect(methodology.getByText('Локомотив', { exact: true })).toBeVisible();
   await expect(methodology.getByText('Бронебойщик', { exact: true })).toBeVisible();

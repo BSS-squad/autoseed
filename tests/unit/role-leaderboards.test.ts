@@ -24,6 +24,15 @@ test('restores and serializes role leaderboard selection without internal ids', 
     buildRoleLeaderboardHash(selection),
     '#leaderboards?period=week&role=squad_leader&squadSize=medium&periodId=2026-07-20'
   );
+  assert.equal(
+    buildRoleLeaderboardHash({
+      period: 'day',
+      role: 'player',
+      squadSize: 'small',
+      periodId: null
+    }),
+    '#leaderboards?period=day&role=player&squadSize=small'
+  );
 });
 
 test('selection rejects malformed values and period ids', () => {
@@ -81,7 +90,7 @@ test('adapter reads only allowed public fields and preserves API order', async (
         status: 'partial',
         available: true,
         stale: true,
-        rulesVersion: 'observed-impact-v2',
+        rulesVersion: 'observed-impact-v3',
         revision: 'safe-revision',
         scope: 'public',
         period: 'day',
@@ -115,7 +124,7 @@ test('adapter reads only allowed public fields and preserves API order', async (
           sortKeys: ['resourceSwingPer90', 'resourceSwing']
         },
         methodology: {
-          rulesVersion: 'observed-impact-v2',
+          rulesVersion: 'observed-impact-v3',
           role: 'player',
           roleTitle: 'Игроки',
           summary: 'Понятное объяснение места.',
@@ -219,7 +228,8 @@ test('adapter reads only allowed public fields and preserves API order', async (
     assert.equal(requestedUrl.includes('role=player'), true);
     assert.equal(requestedUrl.includes('scope=public'), true);
     assert.equal(requestedUrl.includes('limit=500'), true);
-    assert.equal(requestedUrl.includes('squadSize'), false);
+    assert.equal(requestedUrl.includes('squadSize=full'), true);
+    assert.equal(result.squadSize, 'full');
     assert.equal(result.entries[0]?.rank, 2);
     assert.equal(result.entries[1]?.rank, 1);
     assert.equal(result.entries[0]?.indicators.resourceSwingPer90, 4);
