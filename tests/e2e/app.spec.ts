@@ -1223,7 +1223,7 @@ async function mockLeaderboardApi(
       revivesPer100PersonHours: 'Поднятия на 100 человеко-часов',
       winRate: 'Процент побед',
       averageSurprise: 'Результат сверх ожидания',
-      averageHoursGap: 'Разница часов сторон',
+      averageHoursGap: 'Разница среднего числа часов в Squad у игроков сторон',
       weakSideHoursGap: 'Игра менее опытной стороной',
       matches: 'Число зачётных матчей',
       name: 'Имя участника'
