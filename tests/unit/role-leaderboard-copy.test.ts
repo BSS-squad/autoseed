@@ -63,6 +63,21 @@ test('attributes role metrics to the player, squad and side correctly', () => {
   assert.match(ROLE_LEADERBOARD_GUIDES.commander.ranking, /всей стороны/);
 });
 
+test('uses explicit Squad hours wording instead of the rare term', () => {
+  const visibleCopy = JSON.stringify({
+    achievements: ACHIEVEMENT_COPY,
+    guides: ROLE_LEADERBOARD_GUIDES,
+    metrics: ROLE_METRIC_COPY
+  }).toLowerCase();
+
+  assert.doesNotMatch(visibleCopy, /наигрыш/);
+  assert.match(ROLE_METRIC_COPY.weakSideHoursGap.explanation, /часов в Squad/);
+  assert.match(
+    ROLE_METRIC_COPY.weakSideHoursGap.explanation,
+    /некомандирского состава/
+  );
+});
+
 test('separates vehicle achievements from the main ranking and names their data gates', () => {
   for (const role of ['player', 'squad_leader'] as const) {
     const guide = ROLE_LEADERBOARD_GUIDES[role];
