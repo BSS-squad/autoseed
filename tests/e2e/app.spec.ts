@@ -1235,9 +1235,9 @@ async function mockLeaderboardApi(
               code: 'against_odds',
               title: 'Вопреки',
               description:
-                'Показывает сильный результат на стороне, которая уступала сопернику по среднему наигрышу.',
+                'Показывает сильный результат на стороне, у игроков которой в среднем меньше часов в Squad, чем у соперника.',
               criteria:
-                'Средняя разница наигрыша отрицательная, а полезный размен вошёл в лучшие 20%.'
+                'У игроков стороны в среднем было меньше часов в Squad, чем у соперника, а полезный размен вошёл в лучшие 20%.'
             },
             {
               code: 'locomotive',
@@ -2897,7 +2897,7 @@ test('renders role leaderboards, achievements and restores controls from the lin
     )
     .toBeGreaterThanOrEqual(140);
   await expect(achievement.getByRole('tooltip')).toContainText(
-    'Показывает сильный результат на стороне, которая уступала сопернику по среднему наигрышу.'
+    'Показывает сильный результат на стороне, у игроков которой в среднем меньше часов в Squad, чем у соперника.'
   );
   await expect(achievement.getByRole('tooltip')).toContainText('Разрыв часов');
 
