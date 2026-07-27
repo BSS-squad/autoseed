@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import {
+  EmptyState,
+  ResponsiveTable,
+  ServerSelector
+} from '../components/Primitives';
+import {
   collapseTerminalVehicleEvents,
   fetchActivitySession,
   fetchMatchExport,
@@ -357,10 +362,11 @@ function ScoreboardView({
   const teams = response.session.scoreboard?.teams || [];
   if (!teams.length) {
     return (
-      <div className="journal-empty-state">
-        <strong>Итоговые табы не сохранились</strong>
-        <p>Матч завершён, но сервер не передал состав сторон и показатели игроков.</p>
-      </div>
+      <EmptyState
+        className="journal-empty-state"
+        title="Итоговые табы не сохранились"
+        description="Матч завершён, но сервер не передал состав сторон и показатели игроков."
+      />
     );
   }
 
@@ -398,7 +404,10 @@ function ScoreboardView({
                   Сервер не успел сохранить сторону части игроков — они вынесены отдельно.
                 </div>
               ) : null}
-              <div className="journal-table-wrap">
+              <ResponsiveTable
+                label={`Итоги ${formatTeamDisplayName(team)}`}
+                className="journal-table-wrap"
+              >
                 <table>
                   <thead>
                     <tr>
@@ -428,7 +437,7 @@ function ScoreboardView({
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </ResponsiveTable>
             </section>
           );
         })}
@@ -985,7 +994,7 @@ export function JournalWorkspace({ servers }: JournalWorkspaceProps) {
 
   return (
     <>
-      <section className="journal-server-switcher" aria-label="Выбор сервера">
+      <ServerSelector label="Выбор сервера" className="journal-server-switcher">
         {servers.map((server) => {
           const serverSessions = getSessions(server);
           const active = server.code === selectedServer?.code;
@@ -1011,7 +1020,7 @@ export function JournalWorkspace({ servers }: JournalWorkspaceProps) {
             </button>
           );
         })}
-      </section>
+      </ServerSelector>
 
       <section className="journal-workspace" data-testid="journal-workspace">
         <aside className="journal-session-sidebar">

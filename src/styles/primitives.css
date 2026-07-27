@@ -1,0 +1,37 @@
+.ui-metric-card,
+.ui-notice,
+.ui-empty-state,
+.ui-segmented-control,
+.ui-server-selector,
+.ui-responsive-table {
+  min-width: 0;
+}
+
+.ui-notice > p,
+.ui-empty-state > p,
+.ui-metric-card > p {
+  margin: var(--space-2) 0 0;
+}
+
+.ui-notice-success {
+  border-color: rgba(118, 242, 184, 0.24);
+}
+
+.ui-notice-warning {
+  border-color: rgba(255, 211, 108, 0.28);
+}
+
+.ui-notice-danger {
+  border-color: rgba(255, 140, 140, 0.3);
+}
+
+.ui-responsive-table {
+  max-width: 100%;
+  overflow: auto;
+  overscroll-behavior-inline: contain;
+}
+
+.ui-responsive-table:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}

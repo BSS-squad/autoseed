@@ -2031,6 +2031,7 @@ test('renders one completed session with separate full journal categories', asyn
   const workspace = page.getByTestId('journal-workspace');
   const matchPanel = workspace.locator('.journal-match-panel');
   await expect(workspace).toBeVisible();
+  await expect(page.locator('.ui-server-selector')).toHaveCount(1);
   await expect(page.getByTestId('journal-server-2')).toContainText('2 матчей');
   await page.getByTestId('journal-server-2').click();
   await expect(page.getByTestId('journal-server-2')).toHaveAttribute('aria-pressed', 'true');
@@ -2061,6 +2062,7 @@ test('renders one completed session with separate full journal categories', asyn
     ...scoreboardHeaders
   ]);
   await expect(page.getByTestId('journal-scoreboard')).toContainText('1 250,5 урона технике');
+  await expect(page.locator('.ui-responsive-table')).toHaveCount(2);
   await expect(page.getByTestId('journal-match-export')).toContainText(
     'SteamID доступен только в защищённых файлах'
   );
@@ -2853,6 +2855,7 @@ test('uses player-friendly language on the winners page', async ({ page }) => {
   await page.goto('./#winners');
 
   await expect(page.getByText('Розыгрыши BSS', { exact: true })).toBeVisible();
+  await expect(page.locator('.ui-metric-card')).toHaveCount(4);
   await expect(page.getByText('Здесь собраны текущие розыгрыши и история победителей со всех серверов BSS.')).toBeVisible();
   await expect(page.getByTestId('planned-campaigns')).toContainText('по московскому времени');
   await expectPlayerFriendlyLanguage(page);
@@ -2970,6 +2973,7 @@ test('uses player-friendly language for unavailable leaderboards', async ({ page
   await expect(page.getByTestId('leaderboards-empty')).toContainText(
     'Раздел заполнится после следующих завершённых матчей'
   );
+  await expect(page.getByTestId('leaderboards-empty')).toHaveClass(/ui-empty-state/);
   await expectPlayerFriendlyLanguage(page);
 });
 
@@ -3089,6 +3093,11 @@ test('keeps all five sections visible and active at 360 and 390 pixels', async (
       await link.click();
       await expect(page.getByTestId(route.page)).toBeVisible();
       await expect(link).toHaveAttribute('aria-current', 'page');
+      await expect(
+        page
+          .getByTestId(route.page)
+          .locator(':scope > .page-content > .page-header')
+      ).toHaveCount(1);
 
       const layout = await page.evaluate(() => {
         const navigation = document.querySelector<HTMLElement>('[data-testid="app-navigation"]');

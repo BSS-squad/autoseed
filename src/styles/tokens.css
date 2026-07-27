@@ -1,0 +1,38 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Manrope:wght@400;500;600;700;800&display=swap');
+
+:root {
+  color-scheme: dark;
+  --bg: #070d14;
+  --bg-deep: #03070b;
+  --bg-raise: #111923;
+  --panel: rgba(12, 18, 27, 0.84);
+  --panel-strong: rgba(15, 23, 34, 0.94);
+  --panel-solid: #0e1721;
+  --panel-soft: rgba(255, 255, 255, 0.04);
+  --panel-highlight: rgba(255, 255, 255, 0.08);
+  --line: rgba(148, 163, 184, 0.18);
+  --line-strong: rgba(148, 163, 184, 0.3);
+  --text: #f3f7fb;
+  --muted: #9aa9bb;
+  --muted-strong: #cbd5e1;
+  --accent: #ff6a3d;
+  --accent-strong: #ffb36b;
+  --cyan: #67d7ff;
+  --lime: #76f2b8;
+  --gold: #ffd36c;
+  --danger: #ff8c8c;
+  --shadow-xl: 0 26px 80px rgba(1, 7, 16, 0.38);
+  --shadow-lg: 0 18px 42px rgba(1, 7, 16, 0.28);
+  --content-max: 1480px;
+  --space-1: 6px;
+  --space-2: 10px;
+  --space-3: 14px;
+  --space-4: 20px;
+  --space-5: 24px;
+  --control-min-height: 44px;
+  --motion-fast: 160ms ease;
+  --radius-xl: 24px;
+  --radius-lg: 20px;
+  --radius-md: 16px;
+  --radius-sm: 12px;
+}
