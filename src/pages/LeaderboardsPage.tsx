@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import {
   PageHeader,
@@ -130,6 +131,97 @@ function roleMetricLabel(
   );
 }
 
+function AchievementDialog({
+  achievement,
+  dialogId,
+  iconUrl,
+  title,
+  description,
+  onClose
+}: {
+  achievement: RoleLeaderboardAchievement;
+  dialogId: string;
+  iconUrl: string | null;
+  title: string;
+  description: string;
+  onClose: () => void;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const titleId = `${dialogId}-title`;
+  const descriptionId = `${dialogId}-description`;
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    if (dialog.open) return;
+    if (typeof dialog.showModal === 'function') dialog.showModal();
+    else dialog.setAttribute('open', '');
+  }, []);
+
+  const close = () => {
+    const dialog = dialogRef.current;
+    if (dialog?.open && typeof dialog.close === 'function') dialog.close();
+    else onClose();
+  };
+
+  return createPortal(
+    <dialog
+      ref={dialogRef}
+      id={dialogId}
+      className="achievement-dialog"
+      aria-labelledby={titleId}
+      aria-describedby={descriptionId}
+      onClose={onClose}
+      onCancel={(event) => {
+        event.preventDefault();
+        close();
+      }}
+      onClick={(event) => {
+        if (event.target !== event.currentTarget) return;
+        const bounds = event.currentTarget.getBoundingClientRect();
+        const outside =
+          event.clientX < bounds.left ||
+          event.clientX > bounds.right ||
+          event.clientY < bounds.top ||
+          event.clientY > bounds.bottom;
+        if (outside) close();
+      }}
+      data-testid="achievement-dialog"
+    >
+      <header className="achievement-dialog-head">
+        <strong id={titleId}>{title}</strong>
+        <button
+          type="button"
+          className="achievement-dialog-close"
+          onClick={close}
+          autoFocus
+          data-testid="achievement-dialog-close"
+        >
+          Закрыть
+        </button>
+      </header>
+      <div className="achievement-dialog-body">
+        {iconUrl ? (
+          <img
+            className="achievement-dialog-image"
+            src={iconUrl}
+            alt=""
+            width="180"
+            height="180"
+            data-testid={`achievement-dialog-preview-${achievement.code}`}
+          />
+        ) : null}
+        <p id={descriptionId}>{description}</p>
+        <p className="achievement-dialog-reason">
+          <strong>Почему выдано</strong>
+          <span>{achievement.reason}</span>
+        </p>
+      </div>
+    </dialog>,
+    document.body
+  );
+}
+
 function AchievementBadge({
   achievement,
   tooltipId,
@@ -143,44 +235,69 @@ function AchievementBadge({
   const copy = getAchievementCopy(achievement.code, methodology);
   const title = copy?.title || achievement.title;
   const description = copy?.description || achievement.description;
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const dialogId = `${tooltipId}-dialog`;
+  const closeDialog = () => {
+    setDialogOpen(false);
+    window.requestAnimationFrame(() => buttonRef.current?.focus());
+  };
+
   return (
-    <button
-      type="button"
-      className="achievement-badge"
-      aria-label={`${title}. Показать, за что выдана ачивка`}
-      aria-describedby={tooltipId}
-      data-testid={`achievement-${achievement.code}`}
-    >
-      {iconUrl ? (
-        <img
-          className="achievement-badge-icon"
-          src={iconUrl}
-          alt=""
-          loading="lazy"
-          width="48"
-          height="48"
-        />
-      ) : (
-        <span className="achievement-fallback" aria-hidden="true">
-          ◆
-        </span>
-      )}
-      <span className="achievement-tooltip" role="tooltip" id={tooltipId}>
+    <>
+      <button
+        ref={buttonRef}
+        type="button"
+        className="achievement-badge"
+        aria-label={`${title}. Показать, за что выдана ачивка`}
+        aria-describedby={tooltipId}
+        aria-haspopup="dialog"
+        aria-expanded={dialogOpen}
+        aria-controls={dialogId}
+        data-testid={`achievement-${achievement.code}`}
+        onClick={() => setDialogOpen(true)}
+      >
         {iconUrl ? (
           <img
-            className="achievement-tooltip-image"
+            className="achievement-badge-icon"
             src={iconUrl}
             alt=""
-            width="144"
-            height="144"
-            data-testid={`achievement-preview-${achievement.code}`}
+            loading="lazy"
+            width="48"
+            height="48"
           />
-        ) : null}
-        <strong>{title}</strong>
-        <span>{description}</span>
-        <small>Почему выдано: {achievement.reason}</small>
-      </span>
-    </button>
+        ) : (
+          <span className="achievement-fallback" aria-hidden="true">
+            ◆
+          </span>
+        )}
+        <span className="achievement-tooltip" role="tooltip" id={tooltipId}>
+          {iconUrl ? (
+            <img
+              className="achievement-tooltip-image"
+              src={iconUrl}
+              alt=""
+              width="144"
+              height="144"
+              data-testid={`achievement-preview-${achievement.code}`}
+            />
+          ) : null}
+          <strong>{title}</strong>
+          <span>{description}</span>
+          <small>Почему выдано: {achievement.reason}</small>
+        </span>
+      </button>
+      {dialogOpen ? (
+        <AchievementDialog
+          achievement={achievement}
+          dialogId={dialogId}
+          iconUrl={iconUrl}
+          title={title}
+          description={description}
+          onClose={closeDialog}
+        />
+      ) : null}
+    </>
   );
 }
 

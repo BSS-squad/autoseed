@@ -3233,30 +3233,69 @@ test('shows empty, partial and stale role leaderboard states without treating th
   );
 });
 
-test('keeps achievement descriptions reachable by keyboard on a narrow screen', async ({
+test('keeps achievement dialogs inside narrow screens and restores focus', async ({
   page
 }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
   await page.clock.setFixedTime('2026-07-26T12:00:00.000Z');
   await mockLeaderboardApi(page, { status: 'partial', stale: true });
-  await page.goto('./#leaderboards');
 
-  await expect(page.getByTestId('leaderboard-context')).toContainText(
-    'Часть матчей записана неполно'
-  );
-  await expect(page.getByTestId('leaderboard-context')).toContainText(
-    'Обновление задерживается'
-  );
-  const achievement = page.getByTestId('achievement-against_odds');
-  await achievement.focus();
-  await expect(achievement.getByRole('tooltip')).toBeVisible();
-  await expect(achievement.getByTestId('achievement-preview-against_odds')).toBeVisible();
-  await expect(achievement.getByRole('tooltip')).toContainText('Вопреки');
-  const viewport = await page.evaluate(() => ({
-    documentWidth: document.documentElement.scrollWidth,
-    viewportWidth: window.innerWidth
-  }));
-  expect(viewport.documentWidth).toBeLessThanOrEqual(viewport.viewportWidth);
+  for (const viewport of [
+    { width: 360, height: 800 },
+    { width: 390, height: 844 }
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto('./#leaderboards');
+
+    await expect(page.getByTestId('leaderboard-context')).toContainText(
+      'Часть матчей записана неполно'
+    );
+    await expect(page.getByTestId('leaderboard-context')).toContainText(
+      'Обновление задерживается'
+    );
+    const achievement = page.getByTestId('achievement-against_odds');
+    await achievement.focus();
+    await page.keyboard.press('Enter');
+
+    const dialog = page.getByTestId('achievement-dialog');
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText('Вопреки');
+    await expect(dialog).toContainText('Почему выдано');
+    await expect(dialog.getByTestId('achievement-dialog-preview-against_odds')).toBeVisible();
+    await expect(page.getByTestId('achievement-dialog-close')).toBeFocused();
+
+    const geometry = await dialog.evaluate((element) => {
+      const bounds = element.getBoundingClientRect();
+      return {
+        left: bounds.left,
+        right: bounds.right,
+        top: bounds.top,
+        bottom: bounds.bottom,
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+        documentWidth: document.documentElement.scrollWidth
+      };
+    });
+    expect(geometry.left).toBeGreaterThanOrEqual(0);
+    expect(geometry.right).toBeLessThanOrEqual(geometry.viewportWidth);
+    expect(geometry.top).toBeGreaterThanOrEqual(0);
+    expect(geometry.bottom).toBeLessThanOrEqual(geometry.viewportHeight);
+    expect(geometry.documentWidth).toBeLessThanOrEqual(geometry.viewportWidth);
+
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    await expect(achievement).toBeFocused();
+
+    await page.keyboard.press('Space');
+    await expect(page.getByTestId('achievement-dialog')).toBeVisible();
+    await page.getByTestId('achievement-dialog-close').click();
+    await expect(page.getByTestId('achievement-dialog')).toHaveCount(0);
+    await expect(achievement).toBeFocused();
+
+    await achievement.click();
+    await expect(page.getByTestId('achievement-dialog')).toBeVisible();
+    await page.mouse.click(1, 1);
+    await expect(page.getByTestId('achievement-dialog')).toHaveCount(0);
+  }
 });
 
 test('keeps the public page selector and content width stable while switching sections', async ({
