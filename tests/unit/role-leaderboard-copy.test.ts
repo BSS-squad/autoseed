@@ -62,3 +62,19 @@ test('attributes role metrics to the player, squad and side correctly', () => {
   assert.match(ROLE_METRIC_COPY.kd.explanation, /не личный K\/D сквадного/);
   assert.match(ROLE_LEADERBOARD_GUIDES.commander.ranking, /всей стороны/);
 });
+
+test('separates vehicle achievements from the main ranking and names their data gates', () => {
+  for (const role of ['player', 'squad_leader'] as const) {
+    const guide = ROLE_LEADERBOARD_GUIDES[role];
+    const vehicleRule = guide.achievements.find(({ code }) =>
+      ['armor_piercer', 'squad_armor_piercer'].includes(code)
+    );
+
+    assert.match(guide.limitation, /на место в топе не влияют/);
+    assert.match(vehicleRule?.rule || '', /не меньше 50 событий/);
+    assert.match(vehicleRule?.rule || '', /не меньше 20 случаев/);
+    assert.match(vehicleRule?.rule || '', /80%/);
+  }
+
+  assert.doesNotMatch(ROLE_LEADERBOARD_GUIDES.player.limitation, /связь и техника/);
+});

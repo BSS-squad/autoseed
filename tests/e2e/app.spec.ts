@@ -1252,7 +1252,7 @@ async function mockLeaderboardApi(
               description:
                 'Входит в число лучших по подтверждённому урону или уничтожениям техники.',
               criteria:
-                'Урон или уничтожения вошли в лучшие 10% при достаточном покрытии.'
+                'Урон вошёл в лучшие 10% при не менее чем 50 событиях и 80% подтверждённых источников либо уничтожения вошли в лучшие 10% при не менее чем 20 случаях и таком же покрытии.'
             }
           ]
         : [];
@@ -1327,7 +1327,8 @@ async function mockLeaderboardApi(
           'Ачивки не дают очков и не меняют место в топе.'
         ],
         limitations: [
-          'Логистика, строительство и связь пока не измеряются.'
+          'Логистика, строительство и связь пока не измеряются.',
+          'Техника не влияет на место в основном топе. Для урона нужно не меньше 50 событий, для уничтожений — не меньше 20 случаев; источник должен быть подтверждён минимум у 80% событий.'
         ],
         ranking: sortKeys.map((key) => ({
           key,
@@ -2876,7 +2877,7 @@ test('renders role leaderboards, achievements and restores controls from the lin
   await expect(page.getByTestId('leaderboards-row-6')).toHaveCount(0);
 
   const achievement = page.getByTestId('achievement-against_odds');
-  const achievementIcon = achievement.locator('img');
+  const achievementIcon = achievement.locator('.achievement-badge-icon');
   await expect(achievementIcon).toBeVisible();
   await expect(achievementIcon).toHaveAttribute(
     'src',
@@ -2886,6 +2887,15 @@ test('renders role leaderboards, achievements and restores controls from the lin
     .poll(() => achievementIcon.evaluate((image: HTMLImageElement) => image.naturalWidth))
     .toBeGreaterThan(0);
   await achievement.hover();
+  const achievementPreview = achievement.getByTestId('achievement-preview-against_odds');
+  await expect(achievementPreview).toBeVisible();
+  await expect
+    .poll(() =>
+      achievementPreview.evaluate(
+        (image: HTMLImageElement) => image.getBoundingClientRect().width
+      )
+    )
+    .toBeGreaterThanOrEqual(140);
   await expect(achievement.getByRole('tooltip')).toContainText(
     'Показывает сильный результат на стороне, которая уступала сопернику по среднему наигрышу.'
   );
@@ -2900,6 +2910,9 @@ test('renders role leaderboards, achievements and restores controls from the lin
   await expect(methodology).toContainText('Все ачивки этой роли');
   await expect(methodology.getByText('Локомотив', { exact: true })).toBeVisible();
   await expect(methodology.getByText('Бронебойщик', { exact: true })).toBeVisible();
+  await expect(methodology).toContainText('не влияет на место в основном топе');
+  await expect(methodology).toContainText('не меньше 50 событий');
+  await expect(methodology).toContainText('не меньше 20 случаев');
 
   await page.getByTestId('leaderboards-expand').click();
   await expect(page.getByTestId('leaderboards-row-6')).toContainText('Fast Driver');
@@ -2982,6 +2995,7 @@ test('keeps achievement descriptions reachable by keyboard on a narrow screen', 
   const achievement = page.getByTestId('achievement-against_odds');
   await achievement.focus();
   await expect(achievement.getByRole('tooltip')).toBeVisible();
+  await expect(achievement.getByTestId('achievement-preview-against_odds')).toBeVisible();
   await expect(achievement.getByRole('tooltip')).toContainText('Вопреки');
   const viewport = await page.evaluate(() => ({
     documentWidth: document.documentElement.scrollWidth,

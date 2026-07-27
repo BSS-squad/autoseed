@@ -1262,6 +1262,7 @@ function AchievementBadge({
     >
       {iconUrl ? (
         <img
+          className="achievement-badge-icon"
           src={iconUrl}
           alt=""
           loading="lazy"
@@ -1274,6 +1275,16 @@ function AchievementBadge({
         </span>
       )}
       <span className="achievement-tooltip" role="tooltip" id={tooltipId}>
+        {iconUrl ? (
+          <img
+            className="achievement-tooltip-image"
+            src={iconUrl}
+            alt=""
+            width="144"
+            height="144"
+            data-testid={`achievement-preview-${achievement.code}`}
+          />
+        ) : null}
         <strong>{title}</strong>
         <span>{description}</span>
         <small>Почему выдано: {achievement.reason}</small>
