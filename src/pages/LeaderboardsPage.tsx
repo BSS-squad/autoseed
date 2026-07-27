@@ -19,6 +19,7 @@ import {
   ROLE_LEADERBOARD_PERIODS,
   ROLE_LEADERBOARD_ROLES,
   ROLE_LEADERBOARD_SQUAD_SIZES,
+  roleLeaderboardUsesSquadSize,
   shiftRolePeriodId
 } from '../lib/leaderboards';
 import {
@@ -602,7 +603,7 @@ export function LeaderboardsPage({ config, route, vipShopUrl }: LeaderboardsPage
           </SegmentedControl>
 
           <div className="leaderboard-squad-size-slot">
-            {selection.role === 'squad_leader' ? (
+            {roleLeaderboardUsesSquadSize(selection.role) ? (
               <SegmentedControl
                 label="Размер отряда"
                 className="leaderboard-squad-size-row"
@@ -628,7 +629,8 @@ export function LeaderboardsPage({ config, route, vipShopUrl }: LeaderboardsPage
               </SegmentedControl>
             ) : (
               <div className="leaderboard-filter-placeholder">
-                Размер отряда выбирается только для сквадных.
+                Командир оценивается по результату всей стороны, поэтому размер
+                его отряда здесь не используется.
               </div>
             )}
           </div>
