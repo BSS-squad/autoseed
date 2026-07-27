@@ -5,6 +5,10 @@ import type {
   LeaderboardsEndpointConfig,
   RoleLeaderboardAchievement,
   RoleLeaderboardEntry,
+  RoleLeaderboardMethodology,
+  RoleLeaderboardMethodologyAchievement,
+  RoleLeaderboardMethodologyFormula,
+  RoleLeaderboardMethodologyMetric,
   RoleLeaderboardMetricGroup,
   RoleLeaderboardPendingEntry,
   RoleLeaderboardPeriod,
@@ -310,6 +314,95 @@ function toRatioOrNull(value: unknown): number | null {
   return parsed === null ? null : Math.max(0, Math.min(1, parsed));
 }
 
+function normalizePublicText(value: unknown, maximumLength = 600): string | null {
+  const text = toStringOrNull(value);
+  return text ? text.slice(0, maximumLength) : null;
+}
+
+function normalizePublicTextList(
+  value: unknown,
+  maximumItems: number
+): string[] {
+  return (Array.isArray(value) ? value : [])
+    .map((item) => normalizePublicText(item))
+    .filter((item): item is string => item !== null)
+    .slice(0, maximumItems);
+}
+
+function normalizeMethodologyMetric(
+  value: unknown
+): RoleLeaderboardMethodologyMetric | null {
+  const record = getRecord(value);
+  const key = normalizePublicText(record?.key, 64);
+  const label = normalizePublicText(record?.label, 120);
+  const description = normalizePublicText(record?.description);
+  return key && label && description ? { key, label, description } : null;
+}
+
+function normalizeMethodologyFormula(
+  value: unknown
+): RoleLeaderboardMethodologyFormula | null {
+  const record = getRecord(value);
+  const label = normalizePublicText(record?.label, 120);
+  const expression = normalizePublicText(record?.expression, 300);
+  const description = normalizePublicText(record?.description);
+  return label && expression && description
+    ? { label, expression, description }
+    : null;
+}
+
+function normalizeMethodologyAchievement(
+  value: unknown
+): RoleLeaderboardMethodologyAchievement | null {
+  const record = getRecord(value);
+  const code = normalizePublicText(record?.code, 64);
+  const title = normalizePublicText(record?.title, 120);
+  const description = normalizePublicText(record?.description);
+  const criteria = normalizePublicText(record?.criteria);
+  return code && title && description && criteria
+    ? { code, title, description, criteria }
+    : null;
+}
+
+function normalizeRoleMethodology(
+  value: unknown,
+  expectedRole: RoleLeaderboardRole,
+  fallbackRulesVersion: string
+): RoleLeaderboardMethodology | null {
+  const record = getRecord(value);
+  if (!record || record.role !== expectedRole) return null;
+  const roleTitle = normalizePublicText(record.roleTitle, 120);
+  const summary = normalizePublicText(record.summary);
+  if (!roleTitle || !summary) return null;
+
+  return {
+    rulesVersion:
+      normalizePublicText(record.rulesVersion, 80) || fallbackRulesVersion,
+    role: expectedRole,
+    roleTitle,
+    summary,
+    participation: normalizePublicTextList(record.participation, 6),
+    achievementRules: normalizePublicTextList(record.achievementRules, 8),
+    limitations: normalizePublicTextList(record.limitations, 8),
+    ranking: (Array.isArray(record.ranking) ? record.ranking : [])
+      .map(normalizeMethodologyMetric)
+      .filter((item): item is RoleLeaderboardMethodologyMetric => item !== null)
+      .slice(0, 8),
+    formulas: (Array.isArray(record.formulas) ? record.formulas : [])
+      .map(normalizeMethodologyFormula)
+      .filter((item): item is RoleLeaderboardMethodologyFormula => item !== null)
+      .slice(0, 6),
+    achievements: (
+      Array.isArray(record.achievements) ? record.achievements : []
+    )
+      .map(normalizeMethodologyAchievement)
+      .filter(
+        (item): item is RoleLeaderboardMethodologyAchievement => item !== null
+      )
+      .slice(0, 32)
+  };
+}
+
 function normalizeRoleResponse(
   payload: unknown,
   selection: RoleLeaderboardSelection
@@ -323,18 +416,21 @@ function normalizeRoleResponse(
   const roleValue = toStringOrNull(record.role) as RoleLeaderboardRole | null;
   const squadSizeValue = toStringOrNull(record.squadSize) as RoleLeaderboardSquadSize | null;
   const periodValue = toStringOrNull(record.period) as RoleLeaderboardPeriod | null;
+  const role =
+    roleValue && ROLE_VALUES.has(roleValue) ? roleValue : selection.role;
+  const rulesVersion = toStringOrNull(record.rulesVersion) || 'unknown';
 
   return {
     status: statusValue && ROLE_STATUS_VALUES.has(statusValue) ? statusValue : 'empty',
     available: record.available === true,
     stale: record.stale === true,
-    rulesVersion: toStringOrNull(record.rulesVersion) || 'unknown',
+    rulesVersion,
     revision: toStringOrNull(record.revision),
     scope: record.scope === 'custom' ? 'custom' : 'public',
     period:
       periodValue && ROLE_PERIOD_VALUES.has(periodValue) ? periodValue : selection.period,
     periodId: toStringOrNull(record.periodId) || selection.periodId || '',
-    role: roleValue && ROLE_VALUES.has(roleValue) ? roleValue : selection.role,
+    role,
     squadSize:
       squadSizeValue && SQUAD_SIZE_VALUES.has(squadSizeValue) ? squadSizeValue : null,
     timeZone: toStringOrNull(record.timeZone) || 'Europe/Moscow',
@@ -376,6 +472,11 @@ function normalizeRoleResponse(
             .slice(0, 8)
         : []
     },
+    methodology: normalizeRoleMethodology(
+      record.methodology,
+      role,
+      rulesVersion
+    ),
     achievements: {
       comparisonGroupSize: Math.max(
         0,

@@ -3749,7 +3749,7 @@ input {
 
 .leaderboard-context-strip {
   display: grid;
-  grid-template-columns: repeat(6, minmax(110px, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 1px;
   overflow: hidden;
   border: 1px solid var(--line);
@@ -3840,9 +3840,25 @@ input {
   line-height: 1.55;
 }
 
-.role-methodology-note {
-  color: var(--muted) !important;
+.role-methodology-subtitle {
+  display: block;
+  margin-top: 16px;
+  color: var(--text);
   font-size: 0.82rem;
+}
+
+.role-methodology-notes {
+  display: grid;
+  gap: 7px;
+  margin: 9px 0 0;
+  padding-left: 18px;
+  color: var(--muted-strong);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.role-methodology-notes-muted {
+  color: var(--muted);
 }
 
 .role-formula {
@@ -3861,6 +3877,12 @@ input {
 .role-formula span {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.8rem;
+}
+
+.role-formula small {
+  color: var(--muted);
+  font-size: 0.74rem;
+  line-height: 1.45;
 }
 
 .role-methodology-metrics {
@@ -4969,7 +4991,11 @@ input {
 
 @media (max-width: 1240px) {
   .leaderboard-context-strip {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .leaderboard-context-strip > span:last-of-type {
+    grid-column: span 2;
   }
 
   .role-podium {
@@ -4995,6 +5021,10 @@ input {
 
   .leaderboard-context-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .leaderboard-context-strip > span:last-of-type {
+    grid-column: 1 / -1;
   }
 
   .role-methodology-body,

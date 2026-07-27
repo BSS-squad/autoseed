@@ -114,6 +114,39 @@ test('adapter reads only allowed public fields and preserves API order', async (
         ranking: {
           sortKeys: ['resourceSwingPer90', 'resourceSwing']
         },
+        methodology: {
+          rulesVersion: 'observed-impact-v2',
+          role: 'player',
+          roleTitle: 'Игроки',
+          summary: 'Понятное объяснение места.',
+          participation: ['Не меньше 15 минут.'],
+          achievementRules: ['Ачивки не меняют место.'],
+          limitations: ['Логистика пока не измеряется.'],
+          ranking: [
+            {
+              key: 'resourceSwingPer90',
+              label: 'Полезный размен / 90 мин',
+              description: 'Засчитанные убийства и поднятия минус потери.',
+              internalFormula: 'must-not-enter-state'
+            }
+          ],
+          formulas: [
+            {
+              label: 'Полезный размен',
+              expression: 'убийства + поднятия − смерти − тимкиллы',
+              description: 'Нок и смерть образуют один эпизод.'
+            }
+          ],
+          achievements: [
+            {
+              code: 'against_odds',
+              title: 'Вопреки',
+              description: 'Сильный результат менее опытной стороны.',
+              criteria: 'Полезный размен вошёл в лучшие 20% группы.'
+            }
+          ],
+          internalNotes: ['must-not-enter-state']
+        },
         entries: [
           {
             rank: 2,
@@ -194,11 +227,19 @@ test('adapter reads only allowed public fields and preserves API order', async (
     assert.equal(result.pendingEntries[0]?.rank, null);
     assert.equal(result.pendingEntries[0]?.matchesNeeded, 1);
     assert.equal(result.dataQuality.achievementHistoryMatches, 120);
+    assert.equal(result.methodology?.roleTitle, 'Игроки');
+    assert.equal(
+      result.methodology?.ranking[0]?.label,
+      'Полезный размен / 90 мин'
+    );
+    assert.equal(result.methodology?.achievements[0]?.code, 'against_odds');
     assert.equal(serialized.includes('playerId'), false);
     assert.equal(serialized.includes('sessionId'), false);
     assert.equal(serialized.includes('serverId'), false);
     assert.equal(serialized.includes('hiddenMetric'), false);
     assert.equal(serialized.includes('memberIds'), false);
+    assert.equal(serialized.includes('internalFormula'), false);
+    assert.equal(serialized.includes('internalNotes'), false);
   } finally {
     globalThis.fetch = originalFetch;
   }
