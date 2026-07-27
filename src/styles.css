@@ -1327,6 +1327,11 @@ input {
   font-weight: 700;
   text-decoration: none;
   white-space: nowrap;
+  transition:
+    color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
 }
 
 .app-nav-link-active {
@@ -1335,9 +1340,69 @@ input {
   box-shadow: inset 0 0 0 1px rgba(255, 106, 61, 0.18);
 }
 
+.app-nav-link:hover:not(.app-nav-link-active) {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text);
+}
+
+.app-nav-link:active {
+  transform: translateY(1px);
+}
+
 .app-nav-link:focus-visible {
-  outline: 2px solid rgba(103, 215, 255, 0.32);
+  outline: 2px solid var(--cyan);
   outline-offset: 2px;
+}
+
+.app-nav-link[aria-disabled='true'] {
+  color: rgba(154, 169, 187, 0.48);
+  pointer-events: none;
+}
+
+.page-content {
+  min-width: 0;
+}
+
+.page-content > .page-header {
+  margin-top: 0;
+}
+
+.page-header-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.page-header-heading.hero-main-tight {
+  display: grid;
+}
+
+.page-header-heading.winners-hero-main {
+  display: block;
+}
+
+.page-header-title {
+  min-width: 0;
+}
+
+.page-header-heading h1 {
+  margin: 4px 0 0;
+  font-size: clamp(2rem, 4vw, 3.35rem);
+  line-height: 1;
+  letter-spacing: -0.04em;
+  text-wrap: balance;
+}
+
+.page-header-description {
+  max-width: 60ch;
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.page-header-eyebrow {
+  display: inline-block;
 }
 
 .hero-brand-kicker,
@@ -4503,6 +4568,7 @@ input {
   .hero-brand,
   .winners-hero-top,
   .leaderboard-table-head,
+  .page-header-heading,
   .section-head,
   .server-title-row,
   .server-title-main,
@@ -4517,7 +4583,9 @@ input {
 
   .app-nav {
     width: 100%;
-    grid-auto-columns: minmax(0, 1fr);
+    grid-template-columns: repeat(var(--nav-item-count), minmax(0, 1fr));
+    grid-auto-flow: row;
+    grid-auto-columns: auto;
     justify-content: stretch;
   }
 
@@ -4716,18 +4784,15 @@ input {
   }
 
   .app-nav {
-    grid-auto-columns: max-content;
-    justify-content: start;
-    overflow-x: auto;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    justify-content: stretch;
+    overflow: visible;
     border-radius: 16px;
-    scrollbar-width: none;
-  }
-
-  .app-nav::-webkit-scrollbar {
-    display: none;
   }
 
   .app-nav-link {
+    width: 100%;
+    min-width: 0;
     padding-inline: 13px;
   }
 

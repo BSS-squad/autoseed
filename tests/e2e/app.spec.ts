@@ -3064,6 +3064,86 @@ test('keeps the public page selector and content width stable while switching se
   }
 });
 
+test('keeps all five sections visible and active at 360 and 390 pixels', async ({ page }) => {
+  await mockAutoseedApi(page);
+  await mockLeaderboardApi(page);
+
+  const routes = [
+    { link: 'home-nav-link', page: 'app-shell' },
+    { link: 'winners-nav-link', page: 'winners-page' },
+    { link: 'leaderboards-nav-link', page: 'leaderboards-page' },
+    { link: 'balance-nav-link', page: 'balance-page' },
+    { link: 'journal-nav-link', page: 'journal-page' }
+  ];
+
+  for (const viewport of [
+    { width: 390, height: 844 },
+    { width: 360, height: 800 }
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto('./');
+
+    for (const route of routes) {
+      const link = page.getByTestId(route.link);
+      await expect(link).toBeVisible();
+      await link.click();
+      await expect(page.getByTestId(route.page)).toBeVisible();
+      await expect(link).toHaveAttribute('aria-current', 'page');
+
+      const layout = await page.evaluate(() => {
+        const navigation = document.querySelector<HTMLElement>('[data-testid="app-navigation"]');
+        const links = [...document.querySelectorAll<HTMLElement>('[data-testid="app-navigation"] a')];
+        return {
+          documentFits: document.documentElement.scrollWidth <= window.innerWidth + 1,
+          navigationFits: Boolean(
+            navigation &&
+              navigation.getBoundingClientRect().left >= 0 &&
+              navigation.getBoundingClientRect().right <= window.innerWidth
+          ),
+          linksFit: links.every((entry) => {
+            const box = entry.getBoundingClientRect();
+            return box.left >= 0 && box.right <= window.innerWidth;
+          })
+        };
+      });
+
+      expect(layout).toEqual({
+        documentFits: true,
+        navigationFits: true,
+        linksFit: true
+      });
+    }
+  }
+});
+
+test('supports Tab, Enter and Space while preserving detailed section selection', async ({
+  page
+}) => {
+  await mockAutoseedApi(page);
+  await mockLeaderboardApi(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+
+  await page.goto('./#leaderboards?period=month&role=player');
+  await expect(page.getByTestId('leaderboards-page')).toBeVisible();
+  const detailedHash = await page.evaluate(() => window.location.hash);
+
+  const balanceLink = page.getByTestId('balance-nav-link');
+  await balanceLink.focus();
+  await page.keyboard.press('Tab');
+  await expect(page.getByTestId('journal-nav-link')).toBeFocused();
+
+  const winnersLink = page.getByTestId('winners-nav-link');
+  await winnersLink.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('winners-page')).toBeVisible();
+
+  const leaderboardsLink = page.getByTestId('leaderboards-nav-link');
+  await leaderboardsLink.focus();
+  await page.keyboard.press('Space');
+  await expect(page.getByTestId('leaderboards-page')).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`${detailedHash.replace(/[?]/g, '\\?')}$`));
+});
+
 test('uses player-friendly language in the autoconnect window', async ({ page }) => {
   await captureConnectorWindowMarkup(page);
   await seedStoredAutoconnectState(page, { enabled: false });
