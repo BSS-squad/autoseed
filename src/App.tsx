@@ -61,6 +61,11 @@ import {
   saveTestSequenceDelayMs
 } from './lib/storage';
 import { JournalWorkspace } from './journal/JournalWorkspace';
+import {
+  PageHeader,
+  PageShell,
+  type AppRoute
+} from './components/PageShell';
 import type {
   AppConfig,
   AppMode,
@@ -90,8 +95,6 @@ import projectLogo from '../image.png';
 type AppProps = {
   config: AppConfig;
 };
-
-type AppRoute = 'home' | 'winners' | 'leaderboards' | 'balance' | 'journal';
 
 type PendingSequence = {
   remaining: ExporterServerSnapshot[];
@@ -164,11 +167,6 @@ type InlineHelpProps = {
   title: string;
   description: string;
   testId?: string;
-};
-
-type AppNavProps = {
-  currentRoute: AppRoute;
-  vipShopUrl?: string | null;
 };
 
 type RaffleServerSnapshot = {
@@ -1021,73 +1019,6 @@ function InlineHelp({ label, title, description, testId }: InlineHelpProps) {
   );
 }
 
-function AppNav({ currentRoute, vipShopUrl }: AppNavProps) {
-  return (
-    <nav className="app-nav" aria-label="Навигация Автосида">
-      <a
-        className={classNames('app-nav-link', currentRoute === 'home' && 'app-nav-link-active')}
-        href="#"
-        data-testid="home-nav-link"
-      >
-        Автосид
-      </a>
-      <a
-        className={classNames(
-          'app-nav-link',
-          currentRoute === 'winners' && 'app-nav-link-active'
-        )}
-        href="#winners"
-        data-testid="winners-nav-link"
-      >
-        Победители
-      </a>
-      <a
-        className={classNames(
-          'app-nav-link',
-          currentRoute === 'leaderboards' && 'app-nav-link-active'
-        )}
-        href="#leaderboards"
-        data-testid="leaderboards-nav-link"
-      >
-        Топы
-      </a>
-      <a
-        className={classNames('app-nav-link', currentRoute === 'balance' && 'app-nav-link-active')}
-        href="#balance"
-        data-testid="balance-nav-link"
-      >
-        Балансер
-      </a>
-      <a
-        className={classNames('app-nav-link', currentRoute === 'journal' && 'app-nav-link-active')}
-        href="#journal"
-        data-testid="journal-nav-link"
-      >
-        Журнал
-      </a>
-      {vipShopUrl ? (
-        <a
-          className="app-nav-link"
-          href={vipShopUrl}
-          target="_blank"
-          rel="noreferrer noopener"
-          data-testid="vip-shop-nav-link"
-        >
-          VIP
-        </a>
-      ) : null}
-    </nav>
-  );
-}
-
-function AppTopbar({ currentRoute, vipShopUrl }: AppNavProps) {
-  return (
-    <div className="app-topbar">
-      <AppNav currentRoute={currentRoute} vipShopUrl={vipShopUrl} />
-    </div>
-  );
-}
-
 function getRaffleServers(snapshot: CombinedSnapshot): RaffleServerSnapshot[] {
   return snapshot.servers.flatMap((server) =>
     server.raffles ? [{ server, raffles: server.raffles }] : []
@@ -1672,24 +1603,23 @@ function LeaderboardsPage({ config, route, vipShopUrl }: LeaderboardsPageProps) 
   };
 
   return (
-    <div
-      className="shell modern-shell leaderboards-shell"
-      style={BRAND_STYLE}
-      data-testid="leaderboards-page"
+    <PageShell
+      currentRoute={route}
+      vipShopUrl={vipShopUrl}
+      brandStyle={BRAND_STYLE}
+      className="leaderboards-shell"
+      testId="leaderboards-page"
     >
-      <AppTopbar currentRoute={route} vipShopUrl={vipShopUrl} />
-      <header className="winners-hero leaderboards-hero">
-        <div className="leaderboards-heading">
-          <div>
-            <p className="eyebrow">Топы по ролям</p>
-            <h1 data-testid="leaderboards-title">Ролевые топы BSS</h1>
-          </div>
-          <p className="hero-copy">
-            Место даёт статистика выбранного периода. Ачивки показывают стиль игры по
-            накопленной истории и не дают скрытых очков.
-          </p>
-        </div>
-
+      <PageHeader
+        eyebrow="Топы по ролям"
+        title="Ролевые топы BSS"
+        description="Место даёт статистика выбранного периода. Ачивки показывают стиль игры по накопленной истории и не дают скрытых очков."
+        className="winners-hero leaderboards-hero"
+        headingClassName="leaderboards-heading"
+        eyebrowClassName="eyebrow"
+        descriptionClassName="hero-copy"
+        titleTestId="leaderboards-title"
+      >
         <div className="leaderboard-control-stack">
           <div className="leaderboard-periods" aria-label="Период топа">
             {ROLE_LEADERBOARD_PERIODS.map((entry) => (
@@ -1776,7 +1706,7 @@ function LeaderboardsPage({ config, route, vipShopUrl }: LeaderboardsPageProps) 
             </button>
           </div>
         </div>
-      </header>
+      </PageHeader>
 
       {response ? (
         <section
@@ -1998,7 +1928,7 @@ function LeaderboardsPage({ config, route, vipShopUrl }: LeaderboardsPageProps) 
           </p>
         ) : null}
       </section>
-    </div>
+    </PageShell>
   );
 }
 
@@ -2016,29 +1946,36 @@ function WinnersPage({ snapshot, now, route, vipShopUrl }: WinnersPageProps) {
   const latestWinner = history.find((item) => item.entry.winner)?.entry.winner || null;
 
   return (
-    <div className="shell modern-shell winners-shell" style={BRAND_STYLE} data-testid="winners-page">
-      <AppTopbar currentRoute={route} vipShopUrl={vipShopUrl} />
-      <header className="winners-hero">
-        <div className="winners-hero-top">
-          <div className="hero-brand">
-            <div className="hero-logo-shell hero-logo-shell-compact">
-              <img className="hero-logo" src={projectLogo} alt={`Логотип ${APP_DISPLAY_NAME}`} />
-            </div>
-            <div className="hero-brand-copy">
-              <span className="hero-brand-kicker">BREAKING SQUAD</span>
-              <span className="hero-brand-subtitle">розыгрыши и победители</span>
+    <PageShell
+      currentRoute={route}
+      vipShopUrl={vipShopUrl}
+      brandStyle={BRAND_STYLE}
+      className="winners-shell"
+      testId="winners-page"
+    >
+      <PageHeader
+        eyebrow="Розыгрыши BSS"
+        title="Победители розыгрышей"
+        description="Здесь собраны текущие розыгрыши и история победителей со всех серверов BSS."
+        className="winners-hero"
+        headingClassName="winners-hero-main"
+        eyebrowClassName="eyebrow"
+        descriptionClassName="hero-copy"
+        titleTestId="winners-title"
+        before={
+          <div className="winners-hero-top">
+            <div className="hero-brand">
+              <div className="hero-logo-shell hero-logo-shell-compact">
+                <img className="hero-logo" src={projectLogo} alt={`Логотип ${APP_DISPLAY_NAME}`} />
+              </div>
+              <div className="hero-brand-copy">
+                <span className="hero-brand-kicker">BREAKING SQUAD</span>
+                <span className="hero-brand-subtitle">розыгрыши и победители</span>
+              </div>
             </div>
           </div>
-        </div>
-
-        <div className="winners-hero-main">
-          <p className="eyebrow">Розыгрыши BSS</p>
-          <h1 data-testid="winners-title">Победители розыгрышей</h1>
-          <p className="hero-copy">
-            Здесь собраны текущие розыгрыши и история победителей со всех серверов BSS.
-          </p>
-        </div>
-
+        }
+      >
         <div className="winners-hero-stats">
           <article>
             <span>Активно</span>
@@ -2057,7 +1994,7 @@ function WinnersPage({ snapshot, now, route, vipShopUrl }: WinnersPageProps) {
             <strong>{formatCompactTimestamp(snapshot.generatedAt)}</strong>
           </article>
         </div>
-      </header>
+      </PageHeader>
 
       {raffleServers.length ? (
         <>
@@ -2218,7 +2155,7 @@ function WinnersPage({ snapshot, now, route, vipShopUrl }: WinnersPageProps) {
           </article>
         </section>
       )}
-    </div>
+    </PageShell>
   );
 }
 
@@ -2623,20 +2560,18 @@ function BalancePage({ snapshot, route, vipShopUrl }: ServerHistoryPageProps) {
   const [proposalMode, setProposalMode] = useState<TeamBalancerProposalMode>('squad');
 
   return (
-    <div className="shell modern-shell" style={BRAND_STYLE} data-testid="balance-page">
-      <AppTopbar currentRoute={route} vipShopUrl={vipShopUrl} />
-      <section className="section-shell">
-        <div className="section-head">
-          <div>
-            <span className="section-eyebrow">Серверы</span>
-            <h1>Балансер</h1>
-          </div>
-          <p>
-            Состояние голосования, предварительный расчёт и только реально выполненные
-            межматчевые перемещения.
-          </p>
-        </div>
-      </section>
+    <PageShell
+      currentRoute={route}
+      vipShopUrl={vipShopUrl}
+      brandStyle={BRAND_STYLE}
+      testId="balance-page"
+    >
+      <PageHeader
+        eyebrow="Серверы"
+        title="Балансер"
+        description="Состояние голосования, предварительный расчёт и только реально выполненные межматчевые перемещения."
+        className="section-shell"
+      />
 
       {snapshot.servers.length ? (
         snapshot.servers.map((server) => (
@@ -2668,32 +2603,31 @@ function BalancePage({ snapshot, route, vipShopUrl }: ServerHistoryPageProps) {
           <div className="server-activity-empty">Данные о серверах пока не поступили.</div>
         </section>
       )}
-    </div>
+    </PageShell>
   );
 }
 
 function JournalPage({ snapshot, route, vipShopUrl }: ServerHistoryPageProps) {
   return (
-    <div className="shell modern-shell" style={BRAND_STYLE} data-testid="journal-page">
-      <AppTopbar currentRoute={route} vipShopUrl={vipShopUrl} />
-      <section className="section-shell journal-page-intro">
-        <div className="section-head">
-          <div>
-            <span className="section-eyebrow">После матча</span>
-            <h1>Журнал матчей</h1>
-          </div>
-          <p>
-            Выберите сервер и матч: табы, убийства, урон, техника и поднятия не
-            публикуются до завершения игры.
-          </p>
-        </div>
+    <PageShell
+      currentRoute={route}
+      vipShopUrl={vipShopUrl}
+      brandStyle={BRAND_STYLE}
+      testId="journal-page"
+    >
+      <PageHeader
+        eyebrow="После матча"
+        title="Журнал матчей"
+        description="Выберите сервер и матч: табы, убийства, урон, техника и поднятия не публикуются до завершения игры."
+        className="section-shell journal-page-intro"
+      >
         <div className="journal-privacy-note">
           <span aria-hidden="true">●</span>
           Только завершённые матчи · последние 10 записей на сервер
         </div>
-      </section>
+      </PageHeader>
       <JournalWorkspace servers={snapshot.servers} />
-    </div>
+    </PageShell>
   );
 }
 
@@ -3640,10 +3574,23 @@ export default function App({ config }: AppProps) {
   }
 
   return (
-    <div className="shell modern-shell" style={BRAND_STYLE} data-testid="app-shell">
-      <AppTopbar currentRoute={route} vipShopUrl={vipShopUrl} />
-      <header className="hero hero-redesign" data-testid="hero">
-        <div className="hero-main hero-main-tight">
+    <PageShell
+      currentRoute={route}
+      vipShopUrl={vipShopUrl}
+      brandStyle={BRAND_STYLE}
+      testId="app-shell"
+    >
+      <PageHeader
+        eyebrow="Автосид BSS"
+        title={APP_DISPLAY_NAME}
+        description="Рабочий экран для выбора цели, проверки браузера и запуска подключения без лишних переходов."
+        className="hero hero-redesign"
+        headingClassName="hero-main hero-main-tight"
+        eyebrowClassName="eyebrow"
+        descriptionClassName="hero-copy hero-copy-tight"
+        titleTestId="hero-title"
+        testId="hero"
+        headingLead={
           <div className="hero-topline">
             <div className="hero-brand">
               <div className="hero-logo-shell">
@@ -3662,61 +3609,59 @@ export default function App({ config }: AppProps) {
               testId="hero-help"
             />
           </div>
+        }
+        afterDescription={
+          <>
+            <div className="hero-ribbon" data-testid="hero-ribbon">
+              <span className="hero-ribbon-tag">Куда заходим</span>
+              <p>
+                {displayTargetServer
+                  ? `${formatServerDisplayName(displayTargetServer)} · ${statusText}`
+                  : 'Подходящий сервер пока не найден.'}
+              </p>
+            </div>
 
-          <p className="eyebrow">Автосид BSS</p>
-          <h1 data-testid="hero-title">{APP_DISPLAY_NAME}</h1>
-          <p className="hero-copy hero-copy-tight">
-            Рабочий экран для выбора цели, проверки браузера и запуска подключения без лишних
-            переходов.
-          </p>
+            <div className="hero-badges hero-badges-tight">
+              <span className={classNames('status-pill', enabled ? 'status-good' : 'status-muted')}>
+                {enabled ? 'Автоподключение активно' : 'Автоподключение выключено'}
+              </span>
+              <span
+                className={classNames(
+                  'status-pill',
+                  permissionsReady ? 'status-good' : 'status-danger'
+                )}
+              >
+                {permissionsReady ? 'Браузер готов' : 'Нужна проверка браузера'}
+              </span>
+            </div>
 
-          <div className="hero-ribbon" data-testid="hero-ribbon">
-            <span className="hero-ribbon-tag">Куда заходим</span>
-            <p>
-              {displayTargetServer
-                ? `${formatServerDisplayName(displayTargetServer)} · ${statusText}`
-                : 'Подходящий сервер пока не найден.'}
-            </p>
-          </div>
+            <div className="hero-glance-grid" data-testid="hero-glance-grid">
+              <article className="hero-glance-card hero-glance-card-emphasis">
+                <span className="hero-glance-label">Серверы</span>
+                <strong>{heroMeshLabel}</strong>
+                <p>доступно сейчас</p>
+              </article>
+              <article className="hero-glance-card">
+                <span className="hero-glance-label">
+                  {pendingSequence ? 'Следующий переход' : 'Обновление'}
+                </span>
+                <strong data-testid="hero-next-action-value">{nextActionValue}</strong>
+                <p>{nextActionCaption}</p>
+              </article>
+              <article className="hero-glance-card">
+                <span className="hero-glance-label">Режим</span>
+                <strong>{heroModeLabel}</strong>
+                <p>{heroModeCaption}</p>
+              </article>
+            </div>
 
-          <div className="hero-badges hero-badges-tight">
-            <span className={classNames('status-pill', enabled ? 'status-good' : 'status-muted')}>
-              {enabled ? 'Автоподключение активно' : 'Автоподключение выключено'}
-            </span>
-            <span
-              className={classNames(
-                'status-pill',
-                permissionsReady ? 'status-good' : 'status-danger'
-              )}
-            >
-              {permissionsReady ? 'Браузер готов' : 'Нужна проверка браузера'}
-            </span>
-          </div>
-
-          <div className="hero-glance-grid" data-testid="hero-glance-grid">
-            <article className="hero-glance-card hero-glance-card-emphasis">
-              <span className="hero-glance-label">Серверы</span>
-              <strong>{heroMeshLabel}</strong>
-              <p>доступно сейчас</p>
-            </article>
-            <article className="hero-glance-card">
-              <span className="hero-glance-label">{pendingSequence ? 'Следующий переход' : 'Обновление'}</span>
-              <strong data-testid="hero-next-action-value">{nextActionValue}</strong>
-              <p>{nextActionCaption}</p>
-            </article>
-            <article className="hero-glance-card">
-              <span className="hero-glance-label">Режим</span>
-              <strong>{heroModeLabel}</strong>
-              <p>{heroModeCaption}</p>
-            </article>
-          </div>
-
-          <div className="mobile-status-strip" data-testid="mobile-monitor-note">
-            <span className="status-pill status-accent">Мобильный просмотр</span>
-            <p>Steam-вход доступен с ПК. Здесь остаются цель, серверы и состав.</p>
-          </div>
-        </div>
-
+            <div className="mobile-status-strip" data-testid="mobile-monitor-note">
+              <span className="status-pill status-accent">Мобильный просмотр</span>
+              <p>Steam-вход доступен с ПК. Здесь остаются цель, серверы и состав.</p>
+            </div>
+          </>
+        }
+      >
         <aside className="control-deck desktop-connector">
           <div className="guide-focus guide-focus-neutral">
             <div className="guide-control-label">
@@ -3893,7 +3838,7 @@ export default function App({ config }: AppProps) {
             </div>
           </div>
         </aside>
-      </header>
+      </PageHeader>
 
       <details className="panel panel-span guide-spoiler">
         <summary className="details-summary">
@@ -4277,6 +4222,6 @@ export default function App({ config }: AppProps) {
         )}
       </section>
 
-    </div>
+    </PageShell>
   );
 }
