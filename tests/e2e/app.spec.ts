@@ -1820,6 +1820,7 @@ test('renders the localized control room from exporter snapshots', async ({ page
   await expect(page.getByTestId('hero-title')).toHaveText('Автосид BSS');
   await expect(page.getByTestId('hero-glance-grid')).toBeVisible();
   await expect(page.getByTestId('overview-target')).toContainText('SPEC OPS');
+  await expect(page.locator('.overview-grid')).toHaveCount(0);
   await expect(page.getByTestId('server-card-1')).toContainText('MIX');
   await expect(page.getByTestId('server-card-2')).toContainText('SPEC OPS');
   await expect(page.getByTestId('active-server-board')).toContainText('вход по запросу');
@@ -2443,6 +2444,24 @@ test('shows the balancer and completed-game journal on separate routes', async (
   await expect(journalPage.getByTestId('team-balancer-history-panel')).toHaveCount(0);
 });
 
+test('shows one selected balancer server instead of stacking every full panel', async ({
+  page
+}) => {
+  await mockAutoseedApi(page);
+  await page.goto('./#balance');
+
+  const visiblePanels = page.locator(
+    'section[data-testid^="balance-server-"]:not([data-testid="balance-server-selector"])'
+  );
+  await expect(visiblePanels).toHaveCount(1);
+  await expect(page.getByTestId('balance-server-2')).toBeVisible();
+
+  await page.getByTestId('balance-server-selector-1').click();
+  await expect(visiblePanels).toHaveCount(1);
+  await expect(page.getByTestId('balance-server-1')).toBeVisible();
+  await expect(page.getByTestId('balance-server-2')).toHaveCount(0);
+});
+
 test('keeps all Team Balancer meta cards in one desktop row', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.clock.setFixedTime('2026-07-06T12:01:00.000Z');
@@ -2962,6 +2981,25 @@ test('renders role leaderboards, achievements and restores controls from the lin
   await expectPlayerFriendlyLanguage(page);
 });
 
+test('keeps the leaderboard filter height stable while switching roles', async ({
+  page
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await mockLeaderboardApi(page);
+  await page.goto('./#leaderboards?period=week&role=player');
+
+  const controls = page.locator('.leaderboard-control-stack');
+  await expect(controls).toBeVisible();
+  const playerBox = await controls.boundingBox();
+  expect(playerBox).not.toBeNull();
+
+  await page.getByTestId('leaderboard-role-squad_leader').click();
+  await expect(page.getByTestId('leaderboard-squad-size-full')).toBeVisible();
+  const squadLeaderBox = await controls.boundingBox();
+  expect(squadLeaderBox).not.toBeNull();
+  expect(Math.abs(squadLeaderBox!.height - playerBox!.height)).toBeLessThanOrEqual(1);
+});
+
 test('uses player-friendly language for unavailable leaderboards', async ({ page }) => {
   await mockAutoseedApi(page);
 
@@ -3227,6 +3265,43 @@ test('shows raffle participant nicknames without public identifiers', async ({ p
     document: document.documentElement.scrollWidth
   }));
   expect(dimensions.document).toBeLessThanOrEqual(dimensions.viewport);
+});
+
+test('limits the winners archive by default and expands it on request', async ({
+  page
+}) => {
+  await page.clock.setFixedTime('2026-07-20T12:00:00.000Z');
+  const history = Array.from({ length: 8 }, (_, index) => {
+    const day = String(19 - index).padStart(2, '0');
+    return {
+      id: 100 + index,
+      serverID: 2,
+      prize: `Приз ${index + 1}`,
+      amountRubles: 500,
+      startedAt: `2026-07-${day}T18:00:00.000Z`,
+      endedAt: `2026-07-${day}T18:20:00.000Z`,
+      participants: [],
+      winner: null,
+      startedBy: null,
+      source: 'auto'
+    };
+  });
+  await mockRaffleAutoseedApi(page, {
+    squad2Raffles: buildRaffleSnapshot({ history })
+  });
+  await page.goto('./#winners');
+
+  await expect(page.getByTestId('winners-history-list').locator('.winner-row')).toHaveCount(5);
+  await expect(page.getByTestId('winners-history-toggle')).toHaveText(
+    'Показать весь архив (8)'
+  );
+
+  await page.getByTestId('winners-history-toggle').click();
+  await expect(page.getByTestId('winners-history-list').locator('.winner-row')).toHaveCount(8);
+  await expect(page.getByTestId('winners-history-toggle')).toHaveAttribute(
+    'aria-expanded',
+    'true'
+  );
 });
 
 test('renders the series card only after its campaign has started', async ({ page }) => {

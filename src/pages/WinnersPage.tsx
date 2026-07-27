@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 import projectLogo from '../../image.png';
 
 import {
@@ -69,6 +71,7 @@ const EMPTY_RAFFLE_BUDGET: RaffleBudgetView = {
   spentRubles: 0,
   remainingRubles: 0
 };
+const DEFAULT_HISTORY_LIMIT = 5;
 
 function getRaffleServers(snapshot: CombinedSnapshot): RaffleServerSnapshot[] {
   return snapshot.servers.flatMap((server) =>
@@ -170,6 +173,7 @@ function getPrimaryRaffleServer(raffleServers: RaffleServerSnapshot[]): RaffleSe
 }
 
 export function WinnersPage({ snapshot, now, route, vipShopUrl }: WinnersPageProps) {
+  const [historyExpanded, setHistoryExpanded] = useState(false);
   const raffleServers = getRaffleServers(snapshot);
   const activeRaffles = getActiveRaffles(raffleServers);
   const history = getRaffleHistory(raffleServers);
@@ -181,6 +185,10 @@ export function WinnersPage({ snapshot, now, route, vipShopUrl }: WinnersPagePro
   const primaryRaffleServer = getPrimaryRaffleServer(raffleServers);
   const budget = primaryRaffleServer?.raffles.budget || EMPTY_RAFFLE_BUDGET;
   const latestWinner = history.find((item) => item.entry.winner)?.entry.winner || null;
+  const visibleHistory = history.slice(
+    0,
+    historyExpanded ? history.length : DEFAULT_HISTORY_LIMIT
+  );
 
   return (
     <PageShell
@@ -327,12 +335,16 @@ export function WinnersPage({ snapshot, now, route, vipShopUrl }: WinnersPagePro
                 <span className="section-eyebrow">История</span>
                 <h2>Последние победители</h2>
               </div>
-              <p>Завершённые розыгрыши со всех серверов.</p>
+              <p>
+                {history.length > DEFAULT_HISTORY_LIMIT && !historyExpanded
+                  ? `Показаны последние ${DEFAULT_HISTORY_LIMIT} из ${history.length}.`
+                  : 'Завершённые розыгрыши со всех серверов.'}
+              </p>
             </div>
 
             <div className="winners-history-list" data-testid="winners-history-list">
               {history.length ? (
-                history.map(({ server, entry }) => {
+                visibleHistory.map(({ server, entry }) => {
                   const entryKey = `${server.id}-${entry.id || entry.startedAt || entry.prize}`;
                   const participantTestId = entry.id ?? entryKey;
 
@@ -374,6 +386,19 @@ export function WinnersPage({ snapshot, now, route, vipShopUrl }: WinnersPagePro
                 <div className="roster-empty">Завершённых розыгрышей пока нет.</div>
               )}
             </div>
+            {history.length > DEFAULT_HISTORY_LIMIT ? (
+              <button
+                type="button"
+                className="winners-history-toggle"
+                aria-expanded={historyExpanded}
+                data-testid="winners-history-toggle"
+                onClick={() => setHistoryExpanded((value) => !value)}
+              >
+                {historyExpanded
+                  ? `Свернуть до последних ${DEFAULT_HISTORY_LIMIT}`
+                  : `Показать весь архив (${history.length})`}
+              </button>
+            ) : null}
           </section>
         </>
       ) : (
