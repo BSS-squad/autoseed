@@ -41,6 +41,7 @@ import type {
   ExporterActivityEventCountsSnapshot,
   ExporterActivityKillfeedEventSnapshot,
   ExporterActivityRecentRoundSnapshot,
+  ExporterActivityScoreboardTeamSnapshot,
   ExporterActivitySessionEventsSnapshot,
   ExporterActivitySessionResponse,
   ExporterActivityTopWindowSnapshot,
@@ -77,6 +78,8 @@ const EMPTY_EVENTS: ExporterActivitySessionEventsSnapshot = {
 };
 
 const DEFAULT_EVENT_PAGE_SIZE: EventPageSize = 10;
+const SCOREBOARD_PAGE_SIZE_OPTIONS = [10, 25, 50] as const;
+type ScoreboardPageSize = (typeof SCOREBOARD_PAGE_SIZE_OPTIONS)[number];
 
 function classNames(...values: Array<string | false | null | undefined>): string {
   return values.filter(Boolean).join(' ');
@@ -352,19 +355,173 @@ function SessionTopSummary({ topWindow }: { topWindow: ExporterActivityTopWindow
   );
 }
 
+function ScoreboardTeamCard({
+  team
+}: {
+  team: ExporterActivityScoreboardTeamSnapshot;
+}) {
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<ScoreboardPageSize>(
+    SCOREBOARD_PAGE_SIZE_OPTIONS[0]
+  );
+  const sortedPlayers = useMemo(
+    () => sortScoreboardPlayers(team.players),
+    [team.players]
+  );
+  const pageRange = getPageRange(sortedPlayers.length, page, pageSize);
+  const pageCount = getPageCount(sortedPlayers.length, pageSize);
+  const visiblePlayers = sortedPlayers.slice(pageRange.start, pageRange.end);
+  const unknown = team.teamID === 'unknown' || team.result === null;
+  const teamName = formatTeamDisplayName(team);
+
+  return (
+    <section
+      className={classNames(
+        'journal-team-card',
+        unknown && 'journal-team-card-unknown'
+      )}
+      data-testid={`journal-scoreboard-team-${team.teamID}`}
+    >
+      <header>
+        <div>
+          <span>
+            {team.result === 'winner'
+              ? 'Победа'
+              : team.result === 'loser'
+                ? 'Поражение'
+                : 'Без стороны'}
+          </span>
+          <h3>{teamName}</h3>
+        </div>
+        <p>
+          {team.totals.revives || 0} поднятий · {team.totals.knockdowns} нокаутов ·{' '}
+          {team.totals.kills} убийств · {team.totals.deaths || 0} смертей ·{' '}
+          {team.totals.teamkills || 0} тимкиллов · {team.totals.vehicleKills || 0}{' '}
+          единиц техники · {formatNumber(team.totals.vehicleDamage)} урона технике
+        </p>
+      </header>
+      {unknown ? (
+        <div className="journal-data-note">
+          Сервер не успел сохранить сторону части игроков — они вынесены отдельно.
+        </div>
+      ) : null}
+
+      {sortedPlayers.length > SCOREBOARD_PAGE_SIZE_OPTIONS[0] ? (
+        <div className="journal-scoreboard-controls">
+          <span>
+            Игроки {pageRange.start + 1}–{pageRange.end} из {sortedPlayers.length}
+          </span>
+          <label>
+            <span>На странице</span>
+            <select
+              aria-label={`Игроков ${teamName} на странице`}
+              data-testid={`journal-scoreboard-page-size-${team.teamID}`}
+              value={pageSize}
+              onChange={(event) => {
+                setPageSize(Number(event.target.value) as ScoreboardPageSize);
+                setPage(1);
+              }}
+            >
+              {SCOREBOARD_PAGE_SIZE_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      ) : null}
+
+      <p className="journal-table-scroll-hint">
+        Листайте таблицу в сторону — имя игрока останется на месте.
+      </p>
+      <ResponsiveTable
+        label={`Итоги ${teamName}`}
+        className="journal-table-wrap"
+      >
+        <table>
+          <thead>
+            <tr>
+              <th>Игрок</th>
+              <th>Отряд / роль</th>
+              {SCOREBOARD_METRICS.map((metric) => (
+                <th key={metric.key}>{metric.label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {visiblePlayers.length ? (
+              visiblePlayers.map((player, index) => (
+                <tr
+                  className="journal-scoreboard-player-row"
+                  key={`${player.name}:${pageRange.start + index}`}
+                >
+                  <td>{player.name}</td>
+                  <td>
+                    {[
+                      formatSquadDisplayName(player.squad),
+                      formatPlayerRole(player.role)
+                    ]
+                      .filter(Boolean)
+                      .join(' · ') || '—'}
+                  </td>
+                  {SCOREBOARD_METRICS.map((metric) => (
+                    <td key={metric.key}>{player[metric.key]}</td>
+                  ))}
+                </tr>
+              ))
+            ) : (
+              <tr className="journal-scoreboard-empty-row">
+                <td colSpan={SCOREBOARD_METRICS.length + 2}>
+                  Игроки этой стороны не сохранились.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </ResponsiveTable>
+
+      {pageCount > 1 ? (
+        <nav
+          className="journal-pagination journal-scoreboard-pagination"
+          aria-label={`Страницы итогов ${teamName}`}
+        >
+          <button
+            className="journal-pagination-button"
+            type="button"
+            onClick={() => setPage(pageRange.page - 1)}
+            disabled={pageRange.page <= 1}
+          >
+            Назад
+          </button>
+          <span>
+            Страница {pageRange.page} из {pageCount}
+          </span>
+          <button
+            className="journal-pagination-button"
+            type="button"
+            onClick={() => setPage(pageRange.page + 1)}
+            disabled={pageRange.page >= pageCount}
+          >
+            Вперёд
+          </button>
+        </nav>
+      ) : null}
+    </section>
+  );
+}
+
 function ScoreboardView({
-  response,
-  server
+  response
 }: {
   response: ExporterActivitySessionResponse;
-  server: ExporterServerSnapshot | null;
 }) {
   const teams = response.session.scoreboard?.teams || [];
   if (!teams.length) {
     return (
       <EmptyState
         className="journal-empty-state"
-        title="Итоговые табы не сохранились"
+        title="Итоговая таблица не сохранилась"
         description="Матч завершён, но сервер не передал состав сторон и показатели игроков."
       />
     );
@@ -380,67 +537,12 @@ function ScoreboardView({
       </div>
 
       <div className="journal-scoreboard-teams">
-        {teams.map((team) => {
-          const unknown = team.teamID === 'unknown' || team.result === null;
-          return (
-            <section
-              className={classNames('journal-team-card', unknown && 'journal-team-card-unknown')}
-              key={team.teamID}
-            >
-              <header>
-                <div>
-                  <span>{team.result === 'winner' ? 'Победа' : team.result === 'loser' ? 'Поражение' : 'Без стороны'}</span>
-                  <h3>{formatTeamDisplayName(team)}</h3>
-                </div>
-                <p>
-                  {team.totals.revives || 0} поднятий · {team.totals.knockdowns} нокаутов ·{' '}
-                  {team.totals.kills} убийств · {team.totals.deaths || 0} смертей ·{' '}
-                  {team.totals.teamkills || 0} тимкиллов · {team.totals.vehicleKills || 0}{' '}
-                  единиц техники · {formatNumber(team.totals.vehicleDamage)} урона технике
-                </p>
-              </header>
-              {unknown ? (
-                <div className="journal-data-note">
-                  Сервер не успел сохранить сторону части игроков — они вынесены отдельно.
-                </div>
-              ) : null}
-              <ResponsiveTable
-                label={`Итоги ${formatTeamDisplayName(team)}`}
-                className="journal-table-wrap"
-              >
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Игрок</th>
-                      <th>Отряд / роль</th>
-                      {SCOREBOARD_METRICS.map((metric) => (
-                        <th key={metric.key}>{metric.label}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sortScoreboardPlayers(team.players).map((player, index) => (
-                      <tr key={`${player.name}:${index}`}>
-                        <td>{player.name}</td>
-                        <td>
-                          {[
-                            formatSquadDisplayName(player.squad),
-                            formatPlayerRole(player.role)
-                          ]
-                            .filter(Boolean)
-                            .join(' · ') || '—'}
-                        </td>
-                        {SCOREBOARD_METRICS.map((metric) => (
-                          <td key={metric.key}>{player[metric.key]}</td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </ResponsiveTable>
-            </section>
-          );
-        })}
+        {teams.map((team) => (
+          <ScoreboardTeamCard
+            team={team}
+            key={`${response.session.sessionId}:${team.teamID}`}
+          />
+        ))}
       </div>
     </div>
   );
@@ -759,7 +861,10 @@ function MatchExportActions({
   const [message, setMessage] = useState('');
   const passwordRef = useRef<HTMLInputElement>(null);
 
-  if (!response.session.matchExportAvailable || !server) return null;
+  const isMdcCustom =
+    server !== null &&
+    (server.id === 6 || server.code.trim().toLocaleLowerCase('ru') === 'squadjs6');
+  if (!response.session.matchExportAvailable || !server || !isMdcCustom) return null;
 
   const download = async (format: MatchExportFormat) => {
     const password = passwordRef.current?.value || '';
@@ -975,8 +1080,11 @@ export function JournalWorkspace({ servers }: JournalWorkspaceProps) {
   const activeDetail = detail.key === detailKey ? detail : null;
   const response = activeDetail?.response || null;
   const counts = response?.session.eventCounts || selectedSession?.eventCounts || EMPTY_COUNTS;
-  const tabs: Array<{ id: JournalTab; label: string; count: number | null }> = [
-    { id: 'scoreboard', label: 'Табы', count: response?.session.scoreboard?.teams.length || null },
+  const eventTabs: Array<{
+    id: Exclude<JournalTab, 'scoreboard'>;
+    label: string;
+    count: number;
+  }> = [
     { id: 'kills', label: 'Убийства', count: counts.kills + counts.knockdowns },
     { id: 'damage', label: 'Урон', count: counts.damage },
     { id: 'vehicles', label: 'Техника', count: counts.vehicles },
@@ -995,31 +1103,38 @@ export function JournalWorkspace({ servers }: JournalWorkspaceProps) {
   return (
     <>
       <ServerSelector label="Выбор сервера" className="journal-server-switcher">
-        {servers.map((server) => {
-          const serverSessions = getSessions(server);
-          const active = server.code === selectedServer?.code;
-          return (
-            <button
-              type="button"
-              className={classNames('journal-server-button', active && 'is-active')}
-              onClick={() => {
-                setSelectedServerCode(server.code);
-                setSelectedSessionId('');
-              }}
-              key={`${server.code}:${server.id}`}
-              aria-pressed={active}
-              title={formatServerDisplayName(server)}
-              data-testid={`journal-server-${server.id}`}
-            >
-              <span>{server.online ? 'В сети' : 'Оффлайн'}</span>
-              <strong>{formatServerDisplayName(server)}</strong>
-              <p>
-                {serverSessions.length} матчей ·{' '}
-                {serverSessions[0] ? formatMatchDate(serverSessions[0].endedAt) : 'истории нет'}
-              </p>
-            </button>
-          );
-        })}
+        <div className="journal-server-track">
+          {servers.map((server) => {
+            const serverSessions = getSessions(server);
+            const active = server.code === selectedServer?.code;
+            return (
+              <button
+                type="button"
+                className={classNames('journal-server-button', active && 'is-active')}
+                onClick={() => {
+                  setSelectedServerCode(server.code);
+                  setSelectedSessionId('');
+                }}
+                key={`${server.code}:${server.id}`}
+                aria-pressed={active}
+                title={formatServerDisplayName(server)}
+                data-testid={`journal-server-${server.id}`}
+              >
+                <span>{server.online ? 'В сети' : 'Оффлайн'}</span>
+                <strong>{formatServerDisplayName(server)}</strong>
+                <p>
+                  {serverSessions.length} матчей ·{' '}
+                  {serverSessions[0]
+                    ? formatMatchDate(serverSessions[0].endedAt)
+                    : 'истории нет'}
+                </p>
+              </button>
+            );
+          })}
+        </div>
+        <p className="journal-mobile-scroll-hint">
+          Листайте карточки в сторону, чтобы выбрать другой сервер.
+        </p>
       </ServerSelector>
 
       <section className="journal-workspace" data-testid="journal-workspace">
@@ -1098,7 +1213,7 @@ export function JournalWorkspace({ servers }: JournalWorkspaceProps) {
 
               {response && !response.session.journalAvailable ? (
                 <div className="journal-legacy-note" role="status">
-                  Итоговые табы доступны, но журнал событий этой сессии не сохранился.
+                  Итоги матча доступны, но журнал событий этой сессии не сохранился.
                 </div>
               ) : activeDetail?.partial ? (
                 <div className="journal-legacy-note" role="status">
@@ -1107,22 +1222,72 @@ export function JournalWorkspace({ servers }: JournalWorkspaceProps) {
                 </div>
               ) : null}
 
-              <div className="journal-tabs" role="tablist" aria-label="Раздел журнала матча">
-                {tabs.map((item) => (
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={tab === item.id}
-                    className={classNames('journal-tab', tab === item.id && 'is-active')}
-                    onClick={() => setTab(item.id)}
-                    key={item.id}
-                    data-testid={`journal-tab-${item.id}`}
-                  >
-                    <span>{item.label}</span>
-                    {item.count !== null ? <strong>{item.count}</strong> : null}
-                  </button>
-                ))}
+              <div
+                className="journal-task-switcher"
+                role="tablist"
+                aria-label="Вид данных матча"
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === 'scoreboard'}
+                  className={classNames(
+                    'journal-task-button',
+                    tab === 'scoreboard' && 'is-active'
+                  )}
+                  data-testid="journal-view-scoreboard"
+                  onClick={() => setTab('scoreboard')}
+                >
+                  <strong>Итоги матча</strong>
+                  <span>Финальные показатели игроков и сторон</span>
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={tab !== 'scoreboard'}
+                  className={classNames(
+                    'journal-task-button',
+                    tab !== 'scoreboard' && 'is-active'
+                  )}
+                  data-testid="journal-view-events"
+                  onClick={() => setTab(tab === 'scoreboard' ? 'kills' : tab)}
+                >
+                  <strong>События матча</strong>
+                  <span>Записи действий по ходу игры</span>
+                </button>
               </div>
+
+              <div className="journal-data-explainer" role="note">
+                {tab === 'scoreboard'
+                  ? 'Итоги берутся из финальной таблицы Squad. Они могут не совпадать с количеством отдельных записей в журнале событий.'
+                  : 'События — отдельные записи сервера по ходу матча. Нокаут и последующее убийство могут быть разными строками, поэтому число событий не равно убийствам в итогах.'}
+              </div>
+
+              {tab !== 'scoreboard' ? (
+                <div
+                  className="journal-tabs"
+                  role="tablist"
+                  aria-label="Категория событий матча"
+                >
+                  {eventTabs.map((item) => (
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={tab === item.id}
+                      className={classNames(
+                        'journal-tab',
+                        tab === item.id && 'is-active'
+                      )}
+                      onClick={() => setTab(item.id)}
+                      key={item.id}
+                      data-testid={`journal-tab-${item.id}`}
+                    >
+                      <span>{item.label}</span>
+                      <strong>{item.count}</strong>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
 
               <div className="journal-tab-panel" role="tabpanel">
                 {(!activeDetail || activeDetail.status === 'loading') && !response ? (
@@ -1133,7 +1298,7 @@ export function JournalWorkspace({ servers }: JournalWorkspaceProps) {
                     <p>{activeDetail?.error || 'Сервер ещё не подготовил архив выбранного матча.'}</p>
                   </div>
                 ) : tab === 'scoreboard' ? (
-                  <ScoreboardView response={response} server={selectedServer} />
+                  <ScoreboardView response={response} />
                 ) : (
                   <EventJournal
                     events={response.events || EMPTY_EVENTS}
@@ -1157,7 +1322,7 @@ export function JournalWorkspace({ servers }: JournalWorkspaceProps) {
           ) : (
             <div className="journal-empty-state journal-match-empty">
               <strong>Выберите завершённый матч</strong>
-              <p>Табы и журнал никогда не показываются до окончания игры.</p>
+              <p>Итоги и события никогда не показываются до окончания игры.</p>
             </div>
           )}
         </main>
