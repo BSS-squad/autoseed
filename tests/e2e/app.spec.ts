@@ -905,7 +905,7 @@ async function fulfillJson(route: Route, payload: unknown) {
 async function expectPlayerFriendlyLanguage(page: Page) {
   const visibleText = await page.locator('body').innerText();
   expect(visibleText).not.toMatch(
-    /\b(snapshot|raffle|exporter|endpoint|autoconnect)\b|снимок|экспортер|коннектор|текущая цель|боевой режим/i
+    /\b(snapshot|raffle|exporter|endpoint|autoconnect|diff|dry-run|sl|cmd|squadjs\d*)\b|снимок|экспортер|коннектор|текущая цель|боевой режим|mdj/i
   );
 }
 
@@ -1819,9 +1819,9 @@ test('renders the localized control room from exporter snapshots', async ({ page
 
   await expect(page.getByTestId('hero-title')).toHaveText('Автосид BSS');
   await expect(page.getByTestId('hero-glance-grid')).toBeVisible();
-  await expect(page.getByTestId('overview-target')).toContainText('[RU] BSS Spec Ops');
-  await expect(page.getByTestId('server-card-1')).toContainText('[RU] BSS Classic');
-  await expect(page.getByTestId('server-card-2')).toContainText('[RU] BSS Spec Ops');
+  await expect(page.getByTestId('overview-target')).toContainText('SPEC OPS');
+  await expect(page.getByTestId('server-card-1')).toContainText('MIX');
+  await expect(page.getByTestId('server-card-2')).toContainText('SPEC OPS');
   await expect(page.getByTestId('active-server-board')).toContainText('вход по запросу');
   await expect(page.getByText('Как запустить')).toBeVisible();
   await expect(page.getByText('Выбор сервера')).toBeVisible();
@@ -1861,7 +1861,7 @@ test('keeps a private event server in the journal but out of autoseed controls',
   await page.goto('./');
 
   await expect(page.getByTestId('server-card-6')).toHaveCount(0);
-  await expect(page.getByTestId('overview-target')).toContainText('[RU] BSS Spec Ops');
+  await expect(page.getByTestId('overview-target')).toContainText('SPEC OPS');
 
   await page.goto('./#journal?server=squadjs6');
 
@@ -1904,10 +1904,10 @@ test('normalizes exporter v3 fixtures and follows Mix Spec Ops Invasion day prio
 
   await page.goto('./');
 
-  await expect(page.getByTestId('overview-target')).toContainText('[RU] BSS Mix');
-  await expect(page.getByTestId('server-card-1')).toContainText('[RU] BSS Mix');
-  await expect(page.getByTestId('server-card-2')).toContainText('[RU] BSS Spec Ops');
-  await expect(page.getByTestId('server-card-3')).toContainText('[RU] BSS Invasion');
+  await expect(page.getByTestId('overview-target')).toContainText('MIX');
+  await expect(page.getByTestId('server-card-1')).toContainText('MIX');
+  await expect(page.getByTestId('server-card-2')).toContainText('SPEC OPS');
+  await expect(page.getByTestId('server-card-3')).toContainText('INVASION');
 });
 
 test('keeps strict day priority even when a later server is stronger', async ({ page }) => {
@@ -1920,12 +1920,12 @@ test('keeps strict day priority even when a later server is stronger', async ({ 
   await mockPriorityAutoseedApi(page, snapshotState);
 
   await page.goto('./');
-  await expect(page.getByTestId('overview-target')).toContainText('[RU] BSS Mix');
+  await expect(page.getByTestId('overview-target')).toContainText('MIX');
 
   snapshotState.specOpsPlayers = 71;
   await page.getByTestId('refresh-snapshot-button').click();
 
-  await expect(page.getByTestId('overview-target')).toContainText('[RU] BSS Mix');
+  await expect(page.getByTestId('overview-target')).toContainText('MIX');
 });
 
 test('skips a priority server that has reached the seed limit', async ({ page }) => {
@@ -1938,7 +1938,7 @@ test('skips a priority server that has reached the seed limit', async ({ page })
 
   await page.goto('./');
 
-  await expect(page.getByTestId('overview-target')).toContainText('[RU] BSS Spec Ops');
+  await expect(page.getByTestId('overview-target')).toContainText('SPEC OPS');
 });
 
 test('uses squadjs3 -> squadjs2 -> squadjs1 priority at night', async ({ page }) => {
@@ -1951,7 +1951,7 @@ test('uses squadjs3 -> squadjs2 -> squadjs1 priority at night', async ({ page })
 
   await page.goto('./');
 
-  await expect(page.getByTestId('overview-target')).toContainText('[RU] BSS Invasion');
+  await expect(page.getByTestId('overview-target')).toContainText('INVASION');
 });
 
 test('renders an empty Team Balancer state when no fresh report exists', async ({ page }) => {
@@ -1969,6 +1969,7 @@ test('renders an empty Team Balancer state when no fresh report exists', async (
   await expect(panel).not.toContainText('snapshot');
   await expect(panel).not.toContainText('7656119');
   await expect(page.getByTestId('team-balancer-round-signals')).toHaveCount(0);
+  await expectPlayerFriendlyLanguage(page);
 });
 
 test('renders healthy Team Balancer state without proposal rows', async ({ page }) => {
@@ -2004,6 +2005,7 @@ test('renders healthy Team Balancer state without proposal rows', async ({ page 
   await expect(panel).not.toContainText('Сила сторон');
   await expect(page.getByTestId('team-balancer-round-signals')).toHaveCount(0);
   await expect(page.getByTestId('team-balancer-diff-row')).toHaveCount(0);
+  await expectPlayerFriendlyLanguage(page);
 });
 
 test('renders one completed session with separate full journal categories', async ({ page }) => {
@@ -2041,7 +2043,7 @@ test('renders one completed session with separate full journal categories', asyn
   );
   await expect(matchPanel.locator('h2')).toHaveText('Narva RAAS v2');
   await expect(page.getByTestId('journal-scoreboard')).toContainText('Winner Player');
-  await expect(page.getByTestId('journal-scoreboard')).toContainText('Orange · Rifleman');
+  await expect(page.getByTestId('journal-scoreboard')).toContainText('Orange · Стрелок');
   await expect(page.getByTestId('journal-scoreboard')).toContainText('Победа');
   const scoreboardHeaders = [
     'Игрок',
@@ -2181,6 +2183,7 @@ test('renders one completed session with separate full journal categories', asyn
   );
   expect(sessionRequests.filter((sessionId) => sessionId === NARVA_SESSION_ID)).toHaveLength(1);
   expect(sessionRequests.filter((sessionId) => sessionId === GORODOK_SESSION_ID)).toHaveLength(1);
+  await expectPlayerFriendlyLanguage(page);
 });
 
 const missingLayerScenarios = [
@@ -2666,7 +2669,7 @@ test('renders Team Balancer diff and switches its proposal mode', async ({ page 
     'включить автобаланс: за 2, против 0, нужно 3'
   );
   await expect(panel).toContainText('только после завершения матча');
-  await expect(panel).toContainText('Есть diff');
+  await expect(panel).toContainText('Нужны изменения');
   await expect(panel).toContainText('Расчёт перестановок');
   await expect(panel).toContainText('1 к смене');
   await expect(panel).toContainText('сейчас 6:2 · по расчёту 4:4');
@@ -2679,7 +2682,7 @@ test('renders Team Balancer diff and switches its proposal mode', async ({ page 
     'Сильный перекос'
   );
   await expect(page.getByTestId('team-balancer-round-signal-severity')).toContainText(
-    'ticket diff 240 · серия 2'
+    'разница билетов 240 · серия 2'
   );
   await expect(page.getByTestId('team-balancer-round-signal-ticketDiff')).toContainText(
     'Сторона 1 +240'
@@ -2688,13 +2691,20 @@ test('renders Team Balancer diff and switches its proposal mode', async ({ page 
     '260:20 против Сторона 2'
   );
   await expect(page.getByTestId('team-balancer-round-signal-winStreak')).toContainText(
-    'Сторона 1 x2'
+    'Сторона 1 ×2'
   );
-  await expect(page.getByTestId('team-balancer-round-signal-winStreak')).toContainText('порог 2');
+  await expect(page.getByTestId('team-balancer-round-signal-winStreak')).toContainText(
+    'порог: 2'
+  );
   await expect(page.getByTestId('team-balancer-safety-vote')).toContainText('Голосование');
   await expect(page.getByTestId('team-balancer-safety-vote')).toContainText('2/3');
   await expect(page.getByTestId('team-balancer-safety-vote')).toContainText('за 2 · против 1');
-  await expect(page.getByTestId('team-balancer-safety-moderator')).toContainText('Veto: technical');
+  await expect(page.getByTestId('team-balancer-safety-moderator')).toContainText(
+    'Отклонено'
+  );
+  await expect(page.getByTestId('team-balancer-safety-moderator')).toContainText(
+    'Техническая причина'
+  );
   await expect(page.getByTestId('team-balancer-safety-execution')).toContainText('Заблокировано');
   await expect(page.getByTestId('team-balancer-safety-execution')).toContainText('игроки 0/2');
   await expect(panel).not.toContainText('->');
@@ -2806,7 +2816,7 @@ test('keeps squad diff visible when the live roster has no visible marks', async
   await page.goto('./#balance');
 
   const panel = page.getByTestId('balance-server-2').getByTestId('team-balancer-panel');
-  await expect(panel).toContainText('Есть diff');
+  await expect(panel).toContainText('Нужны изменения');
   await expect(panel).toContainText('1 к смене');
   await expect(panel).toContainText('сейчас 6:2 · по расчёту 4:4');
   const squadDiffRow = page.getByTestId('team-balancer-diff-row');
@@ -2815,7 +2825,7 @@ test('keeps squad diff visible when the live roster has no visible marks', async
   await expect(squadDiffRow.first()).toContainText('Нужна смена');
   await page.getByTestId('team-balancer-mode-player').click();
 
-  await expect(panel).toContainText('Есть diff');
+  await expect(panel).toContainText('Нужны изменения');
   await expect(panel).toContainText('1 к смене');
   await expect(panel).toContainText('сейчас 6:2 · по расчёту 5:3');
   const playerDiffRow = page.getByTestId('team-balancer-diff-row');
@@ -2955,10 +2965,10 @@ test('uses player-friendly language for unavailable leaderboards', async ({ page
   await page.goto('./#leaderboards');
 
   await expect(page.getByTestId('leaderboards-empty')).toContainText(
-    'Топы пока готовятся к показу'
+    'Данные ещё формируются'
   );
   await expect(page.getByTestId('leaderboards-empty')).toContainText(
-    'Статистика уже собирается'
+    'Раздел заполнится после следующих завершённых матчей'
   );
   await expectPlayerFriendlyLanguage(page);
 });
@@ -3060,7 +3070,7 @@ test('uses player-friendly language in the autoconnect window', async ({ page })
   await mockAutoseedApi(page);
 
   await page.goto('./');
-  await expect(page.getByTestId('overview-target')).toContainText('[RU] BSS Spec Ops');
+  await expect(page.getByTestId('overview-target')).toContainText('SPEC OPS');
   await page.getByTestId('power-toggle').click();
 
   await expect.poll(() =>
@@ -3234,7 +3244,7 @@ test('keeps the layout usable on mobile without document-level horizontal overfl
   expect(hasNoDocumentOverflow).toBe(true);
 });
 
-test('keeps a long selected server name inside the mobile viewport', async ({ page }) => {
+test('keeps the selected server card inside the mobile viewport', async ({ page }) => {
   await mockAutoseedApi(page);
   await page.route('**/mock/squadjs2/snapshot', (route) =>
     fulfillJson(
@@ -3253,7 +3263,7 @@ test('keeps a long selected server name inside the mobile viewport', async ({ pa
   await page.setViewportSize({ width: 390, height: 844 });
 
   await page.goto('./');
-  await expect(page.getByTestId('overview-target')).toContainText('МирДружбаЖвачка');
+  await expect(page.getByTestId('overview-target')).toContainText('SPEC OPS');
 
   const dimensions = await page.evaluate(() => ({
     viewport: document.documentElement.clientWidth,
