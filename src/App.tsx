@@ -1371,7 +1371,6 @@ export default function App({ config }: AppProps) {
   const nextFollowupCountdown = pendingSequence
     ? Math.max(0, pendingSequence.nextRedirectAt - now)
     : 0;
-  const weakSideSuggestion = getWeakerTeam(displayTargetServer);
   const liveServerCount = snapshot.servers.filter((server) => server.online).length;
   const healthyExporterCount = Math.max(0, config.exporters.length - snapshot.errors.length);
   const nextActionValue = pendingSequence
@@ -1527,7 +1526,7 @@ export default function App({ config }: AppProps) {
           <>
             <div className="hero-ribbon" data-testid="hero-ribbon">
               <span className="hero-ribbon-tag">Куда заходим</span>
-              <p>
+              <p data-testid="overview-target">
                 {displayTargetServer
                   ? `${formatServerDisplayName(displayTargetServer)} · ${statusText}`
                   : 'Подходящий сервер пока не найден.'}
@@ -1558,7 +1557,9 @@ export default function App({ config }: AppProps) {
                 <span className="hero-glance-label">
                   {pendingSequence ? 'Следующий переход' : 'Обновление'}
                 </span>
-                <strong data-testid="hero-next-action-value">{nextActionValue}</strong>
+                <strong data-testid="hero-next-action-value">
+                  <span data-testid="overview-next-action-value">{nextActionValue}</span>
+                </strong>
                 <p>{nextActionCaption}</p>
               </article>
               <article className="hero-glance-card">
@@ -1798,69 +1799,6 @@ export default function App({ config }: AppProps) {
         </Notice>
       )}
 
-      <section className="section-shell">
-        <div className="section-head">
-          <div>
-            <span className="section-eyebrow">Сводка</span>
-            <h2>Что происходит прямо сейчас</h2>
-          </div>
-          <p>Куда заходить и что сейчас доступно.</p>
-        </div>
-
-        <div className="overview-grid">
-          <article
-            className="overview-card overview-card-spotlight"
-            data-testid="overview-target"
-          >
-            <span className="overview-label">Выбранный сервер</span>
-            <strong>
-              {displayTargetServer
-                ? formatServerDisplayName(displayTargetServer)
-                : 'Подходящий сервер не найден'}
-            </strong>
-            <p>{statusText}</p>
-          </article>
-
-          <article className="overview-card">
-            <span className="overview-label">Куда заходить</span>
-            <strong>
-              {weakSideSuggestion
-                ? formatTeamDisplayName(weakSideSuggestion)
-                : 'Стороны пока ровные'}
-            </strong>
-            <p>{weakSideSuggestion ? 'Слабая сторона на выбранном сервере' : 'Ждём состав сторон'}</p>
-          </article>
-
-          <article className="overview-card">
-            <span className="overview-label">Обновлено</span>
-            <strong>{formatCompactTimestamp(snapshot.generatedAt)}</strong>
-            <p>
-              {liveServerCount}/{snapshot.servers.length || config.exporters.length} серверов в сети
-            </p>
-          </article>
-
-          <article className="overview-card">
-            <span className="overview-label">{pendingSequence ? 'Следующий переход' : 'Обновление'}</span>
-            <strong data-testid="overview-next-action-value">
-              {pendingSequence
-                ? formatCountdown(nextFollowupCountdown)
-                : enabled
-                  ? formatCountdown(SNAPSHOT_POLL_INTERVAL_MS)
-                  : '—'}
-            </strong>
-            <p>
-              {pendingSequence
-                ? nextFollowupServer
-                  ? formatServerDisplayName(nextFollowupServer)
-                  : 'Ждём следующий сервер'
-                : enabled
-                  ? 'Статус обновляется автоматически'
-                  : 'Автоподключение выключено'}
-            </p>
-          </article>
-        </div>
-      </section>
-
       <ServerSelector
         label="Выбор сервера"
         className="section-shell server-switcher"
@@ -1955,8 +1893,6 @@ export default function App({ config }: AppProps) {
 
         {activeServer ? (() => {
           const server = activeServer;
-          const canDirectJoin = canRequestJoinLink(server);
-          const joinRequestPending = isJoinLinkRequestPending(server);
           const seedLimit = effectivePolicy.maxSeedPlayers || server.maxPlayers || 0;
           const loadPercent = getServerLoadPercent(server);
           const seedPercent = getSeedProgressPercent(server, seedLimit);
@@ -2011,28 +1947,8 @@ export default function App({ config }: AppProps) {
                   <p className="server-board-copy">
                     {weakerTeam
                       ? `Сторона для захода: ${formatTeamDisplayName(weakerTeam)}`
-                      : 'Смотри состав сторон и общий баланс часов ниже.'}
+                      : 'Состав сторон и общий баланс часов доступны в подробностях.'}
                   </p>
-                  <div className="server-board-actions">
-                    <button
-                      type="button"
-                      className="button button-primary guide-button guide-focus guide-focus-accent"
-                      onClick={() => void handleDirectJoin(server)}
-                      disabled={!canDirectJoin || joinRequestPending}
-                      data-testid="primary-direct-join"
-                    >
-                      <span className="guide-inline-step" aria-hidden="true">
-                        4
-                      </span>
-                      <span>
-                        {joinRequestPending
-                          ? 'Запрашиваем ссылку...'
-                          : canDirectJoin
-                            ? 'Подключиться напрямую'
-                            : 'Сервер оффлайн'}
-                      </span>
-                    </button>
-                  </div>
                 </div>
 
                 <div className="server-metrics">
@@ -2059,79 +1975,96 @@ export default function App({ config }: AppProps) {
                 </div>
               </div>
 
-              <div className="meter-block">
-                <div className="meter-line">
-                  <span>Загрузка</span>
-                  <strong>{loadPercent}%</strong>
-                </div>
-                <div className="server-meter server-meter-neutral">
-                  <span style={{ width: `${loadPercent}%` }} />
-                </div>
-              </div>
-
-              <div className="meter-block">
-                <div className="meter-line">
-                  <span>Прогресс рассида</span>
-                  <strong>{seedPercent}%</strong>
-                </div>
-                <div className="server-meter server-meter-seed">
-                  <span
-                    style={{
-                      width: `${seedPercent}%`,
-                      background: getSeedProgressGradient(seedPercent)
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div className="server-facts dense-facts">
-                <div className="fact-pill">
-                  <span>Слой</span>
-                  <strong>{server.currentLayer || '—'}</strong>
-                </div>
-                <div className="fact-pill">
-                  <span>Режим</span>
-                  <strong>{server.gameMode || '—'}</strong>
-                </div>
-                <div className="fact-pill">
-                  <span>Стороны</span>
-                  <strong>{server.teams.length || 0}</strong>
-                </div>
-                <div className="fact-pill">
-                  <span>Игроков с часами</span>
-                  <strong>
-                    {server.teams.reduce((sum, team) => sum + (team.playersWithHours || 0), 0)}
-                  </strong>
-                </div>
-              </div>
-
               {server.error ? (
                 <p className="error-text">{USER_STATE_COPY.unavailable.description}</p>
               ) : null}
 
-              <div className="teams-grid">
-                {teamOne ? (
-                  <TeamPanel
-                    team={teamOne}
-                    opponent={teamTwo || null}
-                    teamBalancerSnapshot={server.teamBalancer}
-                    teamBalancerMode={teamBalancerProposalMode}
-                  />
-                ) : null}
-                {teamTwo ? (
-                  <TeamPanel
-                    team={teamTwo}
-                    opponent={teamOne || null}
-                    teamBalancerSnapshot={server.teamBalancer}
-                    teamBalancerMode={teamBalancerProposalMode}
-                  />
-                ) : null}
-                {!teamOne && !teamTwo ? (
-                  <div className="team-panel team-panel-empty">
-                    Данные о составе сторон пока не поступили.
+              <details className="server-board-details" data-testid="server-board-details">
+                <summary>
+                  <span>
+                    <strong>Состав и подробности</strong>
+                    <small>Слой, ход сида, стороны и часы игроков</small>
+                  </span>
+                  <span className="server-board-details-state" aria-hidden="true">
+                    <span className="server-board-details-closed">Развернуть</span>
+                    <span className="server-board-details-open">Свернуть</span>
+                  </span>
+                </summary>
+                <div className="server-board-details-body">
+                  <div className="meter-block">
+                    <div className="meter-line">
+                      <span>Загрузка</span>
+                      <strong>{loadPercent}%</strong>
+                    </div>
+                    <div className="server-meter server-meter-neutral">
+                      <span style={{ width: `${loadPercent}%` }} />
+                    </div>
                   </div>
-                ) : null}
-              </div>
+
+                  <div className="meter-block">
+                    <div className="meter-line">
+                      <span>Прогресс рассида</span>
+                      <strong>{seedPercent}%</strong>
+                    </div>
+                    <div className="server-meter server-meter-seed">
+                      <span
+                        style={{
+                          width: `${seedPercent}%`,
+                          background: getSeedProgressGradient(seedPercent)
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="server-facts dense-facts">
+                    <div className="fact-pill">
+                      <span>Слой</span>
+                      <strong>{server.currentLayer || '—'}</strong>
+                    </div>
+                    <div className="fact-pill">
+                      <span>Режим</span>
+                      <strong>{server.gameMode || '—'}</strong>
+                    </div>
+                    <div className="fact-pill">
+                      <span>Стороны</span>
+                      <strong>{server.teams.length || 0}</strong>
+                    </div>
+                    <div className="fact-pill">
+                      <span>Игроков с часами</span>
+                      <strong>
+                        {server.teams.reduce(
+                          (sum, team) => sum + (team.playersWithHours || 0),
+                          0
+                        )}
+                      </strong>
+                    </div>
+                  </div>
+
+                  <div className="teams-grid">
+                    {teamOne ? (
+                      <TeamPanel
+                        team={teamOne}
+                        opponent={teamTwo || null}
+                        teamBalancerSnapshot={server.teamBalancer}
+                        teamBalancerMode={teamBalancerProposalMode}
+                      />
+                    ) : null}
+                    {teamTwo ? (
+                      <TeamPanel
+                        team={teamTwo}
+                        opponent={teamOne || null}
+                        teamBalancerSnapshot={server.teamBalancer}
+                        teamBalancerMode={teamBalancerProposalMode}
+                      />
+                    ) : null}
+                    {!teamOne && !teamTwo ? (
+                      <div className="team-panel team-panel-empty">
+                        Данные о составе сторон пока не поступили.
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </details>
             </article>
           );
         })() : (

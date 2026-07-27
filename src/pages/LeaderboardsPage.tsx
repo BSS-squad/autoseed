@@ -601,31 +601,37 @@ export function LeaderboardsPage({ config, route, vipShopUrl }: LeaderboardsPage
             ))}
           </SegmentedControl>
 
-          {selection.role === 'squad_leader' ? (
-            <SegmentedControl
-              label="Размер отряда"
-              className="leaderboard-squad-size-row"
-            >
-              {ROLE_LEADERBOARD_SQUAD_SIZES.map((entry) => (
-                <button
-                  key={entry.value}
-                  type="button"
-                  className={classNames(
-                    'segment leaderboard-squad-size-button',
-                    selection.squadSize === entry.value && 'segment-active'
-                  )}
-                  aria-pressed={selection.squadSize === entry.value}
-                  data-testid={`leaderboard-squad-size-${entry.value}`}
-                  onClick={() =>
-                    updateSelection({ squadSize: entry.value, periodId: null })
-                  }
-                >
-                  <span>{entry.label}</span>
-                  <small>{entry.description} человек</small>
-                </button>
-              ))}
-            </SegmentedControl>
-          ) : null}
+          <div className="leaderboard-squad-size-slot">
+            {selection.role === 'squad_leader' ? (
+              <SegmentedControl
+                label="Размер отряда"
+                className="leaderboard-squad-size-row"
+              >
+                {ROLE_LEADERBOARD_SQUAD_SIZES.map((entry) => (
+                  <button
+                    key={entry.value}
+                    type="button"
+                    className={classNames(
+                      'segment leaderboard-squad-size-button',
+                      selection.squadSize === entry.value && 'segment-active'
+                    )}
+                    aria-pressed={selection.squadSize === entry.value}
+                    data-testid={`leaderboard-squad-size-${entry.value}`}
+                    onClick={() =>
+                      updateSelection({ squadSize: entry.value, periodId: null })
+                    }
+                  >
+                    <span>{entry.label}</span>
+                    <small>{entry.description} человек</small>
+                  </button>
+                ))}
+              </SegmentedControl>
+            ) : (
+              <div className="leaderboard-filter-placeholder">
+                Размер отряда выбирается только для сквадных.
+              </div>
+            )}
+          </div>
 
           <div className="leaderboard-archive-row" aria-label="Архивный период">
             <button
