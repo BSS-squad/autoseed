@@ -70,6 +70,38 @@ export type RoleLeaderboardAchievement = {
   comparison: 'gte' | 'lte' | 'lt' | 'gt' | 'eq';
 };
 
+export type RoleLeaderboardMethodologyMetric = {
+  key: string;
+  label: string;
+  description: string;
+};
+
+export type RoleLeaderboardMethodologyFormula = {
+  label: string;
+  expression: string;
+  description: string;
+};
+
+export type RoleLeaderboardMethodologyAchievement = {
+  code: string;
+  title: string;
+  description: string;
+  criteria: string;
+};
+
+export type RoleLeaderboardMethodology = {
+  rulesVersion: string;
+  role: RoleLeaderboardRole;
+  roleTitle: string;
+  summary: string;
+  participation: string[];
+  achievementRules: string[];
+  limitations: string[];
+  ranking: RoleLeaderboardMethodologyMetric[];
+  formulas: RoleLeaderboardMethodologyFormula[];
+  achievements: RoleLeaderboardMethodologyAchievement[];
+};
+
 export type RoleLeaderboardMetricGroup = Record<string, number | boolean | null>;
 
 export type RoleLeaderboardEntry = {
@@ -124,6 +156,7 @@ export type RoleLeaderboardResponse = {
   ranking: {
     sortKeys: string[];
   };
+  methodology: RoleLeaderboardMethodology | null;
   achievements: {
     comparisonGroupSize: number;
     minimumComparisonGroup: number;

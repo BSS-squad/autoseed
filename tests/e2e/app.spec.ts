@@ -1194,6 +1194,68 @@ async function mockLeaderboardApi(
           ? '2026-07-26T21:00:00.000Z'
           : '2026-07-26T21:00:00.000Z';
     const minimumMatches = period === 'month' ? 50 : period === 'week' ? 9 : 2;
+    const sortKeys =
+      role === 'commander'
+        ? ['winRate', 'averageSurprise', 'weakSideHoursGap', 'matches', 'name']
+        : role === 'squad_leader'
+          ? [
+              'kd',
+              'knockdownsPer100PersonHours',
+              'revivesPer100PersonHours',
+              'matches',
+              'name'
+            ]
+          : [
+              'resourceSwingPer90',
+              'resourceSwing',
+              'temporaryPressurePer90',
+              'combatConversion',
+              'matches',
+              'name'
+            ];
+    const metricLabels: Record<string, string> = {
+      resourceSwingPer90: 'Полезный размен за 90 минут',
+      resourceSwing: 'Полезный размен за период',
+      temporaryPressurePer90: 'Ноки без убийства за 90 минут',
+      combatConversion: 'Засчитанные убийства к нокам',
+      kd: 'K/D отряда',
+      knockdownsPer100PersonHours: 'Ноки на 100 человеко-часов',
+      revivesPer100PersonHours: 'Поднятия на 100 человеко-часов',
+      winRate: 'Процент побед',
+      averageSurprise: 'Результат сверх ожидания',
+      averageHoursGap: 'Разница часов сторон',
+      weakSideHoursGap: 'Игра менее опытной стороной',
+      matches: 'Число зачётных матчей',
+      name: 'Имя участника'
+    };
+    const methodologyAchievements =
+      role === 'player'
+        ? [
+            {
+              code: 'against_odds',
+              title: 'Вопреки',
+              description:
+                'Показывает сильный результат на стороне, которая уступала сопернику по среднему наигрышу.',
+              criteria:
+                'Средняя разница наигрыша отрицательная, а полезный размен вошёл в лучшие 20%.'
+            },
+            {
+              code: 'locomotive',
+              title: 'Локомотив',
+              description:
+                'Даёт одну из самых больших долей засчитанных убийств и поднятий своей стороны.',
+              criteria: 'Доля вошла в лучшие 10% сопоставимой группы.'
+            },
+            {
+              code: 'armor_piercer',
+              title: 'Бронебойщик',
+              description:
+                'Входит в число лучших по подтверждённому урону или уничтожениям техники.',
+              criteria:
+                'Урон или уничтожения вошли в лучшие 10% при достаточном покрытии.'
+            }
+          ]
+        : [];
 
     const responseEntries = options.empty ? [] : entries;
     const pendingEntries = options.empty
@@ -1248,25 +1310,51 @@ async function mockLeaderboardApi(
         minimumMatches
       },
       ranking: {
-        sortKeys:
+        sortKeys
+      },
+      methodology: {
+        rulesVersion: 'observed-impact-v2',
+        role,
+        roleTitle:
           role === 'commander'
-            ? ['winRate', 'averageSurprise', 'averageHoursGap', 'matches', 'name']
+            ? 'Командиры'
             : role === 'squad_leader'
-              ? [
-                  'kd',
-                  'knockdownsPer100PersonHours',
-                  'revivesPer100PersonHours',
-                  'matches',
-                  'name'
-                ]
-              : [
-                  'resourceSwingPer90',
-                  'resourceSwing',
-                  'temporaryPressurePer90',
-                  'combatConversion',
-                  'matches',
-                  'name'
-                ]
+              ? 'Сквадные'
+              : 'Игроки',
+        summary: 'Место строится только по наблюдаемым событиям выбранной роли.',
+        participation: ['Матч должен пройти условия зачёта роли.'],
+        achievementRules: [
+          'Ачивки не дают очков и не меняют место в топе.'
+        ],
+        limitations: [
+          'Логистика, строительство и связь пока не измеряются.'
+        ],
+        ranking: sortKeys.map((key) => ({
+          key,
+          label: metricLabels[key] || 'Дополнительный показатель',
+          description:
+            key === 'resourceSwingPer90'
+              ? 'Засчитанные убийства и поднятия минус смерти и тимкиллы.'
+              : 'Следующий показатель при равенстве предыдущего.'
+        })),
+        formulas:
+          role === 'player'
+            ? [
+                {
+                  label: 'Полезный размен',
+                  expression:
+                    'засчитанные убийства + поднятия − смерти − тимкиллы',
+                  description: 'Нок и смерть считаются одним эпизодом.'
+                }
+              ]
+            : [
+                {
+                  label: 'Порядок сравнения',
+                  expression: 'показатели сравниваются слева направо',
+                  description: 'Следующий нужен только при равенстве.'
+                }
+              ],
+        achievements: methodologyAchievements
       },
       achievements: {
         comparisonGroupSize: 42,
@@ -2799,7 +2887,7 @@ test('renders role leaderboards, achievements and restores controls from the lin
     .toBeGreaterThan(0);
   await achievement.hover();
   await expect(achievement.getByRole('tooltip')).toContainText(
-    'Сильный результат на стороне, у которой в среднем было меньше часов в Squad.'
+    'Показывает сильный результат на стороне, которая уступала сопернику по среднему наигрышу.'
   );
   await expect(achievement.getByRole('tooltip')).toContainText('Разрыв часов');
 
@@ -2808,7 +2896,7 @@ test('renders role leaderboards, achievements and restores controls from the lin
   await expect(methodology).toContainText(
     'засчитанные убийства + поднятия − смерти − тимкиллы'
   );
-  await expect(methodology).toContainText('Нокауты без смерти / 90 мин');
+  await expect(methodology).toContainText('Ноки без убийства за 90 минут');
   await expect(methodology).toContainText('Все ачивки этой роли');
   await expect(methodology.getByText('Локомотив', { exact: true })).toBeVisible();
   await expect(methodology.getByText('Бронебойщик', { exact: true })).toBeVisible();

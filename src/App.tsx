@@ -70,6 +70,7 @@ import type {
   ExporterTeamSnapshot,
   RoleLeaderboardAchievement,
   RoleLeaderboardEntry,
+  RoleLeaderboardMethodology,
   RoleLeaderboardPendingEntry,
   RoleLeaderboardResponse,
   RoleLeaderboardRole,
@@ -1229,19 +1230,26 @@ function formatRolePeriodRange(response: RoleLeaderboardResponse | null): string
   return `${formatter.format(start)} — ${formatter.format(end)}`;
 }
 
-function roleMetricLabel(key: string): string {
-  return getRoleMetricCopy(key)?.label || 'Дополнительный показатель';
+function roleMetricLabel(
+  key: string,
+  methodology?: RoleLeaderboardMethodology | null
+): string {
+  return (
+    getRoleMetricCopy(key, methodology)?.label || 'Дополнительный показатель'
+  );
 }
 
 function AchievementBadge({
   achievement,
-  tooltipId
+  tooltipId,
+  methodology
 }: {
   achievement: RoleLeaderboardAchievement;
   tooltipId: string;
+  methodology?: RoleLeaderboardMethodology | null;
 }) {
   const iconUrl = resolveAchievementIconUrl(achievement.code, import.meta.env.BASE_URL);
-  const copy = getAchievementCopy(achievement.code);
+  const copy = getAchievementCopy(achievement.code, methodology);
   const title = copy?.title || achievement.title;
   const description = copy?.description || achievement.description;
   return (
@@ -1276,10 +1284,12 @@ function AchievementBadge({
 
 function AchievementList({
   entry,
-  prefix
+  prefix,
+  methodology
 }: {
   entry: RoleLeaderboardDisplayEntry;
   prefix: string;
+  methodology?: RoleLeaderboardMethodology | null;
 }) {
   if (!entry.achievements.length) {
     return <span className="achievement-empty">Ачивок пока нет</span>;
@@ -1291,6 +1301,7 @@ function AchievementList({
           key={achievement.code}
           achievement={achievement}
           tooltipId={`${prefix}-${achievement.code}-${index}`}
+          methodology={methodology}
         />
       ))}
     </span>
@@ -1300,17 +1311,19 @@ function AchievementList({
 function RoleMetricSet({
   entry,
   role,
+  methodology,
   compact = false
 }: {
   entry: RoleLeaderboardDisplayEntry;
   role: RoleLeaderboardRole;
+  methodology?: RoleLeaderboardMethodology | null;
   compact?: boolean;
 }) {
   return (
     <span className={classNames('role-metric-set', compact && 'role-metric-set-compact')}>
       {ROLE_PRIMARY_METRICS[role].map((key) => (
         <span className="role-metric" key={key}>
-          <small>{roleMetricLabel(key)}</small>
+          <small>{roleMetricLabel(key, methodology)}</small>
           <strong>{formatRoleMetric(key, roleMetricValue(entry, key))}</strong>
         </span>
       ))}
@@ -1329,7 +1342,7 @@ function RoleEntryExplanation({
     ...Object.entries(entry.totals),
     ...Object.entries(entry.style),
     ...Object.entries(entry.dataQuality)
-  ].filter(([key]) => getRoleMetricCopy(key));
+  ].filter(([key]) => getRoleMetricCopy(key, response.methodology));
 
   return (
     <details className="role-entry-explanation">
@@ -1339,7 +1352,7 @@ function RoleEntryExplanation({
           <span className="overview-label">Показатели сравниваются по порядку</span>
           <ol>
             {response.ranking.sortKeys.map((key) => {
-              const metric = getRoleMetricCopy(key);
+              const metric = getRoleMetricCopy(key, response.methodology);
               return (
                 <li key={key}>
                   <strong>{metric?.label || 'Дополнительный показатель'}</strong>
@@ -1352,7 +1365,7 @@ function RoleEntryExplanation({
         {detailMetrics.length ? (
           <dl>
             {detailMetrics.map(([key, value]) => {
-              const metric = getRoleMetricCopy(key);
+              const metric = getRoleMetricCopy(key, response.methodology);
               return (
                 <div key={key}>
                   <dt>
@@ -1369,7 +1382,10 @@ function RoleEntryExplanation({
           <div className="role-achievement-reasons">
             <span className="overview-label">Ачивки не влияют на место</span>
             {entry.achievements.map((achievement) => {
-              const copy = getAchievementCopy(achievement.code);
+              const copy = getAchievementCopy(
+                achievement.code,
+                response.methodology
+              );
               return (
                 <p key={achievement.code}>
                   <strong>{copy?.title || achievement.title}</strong>
@@ -1391,52 +1407,111 @@ function RoleLeaderboardMethodology({
   response: RoleLeaderboardResponse;
 }) {
   const guide = ROLE_LEADERBOARD_GUIDES[response.role];
+  const methodology = response.methodology;
+  const participation = methodology?.participation.length
+    ? methodology.participation
+    : [guide.admission];
+  const limitations = methodology?.limitations.length
+    ? methodology.limitations
+    : [guide.limitation];
+  const ranking = methodology?.ranking.length
+    ? methodology.ranking
+    : response.ranking.sortKeys.map((key) => {
+        const metric = getRoleMetricCopy(key);
+        return {
+          key,
+          label: metric?.label || 'Дополнительный показатель',
+          description: metric?.explanation || ''
+        };
+      });
+  const formulas = methodology?.formulas.length
+    ? methodology.formulas
+    : response.role === 'player'
+      ? [
+          {
+            label: 'Полезный размен',
+            expression: 'засчитанные убийства + поднятия − смерти − тимкиллы',
+            description:
+              'Нок и последующая смерть считаются одним эпизодом, а не двумя убийствами.'
+          }
+        ]
+      : [];
+  const achievementRules = methodology?.achievementRules.length
+    ? methodology.achievementRules
+    : [
+        `Ачивки считаются по накопленной истории до конца выбранного периода и не меняют место в топе.`,
+        `Для выдачи нужна группа минимум из ${response.achievements.minimumComparisonGroup} сопоставимых участников; показывается до трёх ачивок.`
+      ];
+  const achievementCatalog = methodology?.achievements.length
+    ? methodology.achievements.map((achievement) => ({
+        code: achievement.code,
+        title: achievement.title,
+        description: achievement.description,
+        rule: achievement.criteria
+      }))
+    : guide.achievements.map(({ code, rule }) => {
+        const copy = getAchievementCopy(code);
+        return {
+          code,
+          title: copy?.title || 'Ачивка',
+          description: copy?.description || '',
+          rule
+        };
+      });
+
   return (
     <details className="role-methodology" data-testid="leaderboards-methodology">
       <summary>Как считаются места и ачивки</summary>
       <div className="role-methodology-body">
         <section>
-          <span className="overview-label">{guide.title}</span>
-          <p>{guide.admission}</p>
-          <p>{guide.ranking}</p>
-          {response.role === 'player' ? (
-            <p className="role-formula">
-              <strong>Полезный размен</strong>
-              <span>
-                засчитанные убийства + поднятия − смерти − тимкиллы
-              </span>
-            </p>
-          ) : null}
-          <p className="role-methodology-note">{guide.limitation}</p>
+          <span className="overview-label">
+            {methodology?.roleTitle || guide.title}
+          </span>
+          <p>{methodology?.summary || guide.ranking}</p>
+          <strong className="role-methodology-subtitle">Как матч идёт в зачёт</strong>
+          <ul className="role-methodology-notes">
+            {participation.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+          <strong className="role-methodology-subtitle">
+            Чего пока нет в расчёте
+          </strong>
+          <ul className="role-methodology-notes role-methodology-notes-muted">
+            {limitations.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
         </section>
 
         <section>
-          <span className="overview-label">Показатели этого топа</span>
+          <span className="overview-label">Как определяется место</span>
           <ol className="role-methodology-metrics">
-            {response.ranking.sortKeys.map((key) => {
-              const metric = getRoleMetricCopy(key);
-              return (
-                <li key={key}>
-                  <strong>{metric?.label || 'Дополнительный показатель'}</strong>
-                  <span>{metric?.explanation}</span>
-                </li>
-              );
-            })}
+            {ranking.map((metric) => (
+              <li key={metric.key}>
+                <strong>{metric.label}</strong>
+                <span>{metric.description}</span>
+              </li>
+            ))}
           </ol>
+          {formulas.map((formula) => (
+            <p className="role-formula" key={formula.label}>
+              <strong>{formula.label}</strong>
+              <span>{formula.expression}</span>
+              <small>{formula.description}</small>
+            </p>
+          ))}
         </section>
 
         <section>
           <span className="overview-label">Все ачивки этой роли</span>
-          <p>
-            Ачивки считаются по накопленной истории до конца выбранного периода и не
-            меняют место в топе. Порог «топ-10%» или «топ-25%» сравнивает участника
-            только с той же ролью и размером отряда. Нужна группа минимум из{' '}
-            {response.achievements.minimumComparisonGroup} участников; у одного
-            участника показывается не больше трёх ачивок.
-          </p>
+          <ul className="role-methodology-notes">
+            {achievementRules.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
           <div className="role-achievement-catalog">
-            {guide.achievements.map(({ code, rule }) => {
-              const copy = getAchievementCopy(code);
+            {achievementCatalog.map(({ code, title, description, rule }) => {
               const iconUrl = resolveAchievementIconUrl(code, import.meta.env.BASE_URL);
               return (
                 <article key={code}>
@@ -1444,8 +1519,8 @@ function RoleLeaderboardMethodology({
                     <img src={iconUrl} alt="" loading="lazy" width="48" height="48" />
                   ) : null}
                   <div>
-                    <strong>{copy?.title || 'Ачивка'}</strong>
-                    <span>{copy?.description}</span>
+                    <strong>{title}</strong>
+                    <span>{description}</span>
                     <small>{rule}</small>
                   </div>
                 </article>
@@ -1472,13 +1547,21 @@ function RolePodiumCard({
     >
       <div className="role-podium-head">
         <span className="leaderboard-rank">#{entry.rank}</span>
-        <AchievementList entry={entry} prefix={`podium-${entry.rank}`} />
+        <AchievementList
+          entry={entry}
+          prefix={`podium-${entry.rank}`}
+          methodology={response.methodology}
+        />
       </div>
       <strong className="role-entry-name">{entry.name}</strong>
       <span className="role-match-progress">
         {entry.matches} / {response.minimumMatches} матчей
       </span>
-      <RoleMetricSet entry={entry} role={response.role} />
+      <RoleMetricSet
+        entry={entry}
+        role={response.role}
+        methodology={response.methodology}
+      />
       <RoleEntryExplanation entry={entry} response={response} />
     </article>
   );
@@ -1796,8 +1879,17 @@ function LeaderboardsPage({ config, route, vipShopUrl }: LeaderboardsPageProps) 
                           {entry.matches} / {response.minimumMatches} матчей
                         </small>
                       </span>
-                      <RoleMetricSet entry={entry} role={response.role} compact />
-                      <AchievementList entry={entry} prefix={`row-${entry.rank}`} />
+                      <RoleMetricSet
+                        entry={entry}
+                        role={response.role}
+                        methodology={response.methodology}
+                        compact
+                      />
+                      <AchievementList
+                        entry={entry}
+                        prefix={`row-${entry.rank}`}
+                        methodology={response.methodology}
+                      />
                       <RoleEntryExplanation entry={entry} response={response} />
                     </article>
                   ))}
@@ -1852,8 +1944,17 @@ function LeaderboardsPage({ config, route, vipShopUrl }: LeaderboardsPageProps) 
                     </small>
                     <em>Осталось матчей: {entry.matchesNeeded}</em>
                   </span>
-                  <RoleMetricSet entry={entry} role={response.role} compact />
-                  <AchievementList entry={entry} prefix={`pending-${index + 1}`} />
+                  <RoleMetricSet
+                    entry={entry}
+                    role={response.role}
+                    methodology={response.methodology}
+                    compact
+                  />
+                  <AchievementList
+                    entry={entry}
+                    prefix={`pending-${index + 1}`}
+                    methodology={response.methodology}
+                  />
                 </article>
               ))}
             </div>
