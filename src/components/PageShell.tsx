@@ -4,13 +4,15 @@ import type {
   MouseEvent,
   ReactNode
 } from 'react';
+import projectLogo from '../../image.png';
+import { classNames } from '../lib/ui';
 
 export type AppRoute = 'home' | 'winners' | 'leaderboards' | 'balance' | 'journal';
+export const APP_DISPLAY_NAME = 'Автосид BSS';
 
 type PageShellProps = {
   currentRoute: AppRoute;
   vipShopUrl?: string | null;
-  brandStyle?: CSSProperties;
   className?: string;
   testId?: string;
   children: ReactNode;
@@ -68,10 +70,9 @@ const ROUTES: RouteEntry[] = [
 ];
 
 const rememberedHashes: Partial<Record<AppRoute, string>> = {};
-
-function classNames(...values: Array<string | false | null | undefined>): string {
-  return values.filter(Boolean).join(' ');
-}
+const BRAND_STYLE = {
+  '--brand-logo': `url(${projectLogo})`
+} as CSSProperties;
 
 function rememberCurrentHash(route: AppRoute): void {
   if (typeof window === 'undefined') return;
@@ -143,7 +144,6 @@ function AppNav({
 export function PageShell({
   currentRoute,
   vipShopUrl,
-  brandStyle,
   className,
   testId,
   children
@@ -151,7 +151,7 @@ export function PageShell({
   return (
     <div
       className={classNames('shell', 'modern-shell', 'page-shell', className)}
-      style={brandStyle}
+      style={BRAND_STYLE}
       data-testid={testId}
     >
       <div className="app-topbar">

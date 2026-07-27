@@ -4,6 +4,8 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import { loadRuntimeConfig } from './lib/runtime-config';
 
+import './styles/tokens.css';
+import './styles/primitives.css';
 import './styles.css';
 
 async function bootstrap() {
