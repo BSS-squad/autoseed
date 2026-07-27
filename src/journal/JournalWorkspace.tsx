@@ -16,6 +16,12 @@ import {
   summarizeVehicleEvents
 } from '../lib/vehicle-journal';
 import {
+  formatPlayerRole,
+  formatServerDisplayName,
+  formatSquadDisplayName,
+  formatTeamDisplayName
+} from '../lib/ui-copy';
+import {
   buildTimeline,
   buildTimelineIntensity,
   EVENT_PAGE_SIZE_OPTIONS,
@@ -126,25 +132,6 @@ function formatMatchDate(value: string | null): string {
     hour: '2-digit',
     minute: '2-digit'
   }).format(date);
-}
-
-function formatServerName(server: ExporterServerSnapshot): string {
-  const identity = `${server.code} ${server.name}`.toLocaleLowerCase('ru');
-  if (identity.includes('squadjs1') || identity.includes('[mix]') || identity.includes('[микс]')) {
-    return 'MIX';
-  }
-  if (identity.includes('squadjs2') || identity.includes('spec ops')) return 'SPEC OPS';
-  if (
-    identity.includes('squadjs3') ||
-    identity.includes('invasion') ||
-    identity.includes('инвейжен')
-  ) {
-    return 'INVASION';
-  }
-  if (identity.includes('squadjs6') || identity.includes('mdc') || identity.includes('мдц')) {
-    return 'MDC CUSTOM';
-  }
-  return server.name;
 }
 
 function formatEventTime(value: string | null): string {
@@ -397,7 +384,7 @@ function ScoreboardView({
               <header>
                 <div>
                   <span>{team.result === 'winner' ? 'Победа' : team.result === 'loser' ? 'Поражение' : 'Без стороны'}</span>
-                  <h3>{team.name}</h3>
+                  <h3>{formatTeamDisplayName(team)}</h3>
                 </div>
                 <p>
                   {team.totals.revives || 0} поднятий · {team.totals.knockdowns} нокаутов ·{' '}
@@ -426,7 +413,14 @@ function ScoreboardView({
                     {sortScoreboardPlayers(team.players).map((player, index) => (
                       <tr key={`${player.name}:${index}`}>
                         <td>{player.name}</td>
-                        <td>{[player.squad, player.role].filter(Boolean).join(' · ') || '—'}</td>
+                        <td>
+                          {[
+                            formatSquadDisplayName(player.squad),
+                            formatPlayerRole(player.role)
+                          ]
+                            .filter(Boolean)
+                            .join(' · ') || '—'}
+                        </td>
                         {SCOREBOARD_METRICS.map((metric) => (
                           <td key={metric.key}>{player[metric.key]}</td>
                         ))}
@@ -1005,11 +999,11 @@ export function JournalWorkspace({ servers }: JournalWorkspaceProps) {
               }}
               key={`${server.code}:${server.id}`}
               aria-pressed={active}
-              title={server.name}
+              title={formatServerDisplayName(server)}
               data-testid={`journal-server-${server.id}`}
             >
               <span>{server.online ? 'В сети' : 'Оффлайн'}</span>
-              <strong>{formatServerName(server)}</strong>
+              <strong>{formatServerDisplayName(server)}</strong>
               <p>
                 {serverSessions.length} матчей ·{' '}
                 {serverSessions[0] ? formatMatchDate(serverSessions[0].endedAt) : 'истории нет'}

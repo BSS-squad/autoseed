@@ -164,7 +164,7 @@ test('summarizes dry-run assignments without score or impact wording', () => {
 
   assert.equal(view.state, 'proposal');
   assert.equal(view.mode, 'squad');
-  assert.equal(view.message, 'Есть diff');
+  assert.equal(view.message, 'Нужны изменения');
   assert.equal(view.triggerLabel, 'Расчёт перестановок');
   assert.equal(view.assignmentSummary, '1 к смене');
   assert.equal(view.teamSizeSummary, 'сейчас 6:2 · по расчёту 4:4');
@@ -497,7 +497,7 @@ test('keeps squad dry-run diff visible when the live roster has no matching mark
 
   assert.equal(squadView.state, 'proposal');
   assert.equal(squadView.tone, 'conflict');
-  assert.equal(squadView.message, 'Есть diff');
+  assert.equal(squadView.message, 'Нужны изменения');
   assert.equal(squadView.assignmentSummary, '1 к смене');
   assert.equal(squadView.teamSizeSummary, 'сейчас 6:2 · по расчёту 4:4');
   assert.equal(squadView.rows.length, 1);
@@ -505,7 +505,7 @@ test('keeps squad dry-run diff visible when the live roster has no matching mark
   assert.equal(squadView.rows[0]?.label, 'Нужна смена');
   assert.equal(playerView.state, 'proposal');
   assert.equal(playerView.tone, 'conflict');
-  assert.equal(playerView.message, 'Есть diff');
+  assert.equal(playerView.message, 'Нужны изменения');
   assert.equal(playerView.assignmentSummary, '1 к смене');
   assert.equal(playerView.teamSizeSummary, 'сейчас 6:2 · по расчёту 5:3');
 });
@@ -571,11 +571,11 @@ test('lists solo player cohorts in the squad dry-run slice', () => {
   });
 
   assert.equal(view.state, 'proposal');
-  assert.equal(view.message, 'Есть diff');
+  assert.equal(view.message, 'Нужны изменения');
   assert.equal(view.assignmentSummary, '1 к смене');
   assert.equal(view.teamSizeSummary, 'сейчас 47:48 · по расчёту 48:47');
   assert.equal(view.rows.length, 1);
-  assert.equal(view.rows[0]?.title, 'Игрок без сквада');
+  assert.equal(view.rows[0]?.title, 'Игрок без отряда');
   assert.equal(view.rows[0]?.detail, '1 игрок · Сторона 2 в Сторона 1');
 });
 

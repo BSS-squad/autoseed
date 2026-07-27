@@ -1548,8 +1548,7 @@ input {
 
 .status-accent,
 .badge-warn,
-.state-target,
-.role-pill-cmd {
+.state-target {
   color: var(--gold);
   background: rgba(255, 211, 108, 0.16);
 }
@@ -1559,10 +1558,15 @@ input {
   background: rgba(103, 215, 255, 0.12);
 }
 
-.team-balance-underdog,
-.role-pill-sl {
+.team-balance-underdog {
   color: var(--lime);
   background: rgba(118, 242, 184, 0.12);
+}
+
+.role-pill-cmd,
+.role-pill-sl {
+  color: var(--muted-strong);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .team-balance-strong {

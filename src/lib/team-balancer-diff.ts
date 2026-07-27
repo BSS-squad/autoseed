@@ -10,6 +10,7 @@ import type {
   TeamBalancerProposalMode,
   TeamBalancerProposalStatus
 } from '../types';
+import { formatSquadDisplayName } from './ui-copy.ts';
 
 export const TEAM_BALANCER_FRESHNESS_MS = 20 * 60 * 1000;
 
@@ -86,7 +87,7 @@ const TRIGGER_LABELS: Record<string, string> = {
   impact_diff: 'Расчёт перестановок',
   team_impact_within_tolerance: 'Без изменений',
   team_size_diff: 'Разница размера сторон',
-  team_size_within_tolerance: 'Размер команд в допуске',
+  team_size_within_tolerance: 'Размер сторон в допуске',
   invalid_snapshot: 'Недостаточно данных',
   max_moves_exhausted: 'Лимит переводов исчерпан'
 };
@@ -275,9 +276,11 @@ function formatSideMove(entry: {
 }
 
 function getCohortTitle(entry: ExporterTeamBalancerCohortSnapshot): string {
-  const squadName = String(entry.squadName || '').trim();
-  if (entry.type === 'squad') return squadName || 'Сквад';
-  return squadName ? `${squadName} · игрок` : 'Игрок без сквада';
+  const squadName = formatSquadDisplayName(entry.squadName);
+  if (entry.type === 'squad') {
+    return squadName === 'Без отряда' ? 'Отряд' : squadName;
+  }
+  return squadName === 'Без отряда' ? 'Игрок без отряда' : `${squadName} · игрок`;
 }
 
 function getPlayerTitle(entry: ExporterTeamBalancerPlayerSnapshot): string {
@@ -295,9 +298,9 @@ function buildDiffRow(
   const isPlayerMode = mode === 'player';
   const playerCount =
     'playerCount' in entry ? formatPlayerCount(entry.playerCount) : null;
-  const squadName = String(entry.squadName || '').trim();
+  const squadName = formatSquadDisplayName(entry.squadName);
   const detail = isPlayerMode
-    ? joinDetailParts([squadName || 'Без сквада', formatSideMove(entry)]) || formatSideMove(entry)
+    ? joinDetailParts([squadName, formatSideMove(entry)]) || formatSideMove(entry)
     : joinDetailParts([playerCount, formatSideMove(entry)]) || formatSideMove(entry);
 
   return {
@@ -344,14 +347,23 @@ function buildModeratorDecisionSafetyCard(
   decision: ExporterTeamBalancerModeratorDecisionSnapshot | null
 ): TeamBalancerSafetyCard | null {
   if (!decision) return null;
+  const reasonLabels: Record<string, string> = {
+    technical: 'Техническая причина',
+    manual: 'Ручное решение',
+    timeout: 'Время ожидания истекло'
+  };
+  const reason = decision.reason
+    ? reasonLabels[decision.reason] || 'Причина указана модератором'
+    : null;
+  const detail = joinDetailParts([decision.moderatorName, reason, decision.note]);
 
   if (decision.vetoed) {
     return {
       id: 'moderator',
       tone: 'conflict',
       label: 'Модератор',
-      value: `Veto${decision.reason ? `: ${decision.reason}` : ''}`,
-      detail: joinDetailParts([decision.moderatorName, decision.note])
+      value: 'Отклонено',
+      detail
     };
   }
 
@@ -361,7 +373,7 @@ function buildModeratorDecisionSafetyCard(
       tone: 'success',
       label: 'Модератор',
       value: 'Одобрено',
-      detail: joinDetailParts([decision.moderatorName, decision.note])
+      detail
     };
   }
 
@@ -371,7 +383,7 @@ function buildModeratorDecisionSafetyCard(
       tone: 'conflict',
       label: 'Модератор',
       value: 'Требуется решение',
-      detail: joinDetailParts([decision.reason, decision.note])
+      detail
     };
   }
 
@@ -380,7 +392,7 @@ function buildModeratorDecisionSafetyCard(
     tone: 'neutral',
     label: 'Модератор',
     value: 'Не требуется',
-    detail: joinDetailParts([decision.reason, decision.note])
+    detail
   };
 }
 
@@ -399,7 +411,7 @@ function getExecutionValue(execution: ExporterTeamBalancerExecutionSnapshot): st
     partial_failed: 'Ошибка',
     error: 'Ошибка'
   };
-  return labels[status] || status;
+  return labels[status] || 'Состояние уточняется';
 }
 
 function getExecutionTone(execution: ExporterTeamBalancerExecutionSnapshot): TeamBalancerDiffTone {
@@ -448,7 +460,7 @@ function getRoundSeverityValue(level: string): string {
     severe: 'Сильный перекос',
     high: 'Заметный перекос'
   };
-  return labels[normalized] || level;
+  return labels[normalized] || 'Перекос обнаружен';
 }
 
 function getRoundSeverityTone(level: string): TeamBalancerDiffTone {
@@ -457,10 +469,10 @@ function getRoundSeverityTone(level: string): TeamBalancerDiffTone {
 
 function formatRoundSeverityReason(reason: string): string | null {
   const labels: Record<string, string> = {
-    ticket_diff: 'ticket diff',
+    ticket_diff: 'разница билетов',
     win_streak: 'серия побед'
   };
-  return labels[reason] || reason || null;
+  return labels[reason] || (reason ? 'другая причина' : null);
 }
 
 function buildRoundSeveritySignalCard(
@@ -472,7 +484,7 @@ function buildRoundSeveritySignalCard(
   const detail =
     joinDetailParts([
       typeof severity.ticketDiff === 'number'
-        ? `ticket diff ${formatImpactValue(severity.ticketDiff)}`
+        ? `разница билетов ${formatImpactValue(severity.ticketDiff)}`
         : null,
       typeof severity.winStreak === 'number' && severity.winStreak > 0
         ? `серия ${formatImpactValue(severity.winStreak)}`
@@ -498,7 +510,7 @@ function buildTicketDiffSignalCard(
   return {
     id: 'ticketDiff',
     tone: 'neutral',
-    label: 'Последний счет',
+    label: 'Последний счёт',
     value: `${formatTeamId(ticketDiff.winnerTeamID)} ${formatSignedValue(ticketDiff.diff)}`,
     detail: `${formatImpactValue(ticketDiff.winnerTickets)}:${formatImpactValue(
       ticketDiff.loserTickets
@@ -516,8 +528,8 @@ function buildWinStreakSignalCard(
     id: 'winStreak',
     tone: 'neutral',
     label: 'Серия побед',
-    value: `${formatTeamId(winStreak.teamID)} x${formatImpactValue(winStreak.count)}`,
-    detail: `порог ${formatImpactValue(winStreak.threshold)}`
+    value: `${formatTeamId(winStreak.teamID)} ×${formatImpactValue(winStreak.count)}`,
+    detail: `порог: ${formatImpactValue(winStreak.threshold)}`
   };
 }
 
@@ -898,7 +910,7 @@ export function buildTeamBalancerDiffView(
       : getProposalTone(modeSnapshot, mode),
     mode,
     modes,
-    message: 'Есть diff',
+    message: 'Нужны изменения',
     triggerLabel,
     assignmentSummary,
     teamSizeSummary,

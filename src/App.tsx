@@ -44,6 +44,13 @@ import {
 } from './lib/team-balancer-diff';
 import type { TeamBalancerDiffTone } from './lib/team-balancer-diff';
 import {
+  formatServerDisplayName,
+  formatSquadDisplayName,
+  formatTeamDisplayName,
+  ROLE_LABELS,
+  USER_STATE_COPY
+} from './lib/ui-copy';
+import {
   loadStoredState,
   saveActiveRedirectServerKey,
   saveCooldownUntil,
@@ -348,7 +355,9 @@ function formatSideMoveSummary(move: { fromTeamID?: string | null; toTeamID?: st
 }
 
 function formatBalancerModeLabel(value: string | null | undefined): string {
-  return String(value || '').trim().toLowerCase() === 'dry-run' ? 'Dry-run' : 'Боевой';
+  return String(value || '').trim().toLowerCase() === 'dry-run'
+    ? 'Без перемещений'
+    : 'С перемещениями';
 }
 
 function formatBalancerStatusLabel(value: string | null | undefined): string {
@@ -364,12 +373,14 @@ function formatBalancerStatusLabel(value: string | null | undefined): string {
     noop: 'без изменений'
   };
   const status = String(value || '').trim().toLowerCase();
-  return labels[status] || status || 'рассчитано';
+  return labels[status] || 'состояние уточняется';
 }
 
 function formatBalancerHistoryStatus(entry: ExporterTeamBalancerHistoryEntrySnapshot): string {
   const modeLabel = formatBalancerModeLabel(entry.mode);
-  if (modeLabel === 'Dry-run') return `${modeLabel} · ${formatBalancerStatusLabel(entry.status)}`;
+  if (String(entry.mode || '').trim().toLowerCase() === 'dry-run') {
+    return `${modeLabel} · ${formatBalancerStatusLabel(entry.status)}`;
+  }
 
   if (entry.execution?.enabled) {
     return `${modeLabel} · ${formatBalancerStatusLabel(entry.execution.status)} ${
@@ -571,7 +582,7 @@ function buildTeamRosterGroups(team: ExporterTeamSnapshot): TeamRosterGroup[] {
     const key = buildSquadGroupKey(squad.id, squad.name);
     groups.set(key, {
       squad,
-      name: squad.name || 'Без сквада',
+      name: formatSquadDisplayName(squad.name),
       players: [],
       isUnassigned: false
     });
@@ -587,7 +598,7 @@ function buildTeamRosterGroups(team: ExporterTeamSnapshot): TeamRosterGroup[] {
 
     groups.set(key, {
       squad: null,
-      name: player.squadName || 'Без сквада',
+      name: formatSquadDisplayName(player.squadName),
       players: [player],
       isUnassigned: !player.squadName && !player.squadId
     });
@@ -685,10 +696,14 @@ function buildConnectorWindowMarkup(context: ConnectorWindowContext): string {
   const [teamOne, teamTwo] = server.teams;
   const matchupText =
     teamOne && teamTwo
-      ? `${escapeHtml(teamOne.name)} ${formatHours(teamOne.totalPlaytimeHours)} · ${escapeHtml(teamTwo.name)} ${formatHours(teamTwo.totalPlaytimeHours)}`
+      ? `${escapeHtml(formatTeamDisplayName(teamOne))} ${formatHours(
+          teamOne.totalPlaytimeHours
+        )} · ${escapeHtml(formatTeamDisplayName(teamTwo))} ${formatHours(
+          teamTwo.totalPlaytimeHours
+        )}`
       : 'Состав сторон уточняется…';
   const weakerText = weakerTeam
-    ? `Слабее по часам: ${escapeHtml(weakerTeam.name)}`
+    ? `Слабее по часам: ${escapeHtml(formatTeamDisplayName(weakerTeam))}`
     : 'Баланс сторон пока ровный';
   const hasFollowup = Boolean(followupServer && followupDelayMs > 0);
   const statusTag =
@@ -853,7 +868,7 @@ function buildConnectorWindowMarkup(context: ConnectorWindowContext): string {
           <p>Это окно помогает последовательно подключаться к серверам через Steam.</p>
         </div>
       </div>
-      <h1>${escapeHtml(server.name)}</h1>
+      <h1>${escapeHtml(formatServerDisplayName(server))}</h1>
       <p>${leadText}</p>
       <div class="stack">
         <span class="tag">${statusTag}</span>
@@ -1814,24 +1829,24 @@ function LeaderboardsPage({ config, route, vipShopUrl }: LeaderboardsPageProps) 
         {loadState === 'unavailable' ? (
           <article className="leaderboard-empty-state" data-testid="leaderboards-empty">
             <span className="overview-label">Ролевые топы</span>
-            <strong>Топы пока готовятся к показу</strong>
-            <p>Статистика уже собирается. Здесь появятся места и ачивки, как только подготовка закончится.</p>
+            <strong>{USER_STATE_COPY.forming.title}</strong>
+            <p>{USER_STATE_COPY.forming.description}</p>
           </article>
         ) : null}
 
         {loadState === 'loading' ? (
           <article className="leaderboard-empty-state" data-testid="leaderboards-loading">
             <span className="overview-label">Ролевые топы</span>
-            <strong>Загружаем места и ачивки</strong>
-            <p>Обычно это занимает несколько секунд.</p>
+            <strong>{USER_STATE_COPY.loading.title}</strong>
+            <p>{USER_STATE_COPY.loading.description}</p>
           </article>
         ) : null}
 
         {loadState === 'error' ? (
           <article className="leaderboard-empty-state" data-testid="leaderboards-error">
             <span className="overview-label">Ролевые топы</span>
-            <strong>Не удалось обновить топ</strong>
-            <p>Последний выбор сохранён в ссылке. Обновите страницу через несколько минут.</p>
+            <strong>{USER_STATE_COPY.unavailable.title}</strong>
+            <p>{USER_STATE_COPY.unavailable.description}</p>
           </article>
         ) : null}
 
@@ -2010,7 +2025,7 @@ function WinnersPage({ snapshot, now, route, vipShopUrl }: WinnersPageProps) {
               <img className="hero-logo" src={projectLogo} alt={`Логотип ${APP_DISPLAY_NAME}`} />
             </div>
             <div className="hero-brand-copy">
-              <span className="hero-brand-kicker">Mdj BSS</span>
+              <span className="hero-brand-kicker">BREAKING SQUAD</span>
               <span className="hero-brand-subtitle">розыгрыши и победители</span>
             </div>
           </div>
@@ -2104,7 +2119,7 @@ function WinnersPage({ snapshot, now, route, vipShopUrl }: WinnersPageProps) {
                     return (
                       <div key={`${server.id}-${active.startedAt || active.prize}`} className="winners-active-item">
                         <strong>{active.prize}</strong>
-                        <p>{server.name}</p>
+                        <p>{formatServerDisplayName(server)}</p>
                         <div className="winners-meta-row">
                           <span>{formatParticipantCount(active.participantCount)}</span>
                           <span>{formatRaffleSource(active.source)}</span>
@@ -2132,7 +2147,9 @@ function WinnersPage({ snapshot, now, route, vipShopUrl }: WinnersPageProps) {
               <span className="overview-label">Серверы с розыгрышами</span>
               <strong>{raffleServers.length}</strong>
               <p>
-                {raffleServers.map((item) => item.server.code).join(', ')}
+                {raffleServers
+                  .map((item) => formatServerDisplayName(item.server))
+                  .join(', ')}
               </p>
             </article>
           </section>
@@ -2155,7 +2172,7 @@ function WinnersPage({ snapshot, now, route, vipShopUrl }: WinnersPageProps) {
                   return (
                     <article key={entryKey} className="winner-row">
                       <div className="winner-row-main">
-                        <span className="winner-server">{server.name}</span>
+                        <span className="winner-server">{formatServerDisplayName(server)}</span>
                         <strong>{entry.winner?.name || 'без победителя'}</strong>
                         <p>{entry.prize}</p>
                       </div>
@@ -2228,7 +2245,7 @@ function TeamPanel({ team, opponent, teamBalancerSnapshot, teamBalancerMode }: T
     <section className={classNames('team-panel', isUnderdog && 'team-panel-underdog')}>
       <div className="team-panel-head">
         <div>
-          <h4>{team.name}</h4>
+          <h4>{formatTeamDisplayName(team)}</h4>
           <p>{team.playerCount} игроков</p>
         </div>
         <span className={classNames('team-balance', balanceTone)}>{balanceLabel}</span>
@@ -2244,11 +2261,11 @@ function TeamPanel({ team, opponent, teamBalancerSnapshot, teamBalancerMode }: T
           <strong>{team.playerCount ? formatHours(averageHours) : '—'}</strong>
         </div>
         <div className="team-kpi">
-          <span>SL</span>
+          <span>{ROLE_LABELS.squadLeader}</span>
           <strong>{formatHours(team.leaderPlaytimeHours)}</strong>
         </div>
         <div className="team-kpi">
-          <span>CMD</span>
+          <span>{ROLE_LABELS.commander}</span>
           <strong>{formatHours(team.commanderPlaytimeHours)}</strong>
         </div>
       </div>
@@ -2326,10 +2343,14 @@ function TeamPanel({ team, opponent, teamBalancerSnapshot, teamBalancerMode }: T
                         <div className="roster-name-row">
                           <strong>{player.name}</strong>
                           {player.isCommander ? (
-                            <span className="role-pill role-pill-cmd">CMD</span>
+                            <span className="role-pill role-pill-cmd">
+                              {ROLE_LABELS.commander}
+                            </span>
                           ) : null}
                           {!player.isCommander && player.isLeader ? (
-                            <span className="role-pill role-pill-sl">SL</span>
+                            <span className="role-pill role-pill-sl">
+                              {ROLE_LABELS.squadLeader}
+                            </span>
                           ) : null}
                           {teamBalancerMark ? (
                             <span
@@ -2504,7 +2525,7 @@ function TeamBalancerPanel({
               onClick={() => onProposalModeChange(mode)}
               data-testid={`team-balancer-mode-${mode}`}
             >
-              {mode === 'squad' ? 'Сквады' : 'Игроки'}
+              {mode === 'squad' ? 'Отряды' : 'Игроки'}
             </button>
           ))}
         </div>
@@ -2627,7 +2648,7 @@ function BalancePage({ snapshot, route, vipShopUrl }: ServerHistoryPageProps) {
             <div className="section-head">
               <div>
                 <span className="section-eyebrow">{server.online ? 'В сети' : 'Оффлайн'}</span>
-                <h2>{server.name}</h2>
+                <h2>{formatServerDisplayName(server)}</h2>
               </div>
               <p>
                 Расчёт состава не перемещает игроков: исполнение возможно только после матча.
@@ -2823,8 +2844,8 @@ export default function App({ config }: AppProps) {
     if (!canRequestJoinLink(server)) {
       appendLog(
         reason === 'direct'
-          ? `Прямое подключение недоступно: ${server.name} сейчас оффлайн.`
-          : `Переход отменён: ${server.name} сейчас оффлайн.`
+          ? `Прямое подключение недоступно: ${formatServerDisplayName(server)} сейчас оффлайн.`
+          : `Переход отменён: ${formatServerDisplayName(server)} сейчас оффлайн.`
       );
       return null;
     }
@@ -2833,8 +2854,8 @@ export default function App({ config }: AppProps) {
     setJoinLinkRequestServerKey(serverKey);
     appendLog(
       reason === 'direct'
-        ? `Прямое подключение: запрашиваю свежую ссылку входа для ${server.name}.`
-        : `Запрашиваю свежую ссылку входа для ${server.name}.`
+        ? `Прямое подключение: запрашиваю свежую ссылку входа для ${formatServerDisplayName(server)}.`
+        : `Запрашиваю свежую ссылку входа для ${formatServerDisplayName(server)}.`
     );
 
     try {
@@ -2844,8 +2865,8 @@ export default function App({ config }: AppProps) {
         error instanceof Error ? error.message : 'неизвестная ошибка при запросе ссылки входа';
       appendLog(
         reason === 'direct'
-          ? `Прямое подключение не удалось: ${server.name} не отдал ссылку входа (${message}).`
-          : `Переход отменён: ${server.name} не отдал ссылку входа (${message}).`
+          ? `Прямое подключение не удалось: ${formatServerDisplayName(server)} не отдал ссылку входа (${message}).`
+          : `Переход отменён: ${formatServerDisplayName(server)} не отдал ссылку входа (${message}).`
       );
       return null;
     } finally {
@@ -2903,7 +2924,11 @@ export default function App({ config }: AppProps) {
 
         appendLog(
           `Данные ${source === 'manual' ? 'получены' : 'обновлены'}: выбранный сервер=${
-            nextRedirectPlan[0]?.name || nextSelection.targetServer?.name || 'нет'
+            nextRedirectPlan[0]
+              ? formatServerDisplayName(nextRedirectPlan[0])
+              : nextSelection.targetServer
+                ? formatServerDisplayName(nextSelection.targetServer)
+                : 'нет'
           }, режим=${testModeEnabled ? 'тест' : nextSelection.nightMode ? 'ночь' : 'день'}`
         );
 
@@ -2985,7 +3010,9 @@ export default function App({ config }: AppProps) {
             findServerBySelectionKey(nextSnapshot, activeRedirectServerKey) ||
             findServerBySelectionKey(snapshot, activeRedirectServerKey);
           appendLog(
-            `Обычный режим: выбранный сервер изменился с ${previousServer?.name || 'предыдущего сервера'} на ${nextRedirectPlan[0].name}, запускаю новый переход.`
+            `Обычный режим: выбранный сервер изменился с ${
+              previousServer ? formatServerDisplayName(previousServer) : 'предыдущего сервера'
+            } на ${formatServerDisplayName(nextRedirectPlan[0])}, запускаю новый переход.`
           );
         }
 
@@ -3160,8 +3187,8 @@ export default function App({ config }: AppProps) {
           connectorWindow.focus();
           appendLog(
             followupServer
-              ? `Переход отправлен в Steam для ${server.name}. Отдельного ответа от Steam или Squad браузер не получит.`
-              : `Переход отправлен в Steam для ${server.name}. Дальше ждём только новые данные.`
+              ? `Переход отправлен в Steam для ${formatServerDisplayName(server)}. Отдельного ответа от Steam или Squad браузер не получит.`
+              : `Переход отправлен в Steam для ${formatServerDisplayName(server)}. Дальше ждём только новые данные.`
           );
           connectorWindowStateRef.current = {
             serverKey: getServerSelectionKey(server),
@@ -3201,7 +3228,7 @@ export default function App({ config }: AppProps) {
 
     setPendingSequence({ remaining, nextRedirectAt });
     appendLog(
-      `Запланирован следующий переход через ${Math.ceil(nextDelayMs / 1000)} с: ${scheduledNextServer.name}`
+      `Запланирован следующий переход через ${Math.ceil(nextDelayMs / 1000)} с: ${formatServerDisplayName(scheduledNextServer)}`
     );
 
     sequenceTimerRef.current = window.setTimeout(() => {
@@ -3221,7 +3248,7 @@ export default function App({ config }: AppProps) {
           return;
         }
 
-        appendLog(`Следующий переход запущен: ${latestNextServer.name}`);
+        appendLog(`Следующий переход запущен: ${formatServerDisplayName(latestNextServer)}`);
         scheduleSequenceStep(tail);
       })();
     }, nextDelayMs);
@@ -3285,7 +3312,9 @@ export default function App({ config }: AppProps) {
 
   const handleDirectJoin = async (server: ExporterServerSnapshot) => {
     if (!canRequestJoinLink(server)) {
-      appendLog(`Прямое подключение недоступно: ${server.name} сейчас оффлайн.`);
+      appendLog(
+        `Прямое подключение недоступно: ${formatServerDisplayName(server)} сейчас оффлайн.`
+      );
       return;
     }
 
@@ -3293,13 +3322,15 @@ export default function App({ config }: AppProps) {
     if (!joinLink) return;
 
     try {
-      appendLog(`Прямое подключение: ${server.name}`);
+      appendLog(`Прямое подключение: ${formatServerDisplayName(server)}`);
       const openedWindow = window.open(joinLink, '_self');
       if (!openedWindow) {
         window.location.href = joinLink;
       }
     } catch {
-      appendLog(`Прямое подключение не удалось: браузер заблокировал переход к ${server.name}.`);
+      appendLog(
+        `Прямое подключение не удалось: браузер заблокировал переход к ${formatServerDisplayName(server)}.`
+      );
     }
   };
 
@@ -3355,7 +3386,7 @@ export default function App({ config }: AppProps) {
       setCooldownUntil(nextCooldownUntil);
       saveCooldownUntil(nextCooldownUntil);
 
-      appendLog(`Переход запущен: ${firstTarget.name}`);
+      appendLog(`Переход запущен: ${formatServerDisplayName(firstTarget)}`);
       scheduleSequenceStep(followups);
       return true;
     } finally {
@@ -3501,7 +3532,9 @@ export default function App({ config }: AppProps) {
       ? formatCountdown(SNAPSHOT_POLL_INTERVAL_MS)
       : 'Готово';
   const nextActionCaption = pendingSequence
-    ? nextFollowupServer?.name || 'Ждём следующий сервер'
+    ? nextFollowupServer
+      ? formatServerDisplayName(nextFollowupServer)
+      : 'Ждём следующий сервер'
     : enabled
       ? 'Статус обновляется автоматически'
       : 'Автоподключение выключено';
@@ -3617,7 +3650,7 @@ export default function App({ config }: AppProps) {
                 <img className="hero-logo" src={projectLogo} alt={`Логотип ${APP_DISPLAY_NAME}`} />
               </div>
               <div className="hero-brand-copy">
-                <span className="hero-brand-kicker">Mdj BSS</span>
+                <span className="hero-brand-kicker">BREAKING SQUAD</span>
                 <span className="hero-brand-subtitle">подключение к серверам</span>
               </div>
             </div>
@@ -3641,7 +3674,7 @@ export default function App({ config }: AppProps) {
             <span className="hero-ribbon-tag">Куда заходим</span>
             <p>
               {displayTargetServer
-                ? `${displayTargetServer.name} · ${statusText}`
+                ? `${formatServerDisplayName(displayTargetServer)} · ${statusText}`
                 : 'Подходящий сервер пока не найден.'}
             </p>
           </div>
@@ -3899,10 +3932,8 @@ export default function App({ config }: AppProps) {
 
       {(fatalError || snapshot.errors.length > 0) && (
         <section className="alert-strip">
-          {fatalError ? <p>{fatalError}</p> : null}
-          {snapshot.errors.map((error) => (
-            <p key={error}>{error}</p>
-          ))}
+          <strong>{USER_STATE_COPY.unavailable.title}</strong>
+          <p>{USER_STATE_COPY.unavailable.description}</p>
         </section>
       )}
 
@@ -3921,13 +3952,21 @@ export default function App({ config }: AppProps) {
             data-testid="overview-target"
           >
             <span className="overview-label">Выбранный сервер</span>
-            <strong>{displayTargetServer?.name || 'Подходящий сервер не найден'}</strong>
+            <strong>
+              {displayTargetServer
+                ? formatServerDisplayName(displayTargetServer)
+                : 'Подходящий сервер не найден'}
+            </strong>
             <p>{statusText}</p>
           </article>
 
           <article className="overview-card">
             <span className="overview-label">Куда заходить</span>
-            <strong>{weakSideSuggestion?.name || 'Стороны пока ровные'}</strong>
+            <strong>
+              {weakSideSuggestion
+                ? formatTeamDisplayName(weakSideSuggestion)
+                : 'Стороны пока ровные'}
+            </strong>
             <p>{weakSideSuggestion ? 'Слабая сторона на выбранном сервере' : 'Ждём состав сторон'}</p>
           </article>
 
@@ -3950,7 +3989,9 @@ export default function App({ config }: AppProps) {
             </strong>
             <p>
               {pendingSequence
-                ? nextFollowupServer?.name || 'Ждём следующий сервер'
+                ? nextFollowupServer
+                  ? formatServerDisplayName(nextFollowupServer)
+                  : 'Ждём следующий сервер'
                 : enabled
                   ? 'Статус обновляется автоматически'
                   : 'Автоподключение выключено'}
@@ -3978,7 +4019,11 @@ export default function App({ config }: AppProps) {
             const [leftTeam, rightTeam] = server.teams;
             const switcherHoursLine =
               leftTeam && rightTeam
-                ? `${leftTeam.name}: ${formatHours(leftTeam.totalPlaytimeHours)} · ${rightTeam.name}: ${formatHours(rightTeam.totalPlaytimeHours)}`
+                ? `${formatTeamDisplayName(leftTeam)}: ${formatHours(
+                    leftTeam.totalPlaytimeHours
+                  )} · ${formatTeamDisplayName(rightTeam)}: ${formatHours(
+                    rightTeam.totalPlaytimeHours
+                  )}`
                 : 'Сводка сторон пока не готова';
 
             return (
@@ -3997,7 +4042,7 @@ export default function App({ config }: AppProps) {
                   onClick={() => setActiveServerKey(serverKey)}
                 >
                   <div className="server-switcher-head">
-                    <strong>{server.name}</strong>
+                    <strong>{formatServerDisplayName(server)}</strong>
                     <span
                       className={classNames(
                         'server-state',
@@ -4068,7 +4113,7 @@ export default function App({ config }: AppProps) {
                 <div className="server-title-block">
                   <div className="server-title-row">
                     <div className="server-title-main">
-                      <h2>{server.name}</h2>
+                      <h2>{formatServerDisplayName(server)}</h2>
                       <InlineHelp
                         label="Справка по карточке сервера"
                         title="Карточка выбранного сервера"
@@ -4101,7 +4146,7 @@ export default function App({ config }: AppProps) {
                   </div>
                   <p className="server-board-copy">
                     {weakerTeam
-                      ? `Сторона для захода: ${weakerTeam.name}`
+                      ? `Сторона для захода: ${formatTeamDisplayName(weakerTeam)}`
                       : 'Смотри состав сторон и общий баланс часов ниже.'}
                   </p>
                   <div className="server-board-actions">
@@ -4196,7 +4241,9 @@ export default function App({ config }: AppProps) {
                 </div>
               </div>
 
-              {server.error ? <p className="error-text">{server.error}</p> : null}
+              {server.error ? (
+                <p className="error-text">{USER_STATE_COPY.unavailable.description}</p>
+              ) : null}
 
               <div className="teams-grid">
                 {teamOne ? (
