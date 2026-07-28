@@ -3184,6 +3184,55 @@ test('renders role leaderboards, achievements and restores controls from the lin
   await expectPlayerFriendlyLanguage(page);
 });
 
+test('keeps the selected archive period while switching role and squad size', async ({
+  page
+}) => {
+  await page.clock.setFixedTime('2026-07-26T12:00:00.000Z');
+  await mockLeaderboardApi(page);
+
+  await page.goto('./#leaderboards?period=week&role=player&squadSize=full');
+  await page.getByTestId('leaderboard-archive-previous').click();
+  await expect(page).toHaveURL(/periodId=2026-07-13/);
+
+  const roleRequestPromise = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return (
+      url.pathname.includes('/mock/leaderboards') &&
+      url.searchParams.get('role') === 'squad_leader'
+    );
+  });
+  await page.getByTestId('leaderboard-role-squad_leader').click();
+  const roleRequest = await roleRequestPromise;
+  expect(new URL(roleRequest.url()).searchParams.get('periodId')).toBe('2026-07-13');
+  await expect(page).toHaveURL(/periodId=2026-07-13/);
+
+  const sizeRequestPromise = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return (
+      url.pathname.includes('/mock/leaderboards') &&
+      url.searchParams.get('squadSize') === 'medium'
+    );
+  });
+  await page.getByTestId('leaderboard-squad-size-medium').click();
+  const sizeRequest = await sizeRequestPromise;
+  expect(new URL(sizeRequest.url()).searchParams.get('periodId')).toBe('2026-07-13');
+  await expect(page).toHaveURL(/periodId=2026-07-13/);
+
+  await page.reload();
+  await expect(page.getByTestId('leaderboard-role-squad_leader')).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  );
+  await expect(page.getByTestId('leaderboard-squad-size-medium')).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  );
+  await expect(page).toHaveURL(/periodId=2026-07-13/);
+
+  await page.getByTestId('leaderboard-period-day').click();
+  await expect(page).not.toHaveURL(/periodId=/);
+});
+
 test('keeps the leaderboard filter height stable while switching roles', async ({
   page
 }) => {

@@ -712,7 +712,7 @@ export function LeaderboardsPage({ config, route, vipShopUrl }: LeaderboardsPage
                 )}
                 aria-pressed={selection.role === entry.value}
                 data-testid={`leaderboard-role-${entry.value}`}
-                onClick={() => updateSelection({ role: entry.value, periodId: null })}
+                onClick={() => updateSelection({ role: entry.value })}
               >
                 {entry.label}
               </button>
@@ -735,9 +735,7 @@ export function LeaderboardsPage({ config, route, vipShopUrl }: LeaderboardsPage
                     )}
                     aria-pressed={selection.squadSize === entry.value}
                     data-testid={`leaderboard-squad-size-${entry.value}`}
-                    onClick={() =>
-                      updateSelection({ squadSize: entry.value, periodId: null })
-                    }
+                    onClick={() => updateSelection({ squadSize: entry.value })}
                   >
                     <span>{entry.label}</span>
                     <small>{entry.description} человек</small>
