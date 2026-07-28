@@ -893,14 +893,16 @@ function mapActivityTeamResult(value: unknown): ExporterActivityTeamResultSnapsh
 
 function mapActivityRoundTotals(value: unknown): ExporterActivityRoundTotalsSnapshot {
   const totals = getRecord(value) || {};
+  const vehicleKills = toNonNegativeIntegerOrNull(totals.vehicleKills);
+  const vehicleDamage = toNonNegativeNumberOrNull(totals.vehicleDamage);
   return {
     kills: Math.max(0, Math.round(toNumber(totals.kills))),
     deaths: Math.max(0, Math.round(toNumber(totals.deaths))),
     revives: Math.max(0, Math.round(toNumber(totals.revives))),
     knockdowns: Math.max(0, Math.round(toNumber(totals.knockdowns))),
     teamkills: Math.max(0, Math.round(toNumber(totals.teamkills))),
-    vehicleKills: Math.max(0, Math.round(toNumber(totals.vehicleKills))),
-    vehicleDamage: Math.max(0, toNumber(totals.vehicleDamage))
+    ...(vehicleKills === null ? {} : { vehicleKills }),
+    ...(vehicleDamage === null ? {} : { vehicleDamage })
   };
 }
 
@@ -932,8 +934,12 @@ function mapActivityScoreboardPlayer(
     revives: totals.revives ?? 0,
     knockdowns: totals.knockdowns,
     teamkills: totals.teamkills ?? 0,
-    vehicleKills: totals.vehicleKills ?? 0,
-    vehicleDamage: totals.vehicleDamage ?? 0
+    ...(typeof totals.vehicleKills === 'number'
+      ? { vehicleKills: totals.vehicleKills }
+      : {}),
+    ...(typeof totals.vehicleDamage === 'number'
+      ? { vehicleDamage: totals.vehicleDamage }
+      : {})
   };
 }
 

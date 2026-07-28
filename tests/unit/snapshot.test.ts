@@ -401,7 +401,18 @@ test('keeps public activity fields and drops private ids from exporter snapshots
                         name: 'Loser',
                         result: 'loser',
                         totals: { kills: 12, deaths: 20, revives: 2, knockdowns: 20 },
-                        players: []
+                        players: [
+                          {
+                            name: 'Loser Player',
+                            squad: 'Bravo',
+                            role: 'Medic',
+                            kills: 1,
+                            deaths: 4,
+                            revives: 2,
+                            knockdowns: 2,
+                            teamkills: 0
+                          }
+                        ]
                       }
                     ]
                   },
@@ -492,6 +503,24 @@ test('keeps public activity fields and drops private ids from exporter snapshots
     vehicleKills: 2,
     vehicleDamage: 750.5
   });
+  assert.deepEqual(activity?.recentRounds[0]?.scoreboard?.teams[1]?.players[0], {
+    name: 'Loser Player',
+    squad: 'Bravo',
+    role: 'Medic',
+    kills: 1,
+    deaths: 4,
+    revives: 2,
+    knockdowns: 2,
+    teamkills: 0
+  });
+  assert.equal(
+    'vehicleKills' in (activity?.recentRounds[0]?.scoreboard?.teams[1]?.players[0] || {}),
+    false
+  );
+  assert.equal(
+    'vehicleDamage' in (activity?.recentRounds[0]?.scoreboard?.teams[1]?.players[0] || {}),
+    false
+  );
   assert.equal(activity?.teamBalancerHistory[0]?.plannedPlayers, 2);
   assert.equal(activity?.teamBalancerHistory[0]?.mode, 'execute');
   assert.equal(activity?.teamBalancerHistory[0]?.execution?.succeededPlayers, 2);

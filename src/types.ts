@@ -560,8 +560,8 @@ export type ExporterActivityScoreboardPlayerSnapshot = {
   revives: number;
   knockdowns: number;
   teamkills: number;
-  vehicleKills: number;
-  vehicleDamage: number;
+  vehicleKills?: number;
+  vehicleDamage?: number;
 };
 
 export type ExporterActivityScoreboardTeamSnapshot = {
