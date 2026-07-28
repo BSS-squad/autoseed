@@ -93,7 +93,6 @@ function formatRoleMetric(key: string, value: number | boolean | null | undefine
     key === 'kd' ||
     key.includes('Per') ||
     key === 'resourceSwing' ||
-    key === 'vehicleDamage' ||
     key.startsWith('average')
   ) {
     return formatLeaderboardDecimal(value);

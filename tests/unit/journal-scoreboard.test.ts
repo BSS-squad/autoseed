@@ -11,9 +11,7 @@ test('scoreboard keeps the requested metric order', () => {
       'knockdowns',
       'kills',
       'deaths',
-      'teamkills',
-      'vehicleKills',
-      'vehicleDamage'
+      'teamkills'
     ]
   );
 });

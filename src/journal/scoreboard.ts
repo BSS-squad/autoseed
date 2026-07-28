@@ -5,9 +5,7 @@ export const SCOREBOARD_METRICS = [
   { key: 'knockdowns', label: 'Нокауты' },
   { key: 'kills', label: 'Убийства' },
   { key: 'deaths', label: 'Смерти' },
-  { key: 'teamkills', label: 'Тимкиллы' },
-  { key: 'vehicleKills', label: 'Выбито техники' },
-  { key: 'vehicleDamage', label: 'Урон технике' }
+  { key: 'teamkills', label: 'Тимкиллы' }
 ] as const;
 
 export function sortScoreboardPlayers(

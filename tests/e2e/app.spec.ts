@@ -1136,13 +1136,13 @@ async function mockLeaderboardApi(
       role === 'commander'
         ? [
             {
-              code: 'godlike',
-              title: 'Богоподобный',
-              description: 'Побеждает более сильную по часам сторону.',
-              reason: 'Разрыв часов −430, неожиданность +18 п.п.',
-              value: 0.18,
-              threshold: 0.14,
-              comparison: 'gte'
+              code: 'no_wins_today',
+              title: 'Не сегодня',
+              description: 'Провёл дневной порог матчей без побед.',
+              reason: 'За день сыграно 3 зачётных матча, побед — 0.',
+              value: 0,
+              threshold: 0,
+              comparison: 'eq'
             }
           ]
         : [
@@ -2148,15 +2148,14 @@ test('renders one completed session with separate full journal categories', asyn
     'Нокауты',
     'Убийства',
     'Смерти',
-    'Тимкиллы',
-    'Выбито техники',
-    'Урон технике'
+    'Тимкиллы'
   ];
   await expect(page.getByTestId('journal-scoreboard').locator('thead th')).toHaveText([
     ...scoreboardHeaders,
     ...scoreboardHeaders
   ]);
-  await expect(page.getByTestId('journal-scoreboard')).toContainText('1 250,5 урона технике');
+  await expect(page.getByTestId('journal-scoreboard')).not.toContainText('урона технике');
+  await expect(page.getByTestId('journal-scoreboard')).not.toContainText('Выбито техники');
   await expect(page.getByTestId('journal-scoreboard')).toContainText(
     'Игроки этой стороны не сохранились'
   );
@@ -3144,10 +3143,12 @@ test('renders role leaderboards, achievements and restores controls from the lin
   );
   await expect(methodology).toContainText('Все ачивки этой роли');
   await expect(methodology.getByText('Локомотив', { exact: true })).toBeVisible();
-  await expect(methodology.getByText('Бронебойщик', { exact: true })).toBeVisible();
-  await expect(methodology).toContainText('не влияет на место в основном топе');
-  await expect(methodology).toContainText('не меньше 50 событий');
-  await expect(methodology).toContainText('не меньше 20 случаев');
+  await expect(methodology.getByText('Бронебойщик', { exact: true })).toHaveCount(0);
+  await expect(methodology).toContainText(
+    'не становятся статистикой игрока или отряда'
+  );
+  await expect(methodology).not.toContainText('не меньше 50 событий');
+  await expect(methodology).not.toContainText('не меньше 20 случаев');
 
   await page.getByTestId('leaderboards-expand').click();
   await expect(page.getByTestId('leaderboards-row-6')).toContainText('Fast Driver');
@@ -3231,6 +3232,34 @@ test('keeps the selected archive period while switching role and squad size', as
 
   await page.getByTestId('leaderboard-period-day').click();
   await expect(page).not.toHaveURL(/periodId=/);
+});
+
+test('loads the no-wins commander icon on a narrow screen', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockLeaderboardApi(page);
+  await page.goto('./#leaderboards?period=day&role=commander');
+
+  const achievement = page.getByTestId('achievement-no_wins_today').first();
+  const icon = achievement.locator('.achievement-badge-icon');
+  await expect(achievement).toBeVisible();
+  await expect(icon).toHaveAttribute(
+    'src',
+    /\/achievements\/no-wins-today\.webp$/
+  );
+  await expect
+    .poll(() => icon.evaluate((image: HTMLImageElement) => image.naturalWidth))
+    .toBeGreaterThan(0);
+
+  await achievement.click();
+  const dialog = page.getByTestId('achievement-dialog');
+  await expect(dialog).toBeVisible();
+  await expect(
+    dialog.getByTestId('achievement-dialog-preview-no_wins_today')
+  ).toBeVisible();
+  const bounds = await dialog.boundingBox();
+  expect(bounds).not.toBeNull();
+  expect(bounds!.x).toBeGreaterThanOrEqual(0);
+  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
 });
 
 test('keeps the leaderboard filter height stable while switching roles', async ({

@@ -396,8 +396,7 @@ function ScoreboardTeamCard({
         <p>
           {team.totals.revives || 0} поднятий · {team.totals.knockdowns} нокаутов ·{' '}
           {team.totals.kills} убийств · {team.totals.deaths || 0} смертей ·{' '}
-          {team.totals.teamkills || 0} тимкиллов · {team.totals.vehicleKills || 0}{' '}
-          единиц техники · {formatNumber(team.totals.vehicleDamage)} урона технике
+          {team.totals.teamkills || 0} тимкиллов
         </p>
       </header>
       {unknown ? (

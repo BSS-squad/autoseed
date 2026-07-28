@@ -148,6 +148,12 @@ test('adapter reads only allowed public fields and preserves API order', async (
           ],
           achievements: [
             {
+              code: 'armor_piercer',
+              title: 'Бронебойщик',
+              description: 'Недоступная техническая ачивка.',
+              criteria: 'Не должна попадать в состояние сайта.'
+            },
+            {
               code: 'against_odds',
               title: 'Вопреки',
               description: 'Сильный результат менее опытной стороны.',
@@ -168,9 +174,24 @@ test('adapter reads only allowed public fields and preserves API order', async (
             },
             totals: {
               teamkills: 0,
+              vehicleDamage: 1200,
+              vehicleKills: 2,
               memberIds: ['hidden']
             },
+            dataQuality: {
+              vehicleDamageAvailable: false,
+              vehicleKillsAvailable: false
+            },
             achievements: [
+              {
+                code: 'armor_piercer',
+                title: 'Бронебойщик',
+                description: 'Недоступная техническая ачивка.',
+                reason: 'Не должна попадать в состояние сайта.',
+                value: 1200,
+                threshold: 1000,
+                comparison: 'gte'
+              },
               {
                 code: 'against_odds',
                 title: 'Вопреки',
@@ -234,6 +255,16 @@ test('adapter reads only allowed public fields and preserves API order', async (
     assert.equal(result.entries[1]?.rank, 1);
     assert.equal(result.entries[0]?.indicators.resourceSwingPer90, 4);
     assert.equal(result.entries[0]?.achievements[0]?.description, 'Описание.');
+    assert.equal(result.entries[0]?.totals.vehicleDamage, undefined);
+    assert.equal(result.entries[0]?.totals.vehicleKills, undefined);
+    assert.equal(
+      result.entries[0]?.dataQuality.vehicleDamageAvailable,
+      undefined
+    );
+    assert.equal(
+      result.entries[0]?.dataQuality.vehicleKillsAvailable,
+      undefined
+    );
     assert.equal(result.pendingEntries[0]?.rank, null);
     assert.equal(result.pendingEntries[0]?.matchesNeeded, 1);
     assert.equal(result.dataQuality.achievementHistoryMatches, 120);
@@ -243,6 +274,12 @@ test('adapter reads only allowed public fields and preserves API order', async (
       'Полезный размен / 90 мин'
     );
     assert.equal(result.methodology?.achievements[0]?.code, 'against_odds');
+    assert.equal(
+      result.methodology?.achievements.some(
+        ({ code }) => code === 'armor_piercer'
+      ),
+      false
+    );
     assert.equal(serialized.includes('playerId'), false);
     assert.equal(serialized.includes('sessionId'), false);
     assert.equal(serialized.includes('serverId'), false);
@@ -250,6 +287,9 @@ test('adapter reads only allowed public fields and preserves API order', async (
     assert.equal(serialized.includes('memberIds'), false);
     assert.equal(serialized.includes('internalFormula'), false);
     assert.equal(serialized.includes('internalNotes'), false);
+    assert.equal(serialized.includes('vehicleDamage'), false);
+    assert.equal(serialized.includes('vehicleKills'), false);
+    assert.equal(serialized.includes('armor_piercer'), false);
   } finally {
     globalThis.fetch = originalFetch;
   }

@@ -6,6 +6,7 @@ export const ACHIEVEMENT_ICON_FILES = {
   close_call: 'close-call.webp',
   flexible_strategist: 'flexible-strategist.webp',
   stabilizer: 'stabilizer.webp',
+  no_wins_today: 'no-wins-today.webp',
   strike_fist: 'strike-fist.webp',
   no_one_left: 'no-one-left.webp',
   mentor: 'mentor.webp',
