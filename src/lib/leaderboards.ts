@@ -174,6 +174,12 @@ const ROLE_PERIOD_VALUES = new Set(ROLE_LEADERBOARD_PERIODS.map(({ value }) => v
 const ROLE_VALUES = new Set(ROLE_LEADERBOARD_ROLES.map(({ value }) => value));
 const SQUAD_SIZE_VALUES = new Set(ROLE_LEADERBOARD_SQUAD_SIZES.map(({ value }) => value));
 const ROLE_STATUS_VALUES = new Set<RoleLeaderboardStatus>(['ok', 'partial', 'empty']);
+const HIDDEN_ROLE_ACHIEVEMENT_CODES = new Set([
+  'armor_piercer',
+  'squad_armor_piercer'
+]);
+const UNATTRIBUTED_VEHICLE_LIMITATION =
+  'Сырые события техники остаются в журнале матча, но не становятся статистикой игрока или отряда без подтверждённого источника.';
 
 export function roleLeaderboardUsesSquadSize(role: RoleLeaderboardRole): boolean {
   return role === 'player' || role === 'squad_leader';
@@ -196,8 +202,6 @@ const METRIC_FIELDS = new Set([
   'teamkills',
   'knockdowns',
   'temporaryPressure',
-  'vehicleDamage',
-  'vehicleKills',
   'wins',
   'losses',
   'strengthMatches',
@@ -208,8 +212,6 @@ const METRIC_FIELDS = new Set([
   'averageWinningTicketMargin',
   'combinations',
   'squadHoursMatches',
-  'vehicleDamageAvailable',
-  'vehicleKillsAvailable',
   'hoursCoverageSufficient',
   'events',
   'attributedEvents',
@@ -255,7 +257,15 @@ function normalizeAchievement(value: unknown): RoleLeaderboardAchievement | null
   const title = toStringOrNull(record?.title);
   const description = toStringOrNull(record?.description);
   const reason = toStringOrNull(record?.reason);
-  if (!code || !title || !description || !reason) return null;
+  if (
+    !code ||
+    HIDDEN_ROLE_ACHIEVEMENT_CODES.has(code) ||
+    !title ||
+    !description ||
+    !reason
+  ) {
+    return null;
+  }
   const comparisonValue = toStringOrNull(record?.comparison);
   const comparison = ['gte', 'lte', 'lt', 'gt', 'eq'].includes(comparisonValue || '')
     ? (comparisonValue as RoleLeaderboardAchievement['comparison'])
@@ -363,7 +373,11 @@ function normalizeMethodologyAchievement(
   const title = normalizePublicText(record?.title, 120);
   const description = normalizePublicText(record?.description);
   const criteria = normalizePublicText(record?.criteria);
-  return code && title && description && criteria
+  return code &&
+    !HIDDEN_ROLE_ACHIEVEMENT_CODES.has(code) &&
+    title &&
+    description &&
+    criteria
     ? { code, title, description, criteria }
     : null;
 }
@@ -378,6 +392,9 @@ function normalizeRoleMethodology(
   const roleTitle = normalizePublicText(record.roleTitle, 120);
   const summary = normalizePublicText(record.summary);
   if (!roleTitle || !summary) return null;
+  const limitations = normalizePublicTextList(record.limitations, 8).filter(
+    (item) => !/техник|бронеб/i.test(item)
+  );
 
   return {
     rulesVersion:
@@ -387,7 +404,7 @@ function normalizeRoleMethodology(
     summary,
     participation: normalizePublicTextList(record.participation, 6),
     achievementRules: normalizePublicTextList(record.achievementRules, 8),
-    limitations: normalizePublicTextList(record.limitations, 8),
+    limitations: [...limitations, UNATTRIBUTED_VEHICLE_LIMITATION].slice(0, 8),
     ranking: (Array.isArray(record.ranking) ? record.ranking : [])
       .map(normalizeMethodologyMetric)
       .filter((item): item is RoleLeaderboardMethodologyMetric => item !== null)

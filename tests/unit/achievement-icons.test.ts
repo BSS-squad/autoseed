@@ -20,12 +20,16 @@ test('builds achievement icon paths for root and GitHub Pages base paths', () =>
     resolveAchievementIconUrl('against_odds', '/autoseed/'),
     '/autoseed/achievements/against-odds.webp'
   );
+  assert.equal(
+    resolveAchievementIconUrl('no_wins_today', '/autoseed/'),
+    '/autoseed/achievements/no-wins-today.webp'
+  );
   assert.equal(resolveAchievementIconUrl('unknown', '/autoseed'), null);
 });
 
 test('keeps every mapped achievement icon in the public bundle', async () => {
   const iconFiles = Object.values(ACHIEVEMENT_ICON_FILES);
-  assert.equal(iconFiles.length, 21);
+  assert.equal(iconFiles.length, 22);
   assert.equal(new Set(iconFiles).size, iconFiles.length);
 
   await Promise.all(

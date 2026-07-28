@@ -20,9 +20,12 @@ test('explains every achievement that has an icon', () => {
       achievements.map(({ code }) => code)
     )
   );
+  const hiddenVehicleCodes = new Set(['armor_piercer', 'squad_armor_piercer']);
   assert.deepEqual(
     [...explainedCodes].sort(),
-    Object.keys(ACHIEVEMENT_ICON_FILES).sort()
+    Object.keys(ACHIEVEMENT_ICON_FILES)
+      .filter((code) => !hiddenVehicleCodes.has(code))
+      .sort()
   );
 });
 
@@ -78,18 +81,13 @@ test('uses explicit Squad hours wording instead of the rare term', () => {
   );
 });
 
-test('separates vehicle achievements from the main ranking and names their data gates', () => {
+test('does not advertise unattributed vehicle statistics or achievements', () => {
   for (const role of ['player', 'squad_leader'] as const) {
     const guide = ROLE_LEADERBOARD_GUIDES[role];
-    const vehicleRule = guide.achievements.find(({ code }) =>
-      ['armor_piercer', 'squad_armor_piercer'].includes(code)
-    );
-
-    assert.match(guide.limitation, /на место в топе не влияют/);
-    assert.match(vehicleRule?.rule || '', /не меньше 50 событий/);
-    assert.match(vehicleRule?.rule || '', /не меньше 20 случаев/);
-    assert.match(vehicleRule?.rule || '', /80%/);
+    assert.doesNotMatch(JSON.stringify(guide.achievements), /armor_piercer/);
+    assert.match(guide.limitation, /не становятся.*статистик/);
   }
 
-  assert.doesNotMatch(ROLE_LEADERBOARD_GUIDES.player.limitation, /связь и техника/);
+  assert.equal(ROLE_METRIC_COPY.vehicleDamage, undefined);
+  assert.equal(ROLE_METRIC_COPY.vehicleKills, undefined);
 });
