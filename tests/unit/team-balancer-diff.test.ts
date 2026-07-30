@@ -655,6 +655,45 @@ test('keeps safety and recent-round cards separate from dry-run assignment diff'
   assert.doesNotMatch(JSON.stringify(view), /impact|skill|score/i);
 });
 
+test('does not present disabled auto balance as a pending operation', () => {
+  const view = buildTeamBalancerDiffView(
+    buildProposalSnapshot({
+      mode: 'execute',
+      action: 'blocked',
+      result: 'blocked',
+      reasonCodes: ['auto_balance_disabled'],
+      control: {
+        enabled: false,
+        updatedAt: '2026-07-06T11:58:00.000Z',
+        activeVote: null
+      },
+      execution: {
+        enabled: true,
+        status: 'pending',
+        plannedMoves: 1,
+        plannedPlayers: 2,
+        attemptedPlayers: 0,
+        succeededPlayers: 0,
+        failedPlayers: 0,
+        totalRconAttempts: 0,
+        maxAttemptsPerPlayer: 1,
+        completedAt: null
+      }
+    }),
+    'squad',
+    { nowMs: NOW_MS }
+  );
+
+  assert.deepEqual(view.safetyCards.find((card) => card.id === 'execution'), {
+    id: 'execution',
+    tone: 'neutral',
+    label: 'Исполнение',
+    value: 'Не запланировано',
+    detail: 'Автобаланс выключен'
+  });
+  assert.doesNotMatch(JSON.stringify(view.safetyCards), /Ожидает/);
+});
+
 test('shows no-change state when the dry-run has no proposed assignments', () => {
   const view = buildTeamBalancerDiffView(
     buildProposalSnapshot({

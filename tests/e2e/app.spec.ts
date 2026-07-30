@@ -2166,6 +2166,48 @@ test('renders healthy Team Balancer state without proposal rows', async ({ page 
   await expectPlayerFriendlyLanguage(page);
 });
 
+test('does not imply a future operation while automatic balancing is disabled', async ({
+  page
+}) => {
+  await page.clock.setFixedTime('2026-07-06T12:01:00.000Z');
+  await mockAutoseedApi(page, undefined, runtimeConfig, {
+    squadjs2TeamBalancer: buildTeamBalancerProposalSnapshot({
+      mode: 'execute',
+      action: 'blocked',
+      result: 'blocked',
+      reasonCodes: ['auto_balance_disabled'],
+      control: {
+        enabled: false,
+        updatedAt: '2026-07-06T11:58:00.000Z',
+        activeVote: null
+      },
+      execution: {
+        enabled: true,
+        status: 'pending',
+        plannedMoves: 1,
+        plannedPlayers: 2,
+        attemptedPlayers: 0,
+        succeededPlayers: 0,
+        failedPlayers: 0,
+        totalRconAttempts: 0,
+        maxAttemptsPerPlayer: 1,
+        completedAt: null
+      }
+    })
+  });
+
+  await page.goto('./#balance');
+
+  const panel = page.getByTestId('balance-server-2').getByTestId('team-balancer-panel');
+  const execution = panel.getByTestId('team-balancer-safety-execution');
+  await expect(panel.getByTestId('team-balancer-control')).toContainText(
+    'Автобаланс выключен'
+  );
+  await expect(execution).toContainText('Не запланировано');
+  await expect(execution).toContainText('Автобаланс выключен');
+  await expect(execution).not.toContainText('Ожидает');
+});
+
 test('renders one completed session with separate full journal categories', async ({ page }) => {
   await page.clock.setFixedTime('2026-07-06T12:02:00.000Z');
   const sessionRequests: string[] = [];

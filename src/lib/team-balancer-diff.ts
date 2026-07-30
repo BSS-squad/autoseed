@@ -429,9 +429,20 @@ function getExecutionTone(execution: ExporterTeamBalancerExecutionSnapshot): Tea
 }
 
 function buildExecutionSafetyCard(
-  execution: ExporterTeamBalancerExecutionSnapshot | null
+  execution: ExporterTeamBalancerExecutionSnapshot | null,
+  autoBalanceDisabled = false
 ): TeamBalancerSafetyCard | null {
   if (!execution) return null;
+
+  if (autoBalanceDisabled && ['pending', 'queued'].includes(execution.status)) {
+    return {
+      id: 'execution',
+      tone: 'neutral',
+      label: 'Исполнение',
+      value: 'Не запланировано',
+      detail: 'Автобаланс выключен'
+    };
+  }
 
   return {
     id: 'execution',
@@ -447,10 +458,15 @@ function buildTeamBalancerSafetyCards(
 ): TeamBalancerSafetyCard[] {
   if (!snapshot) return [];
 
+  const autoBalanceDisabled =
+    snapshot.control?.enabled === false &&
+    snapshot.action === 'blocked' &&
+    snapshot.reasonCodes.includes('auto_balance_disabled');
+
   return [
     buildVoteGateSafetyCard(snapshot.voteGate),
     buildModeratorDecisionSafetyCard(snapshot.moderatorDecision),
-    buildExecutionSafetyCard(snapshot.execution)
+    buildExecutionSafetyCard(snapshot.execution, autoBalanceDisabled)
   ].filter((card): card is TeamBalancerSafetyCard => Boolean(card));
 }
 
