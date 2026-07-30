@@ -1971,6 +1971,63 @@ test('keeps a private event server in the journal but out of autoseed controls',
   ]);
 });
 
+test('shows the MDC export waiting state before the first completed match', async ({ page }) => {
+  const privateEventRuntimeConfig = {
+    ...runtimeConfig,
+    exporters: [
+      ...runtimeConfig.exporters,
+      {
+        name: 'squadjs6',
+        baseUrl: 'http://127.0.0.1:4173/mock/squadjs6'
+      }
+    ]
+  };
+  const emptyActivity = buildActivitySnapshot();
+  emptyActivity.sessions = [];
+  emptyActivity.recentRounds = [];
+  emptyActivity.topWindow = {
+    ...emptyActivity.topWindow,
+    roundCount: 0,
+    requiredParticipation: 0,
+    entries: []
+  };
+  emptyActivity.killfeed = {
+    ...emptyActivity.killfeed,
+    rounds: [],
+    events: []
+  };
+
+  await mockAutoseedApi(page, undefined, privateEventRuntimeConfig);
+  await page.route('**/mock/squadjs6/snapshot', (route) =>
+    fulfillJson(
+      route,
+      buildSnapshot({
+        id: 6,
+        code: 'squadjs6',
+        name: 'MDC Custom',
+        playerCount: 0,
+        maxPlayers: 100,
+        queueLength: 0,
+        online: true,
+        isSeedCandidate: false,
+        activity: emptyActivity
+      })
+    )
+  );
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('./#journal?server=squadjs6');
+
+  const exportPanel = page.getByTestId('journal-match-export');
+  await expect(exportPanel).toBeVisible();
+  await expect(exportPanel).toHaveAttribute('data-export-state', 'waiting-for-match');
+  await expect(exportPanel).toContainText('Выгрузка матчей MDC');
+  await expect(exportPanel).toContainText('После первого завершённого матча');
+  await expect(page.getByTestId('journal-match-export-password')).toHaveCount(0);
+  await expect(page.getByTestId('journal-match-export-csv')).toHaveCount(0);
+  await expect(page.getByTestId('journal-match-export-json')).toHaveCount(0);
+});
+
 test('hides the VIP purchase link when the runtime config does not provide a URL', async ({
   page
 }) => {
