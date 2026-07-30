@@ -130,6 +130,13 @@ function getSessions(server: ExporterServerSnapshot | null): ExporterActivityRec
   return sessions.slice(0, 10);
 }
 
+function isMdcCustomServer(server: ExporterServerSnapshot | null): boolean {
+  return (
+    server !== null &&
+    (server.id === 6 || server.code.trim().toLocaleLowerCase('ru') === 'squadjs6')
+  );
+}
+
 function formatMatchDate(value: string | null): string {
   if (!value) return 'Время не записано';
   const date = new Date(value);
@@ -851,19 +858,46 @@ function EventJournal({
 
 function MatchExportActions({
   response,
-  server
+  server,
+  hasSelectedSession,
+  isLoading = false
 }: {
-  response: ExporterActivitySessionResponse;
+  response: ExporterActivitySessionResponse | null;
   server: ExporterServerSnapshot | null;
+  hasSelectedSession: boolean;
+  isLoading?: boolean;
 }) {
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const [message, setMessage] = useState('');
   const passwordRef = useRef<HTMLInputElement>(null);
 
-  const isMdcCustom =
-    server !== null &&
-    (server.id === 6 || server.code.trim().toLocaleLowerCase('ru') === 'squadjs6');
-  if (!response.session.matchExportAvailable || !server || !isMdcCustom) return null;
+  if (!server || !isMdcCustomServer(server)) return null;
+
+  if (!response?.session.matchExportAvailable) {
+    const availabilityMessage = !hasSelectedSession
+      ? 'После первого завершённого матча выберите его здесь — появятся защищённые CSV и JSON со SteamID.'
+      : isLoading
+        ? 'Проверяем, подготовлена ли выгрузка выбранного матча…'
+        : response
+          ? 'Для выбранного матча защищённая выгрузка не подготовлена.'
+          : 'Не удалось проверить готовность выгрузки выбранного матча.';
+
+    return (
+      <div
+        className="journal-export-actions"
+        data-testid="journal-match-export"
+        data-export-state={
+          !hasSelectedSession ? 'waiting-for-match' : isLoading ? 'loading' : 'unavailable'
+        }
+        role="status"
+      >
+        <div>
+          <strong>Выгрузка матчей MDC</strong>
+          <span>{availabilityMessage}</span>
+        </div>
+      </div>
+    );
+  }
 
   const download = async (format: MatchExportFormat) => {
     const password = passwordRef.current?.value || '';
@@ -907,9 +941,13 @@ function MatchExportActions({
   };
 
   return (
-    <div className="journal-export-actions" data-testid="journal-match-export">
+    <div
+      className="journal-export-actions"
+      data-testid="journal-match-export"
+      data-export-state="ready"
+    >
       <div>
-        <strong>Выгрузка MDC</strong>
+        <strong>Выгрузка матчей MDC</strong>
         <span>SteamID доступен только в защищённых файлах.</span>
       </div>
       <label className="journal-export-password">
@@ -1208,7 +1246,12 @@ export function JournalWorkspace({ servers }: JournalWorkspaceProps) {
                 <div><span>Смертей</span><strong>{selectedSession.totals.deaths || 0}</strong></div>
               </div>
 
-              {response ? <MatchExportActions response={response} server={selectedServer} /> : null}
+              <MatchExportActions
+                response={response}
+                server={selectedServer}
+                hasSelectedSession
+                isLoading={activeDetail?.status === 'loading'}
+              />
 
               {response && !response.session.journalAvailable ? (
                 <div className="journal-legacy-note" role="status">
@@ -1319,10 +1362,17 @@ export function JournalWorkspace({ servers }: JournalWorkspaceProps) {
               </div>
             </>
           ) : (
-            <div className="journal-empty-state journal-match-empty">
-              <strong>Выберите завершённый матч</strong>
-              <p>Итоги и события никогда не показываются до окончания игры.</p>
-            </div>
+            <>
+              <MatchExportActions
+                response={null}
+                server={selectedServer}
+                hasSelectedSession={false}
+              />
+              <div className="journal-empty-state journal-match-empty">
+                <strong>Выберите завершённый матч</strong>
+                <p>Итоги и события никогда не показываются до окончания игры.</p>
+              </div>
+            </>
           )}
         </main>
       </section>
