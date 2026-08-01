@@ -7,9 +7,37 @@ import {
   getCurrentRolePeriodId,
   readRoleLeaderboardSelection,
   resolveRoleLeaderboardUrl,
+  roleLeaderboardUsesGrowingMonthThreshold,
+  ROLE_LEADERBOARD_LEGACY_MONTH_THRESHOLD_NOTE,
+  ROLE_LEADERBOARD_MONTH_THRESHOLD_NOTE,
+  ROLE_LEADERBOARD_PERIODS,
   roleLeaderboardHasIncompleteFacts,
   shiftRolePeriodId
 } from '../../src/lib/leaderboards.ts';
+
+test('describes the monthly admission threshold without a fixed client value', () => {
+  assert.equal(
+    ROLE_LEADERBOARD_PERIODS.find(({ value }) => value === 'day')?.description,
+    'от 2 матчей'
+  );
+  assert.equal(
+    ROLE_LEADERBOARD_PERIODS.find(({ value }) => value === 'week')?.description,
+    'от 9 матчей'
+  );
+  assert.equal(
+    ROLE_LEADERBOARD_PERIODS.find(({ value }) => value === 'month')?.description,
+    'порог растёт'
+  );
+  assert.doesNotMatch(JSON.stringify(ROLE_LEADERBOARD_PERIODS), /50/);
+  assert.match(ROLE_LEADERBOARD_MONTH_THRESHOLD_NOTE, /по ходу месяца/i);
+  assert.match(ROLE_LEADERBOARD_MONTH_THRESHOLD_NOTE, /пятого по активности участника/i);
+  assert.match(ROLE_LEADERBOARD_MONTH_THRESHOLD_NOTE, /ролями и размерами отряда/i);
+  assert.equal(roleLeaderboardUsesGrowingMonthThreshold('observed-impact-v4'), false);
+  assert.equal(roleLeaderboardUsesGrowingMonthThreshold('observed-impact-v5'), true);
+  assert.equal(roleLeaderboardUsesGrowingMonthThreshold('observed-impact-v12'), true);
+  assert.equal(roleLeaderboardUsesGrowingMonthThreshold('unknown'), false);
+  assert.match(ROLE_LEADERBOARD_LEGACY_MONTH_THRESHOLD_NOTE, /прежним правилам/i);
+});
 
 test('restores and serializes role leaderboard selection without internal ids', () => {
   const selection = readRoleLeaderboardSelection(

@@ -1072,6 +1072,8 @@ async function mockLeaderboardApi(
     stale?: boolean;
     empty?: boolean;
     factsCoverage?: number | null;
+    minimumMatches?: number;
+    rulesVersion?: string;
   } = {}
 ) {
   await mockAutoseedApi(page, undefined, leaderboardsRuntimeConfig);
@@ -1157,6 +1159,9 @@ async function mockLeaderboardApi(
               comparison: 'gte'
             }
           ];
+    const minimumMatches =
+      options.minimumMatches ?? (period === 'month' ? 50 : period === 'week' ? 9 : 2);
+    const rulesVersion = options.rulesVersion ?? 'observed-impact-v5';
     const entries = names.map((name, index) => ({
       rank: index + 1,
       name,
@@ -1218,7 +1223,6 @@ async function mockLeaderboardApi(
         : period === 'week'
           ? '2026-07-26T21:00:00.000Z'
           : '2026-07-26T21:00:00.000Z';
-    const minimumMatches = period === 'month' ? 50 : period === 'week' ? 9 : 2;
     const sortKeys =
       role === 'commander'
         ? ['winRate', 'averageSurprise', 'weakSideHoursGap', 'matches', 'name']
@@ -1303,7 +1307,7 @@ async function mockLeaderboardApi(
       status: options.status || 'ok',
       available: true,
       stale: options.stale === true,
-      rulesVersion: 'observed-impact-v3',
+      rulesVersion,
       revision: 'e2e-role-snapshot',
       scope: 'public',
       period,
@@ -1338,7 +1342,7 @@ async function mockLeaderboardApi(
         sortKeys
       },
       methodology: {
-        rulesVersion: 'observed-impact-v3',
+        rulesVersion,
         role,
         roleTitle:
           role === 'commander'
@@ -3205,6 +3209,9 @@ test('renders role leaderboards, achievements and restores controls from the lin
   await expect(page.getByTestId('leaderboards-title')).toHaveText('Ролевые топы BSS');
   await expect(page.getByTestId('leaderboards-podium')).toContainText('Top Fragger');
   await expect(page.getByTestId('leaderboards-row-1')).toContainText('5,40');
+  await expect(page.getByTestId('leaderboards-row-1')).toContainText(
+    'Матчей: 4 · минимум: 2'
+  );
   await expect(page.getByTestId('leaderboard-context')).toContainText('64');
   await expect(page.getByTestId('leaderboard-context')).toContainText('88%');
   await expect(page.getByTestId('leaderboards-row-6')).toHaveCount(0);
@@ -3265,7 +3272,7 @@ test('renders role leaderboards, achievements and restores controls from the lin
   await expect(page.getByTestId('leaderboards-row-6')).toContainText('Fast Driver');
   await expect(page.getByTestId('leaderboards-pending')).toContainText('Almost Qualified');
   await expect(page.getByTestId('leaderboards-pending')).toContainText(
-    'Осталось матчей: 1'
+    'Матчей до входа: 1'
   );
   await page.getByTestId('leaderboards-expand').click();
   await expect(page.getByTestId('leaderboards-row-6')).toHaveCount(0);
@@ -3415,11 +3422,76 @@ test('shows empty, partial and stale role leaderboard states without treating th
   await page.goto('./#leaderboards?period=month&role=player');
 
   await expect(page.getByTestId('leaderboards-empty')).toContainText(
-    'Пока никто не прошёл порог 50 матчей'
+    'Пока никто не прошёл в топ'
   );
   await expect(page.getByTestId('leaderboards-empty')).toContainText(
     'Сейчас участвуют'
   );
+});
+
+test('explains the growing monthly threshold and keeps server progress visible on mobile', async ({
+  page
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.clock.setFixedTime('2026-07-26T12:00:00.000Z');
+  await mockLeaderboardApi(page, { minimumMatches: 13 });
+  await page.goto('./#leaderboards?period=month&role=player&squadSize=full');
+
+  await expect(page.getByTestId('leaderboard-period-day')).toContainText('от 2 матчей');
+  await expect(page.getByTestId('leaderboard-period-week')).toContainText('от 9 матчей');
+  await expect(page.getByTestId('leaderboard-period-month')).toContainText('порог растёт');
+  await expect(page.getByTestId('leaderboard-period-month')).not.toContainText('50');
+  await expect(page.getByTestId('leaderboard-month-threshold-note')).toContainText(
+    'Месячный минимум начинается с 2 матчей и растёт по ходу месяца'
+  );
+  await expect(page.getByTestId('leaderboard-month-threshold-note')).toContainText(
+    'учитывается число матчей пятого по активности участника'
+  );
+
+  const minimum = page
+    .getByTestId('leaderboard-context')
+    .locator('span')
+    .filter({ hasText: 'Минимум для входа' });
+  await expect(minimum).toContainText('13');
+  await expect(page.getByTestId('leaderboards-row-1')).toContainText(
+    'Матчей: 52 · минимум: 13'
+  );
+
+  await page.getByTestId('leaderboards-expand').click();
+  await expect(page.getByTestId('leaderboards-pending')).toContainText(
+    'Матчей: 12 · минимум: 13'
+  );
+  await expect(page.getByTestId('leaderboards-pending')).toContainText('Матчей до входа: 1');
+
+  const geometry = await page.getByTestId('leaderboard-month-threshold-note').evaluate((element) => {
+    const bounds = element.getBoundingClientRect();
+    return {
+      left: bounds.left,
+      right: bounds.right,
+      viewportWidth: window.innerWidth,
+      documentWidth: document.documentElement.scrollWidth
+    };
+  });
+  expect(geometry.left).toBeGreaterThanOrEqual(0);
+  expect(geometry.right).toBeLessThanOrEqual(geometry.viewportWidth);
+  expect(geometry.documentWidth).toBeLessThanOrEqual(geometry.viewportWidth);
+});
+
+test('marks a compatible monthly archive that still uses the previous rules', async ({
+  page
+}) => {
+  await page.clock.setFixedTime('2026-08-01T12:00:00.000Z');
+  await mockLeaderboardApi(page, {
+    minimumMatches: 50,
+    rulesVersion: 'observed-impact-v4'
+  });
+  await page.goto('./#leaderboards?period=month&periodId=2026-06&role=player&squadSize=full');
+
+  const note = page.getByTestId('leaderboard-month-threshold-note');
+  await expect(note).toContainText('расчёт выполнен по прежним правилам');
+  await expect(note).toContainText('фактический минимум указан в сводке ниже');
+  await expect(note).not.toContainText('пятого по активности участника');
+  await expect(page.getByTestId('leaderboard-context')).toContainText('Минимум для входа50');
 });
 
 test('does not describe a fully covered board as incomplete when nobody passed the threshold', async ({
@@ -3438,7 +3510,7 @@ test('does not describe a fully covered board as incomplete when nobody passed t
   await expect(context).not.toContainText('Часть матчей записана неполно');
   await expect(context).not.toHaveClass(/leaderboard-context-strip-warning/);
   await expect(page.getByTestId('leaderboards-empty')).toContainText(
-    'Пока никто не прошёл порог 2 матчей'
+    'Пока никто не прошёл в топ'
   );
 });
 

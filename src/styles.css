@@ -4008,6 +4008,16 @@ input {
   font-size: 0.72rem;
 }
 
+.leaderboard-month-threshold-note {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 9px 12px;
+  border-left: 2px solid rgba(118, 210, 255, 0.5);
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
 .leaderboard-role-button {
   min-height: 44px;
 }
