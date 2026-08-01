@@ -52,7 +52,13 @@ type JournalWorkspaceProps = {
   servers: ExporterServerSnapshot[];
 };
 
-type JournalTab = 'scoreboard' | 'kills' | 'damage' | 'vehicles' | 'revives';
+type JournalTab =
+  | 'scoreboard'
+  | 'kills'
+  | 'knockdowns'
+  | 'damage'
+  | 'vehicles'
+  | 'revives';
 type DetailState = {
   key: string;
   status: 'idle' | 'loading' | 'ready' | 'error';
@@ -100,6 +106,7 @@ function parseJournalSelection(): {
     tab:
       tab === 'scoreboard' ||
       tab === 'kills' ||
+      tab === 'knockdowns' ||
       tab === 'damage' ||
       tab === 'vehicles' ||
       tab === 'revives'
@@ -302,7 +309,8 @@ function getTabEvents(
   events: ExporterActivitySessionEventsSnapshot,
   tab: JournalTab
 ): ExporterActivityKillfeedEventSnapshot[] {
-  if (tab === 'kills') return sortEvents([...events.kills, ...events.knockdowns]);
+  if (tab === 'kills') return sortEvents(events.kills);
+  if (tab === 'knockdowns') return sortEvents(events.knockdowns);
   if (tab === 'damage') return sortEvents(events.damage);
   if (tab === 'vehicles') return sortEvents(events.vehicles);
   if (tab === 'revives') return sortEvents(events.revives);
@@ -1122,7 +1130,8 @@ export function JournalWorkspace({ servers }: JournalWorkspaceProps) {
     label: string;
     count: number;
   }> = [
-    { id: 'kills', label: 'Убийства', count: counts.kills + counts.knockdowns },
+    { id: 'kills', label: 'Убийства', count: counts.kills },
+    { id: 'knockdowns', label: 'Нокауты', count: counts.knockdowns },
     { id: 'damage', label: 'Урон', count: counts.damage },
     { id: 'vehicles', label: 'Техника', count: counts.vehicles },
     { id: 'revives', label: 'Поднятия', count: counts.revives }

@@ -1071,6 +1071,7 @@ async function mockLeaderboardApi(
     status?: 'ok' | 'partial' | 'empty';
     stale?: boolean;
     empty?: boolean;
+    factsCoverage?: number | null;
   } = {}
 ) {
   await mockAutoseedApi(page, undefined, leaderboardsRuntimeConfig);
@@ -1318,7 +1319,7 @@ async function mockLeaderboardApi(
       dataQuality: {
         sourceMatches: 64,
         achievementHistoryMatches: 180,
-        factsCoverage: 1,
+        factsCoverage: options.factsCoverage === undefined ? 1 : options.factsCoverage,
         hoursCoverage: 0.88,
         hoursCoverageThreshold: 0.8,
         vehicleAttribution: {
@@ -2277,13 +2278,24 @@ test('renders one completed session with separate full journal categories', asyn
   await expect(page.getByTestId('journal-page')).toContainText(
     'число событий не равно убийствам в итогах'
   );
-  await page.getByTestId('journal-tab-kills').click();
+  const killsTab = page.getByTestId('journal-tab-kills');
+  const knockdownsTab = page.getByTestId('journal-tab-knockdowns');
+  await expect(killsTab.locator('strong')).toHaveText('1');
+  await expect(knockdownsTab.locator('strong')).toHaveText('1');
+  await killsTab.click();
   const kills = page.getByTestId('journal-events-kills');
   await expect(kills).toContainText('Killer Alpha');
   await expect(kills).toContainText('Victim Bravo');
-  await expect(kills).toContainText('Knockdown Charlie');
-  await expect(kills).toContainText('Knockdown Delta');
+  await expect(kills).not.toContainText('Knockdown Charlie');
+  await expect(kills).not.toContainText('Knockdown Delta');
   await expect(page).toHaveURL(/tab=kills$/);
+
+  await knockdownsTab.click();
+  const knockdowns = page.getByTestId('journal-events-knockdowns');
+  await expect(knockdowns).toContainText('Knockdown Charlie');
+  await expect(knockdowns).toContainText('Knockdown Delta');
+  await expect(knockdowns).not.toContainText('Killer Alpha');
+  await expect(page).toHaveURL(/tab=knockdowns$/);
 
   await page.getByTestId('journal-tab-damage').click();
   const damage = page.getByTestId('journal-events-damage');
@@ -2432,7 +2444,7 @@ for (const totalPlayers of [0, 10, 100]) {
 
     await page.getByTestId('journal-view-events').click();
     const eventTabs = page.locator('.journal-tabs .journal-tab');
-    await expect(eventTabs).toHaveCount(4);
+    await expect(eventTabs).toHaveCount(5);
     const layout = await page.evaluate(() => ({
       fits: document.documentElement.scrollWidth <= window.innerWidth + 1,
       tabsFit: [...document.querySelectorAll<HTMLElement>('.journal-tabs .journal-tab')].every(
@@ -3410,11 +3422,35 @@ test('shows empty, partial and stale role leaderboard states without treating th
   );
 });
 
+test('does not describe a fully covered board as incomplete when nobody passed the threshold', async ({
+  page
+}) => {
+  await page.clock.setFixedTime('2026-07-26T12:00:00.000Z');
+  await mockLeaderboardApi(page, {
+    status: 'partial',
+    empty: true,
+    factsCoverage: 1
+  });
+  await page.goto('./#leaderboards?period=day&role=player');
+
+  const context = page.getByTestId('leaderboard-context');
+  await expect(context).toContainText('Матчей с обеими сторонами100%');
+  await expect(context).not.toContainText('Часть матчей записана неполно');
+  await expect(context).not.toHaveClass(/leaderboard-context-strip-warning/);
+  await expect(page.getByTestId('leaderboards-empty')).toContainText(
+    'Пока никто не прошёл порог 2 матчей'
+  );
+});
+
 test('keeps achievement dialogs inside narrow screens and restores focus', async ({
   page
 }) => {
   await page.clock.setFixedTime('2026-07-26T12:00:00.000Z');
-  await mockLeaderboardApi(page, { status: 'partial', stale: true });
+  await mockLeaderboardApi(page, {
+    status: 'partial',
+    stale: true,
+    factsCoverage: 0.75
+  });
 
   for (const viewport of [
     { width: 360, height: 800 },

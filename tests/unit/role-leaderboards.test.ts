@@ -7,6 +7,7 @@ import {
   getCurrentRolePeriodId,
   readRoleLeaderboardSelection,
   resolveRoleLeaderboardUrl,
+  roleLeaderboardHasIncompleteFacts,
   shiftRolePeriodId
 } from '../../src/lib/leaderboards.ts';
 
@@ -55,6 +56,30 @@ test('selection rejects malformed values and period ids', () => {
       periodId: null
     }),
     '#leaderboards?period=month&role=commander'
+  );
+});
+
+test('distinguishes incomplete match facts from a partial board without qualified players', () => {
+  assert.equal(
+    roleLeaderboardHasIncompleteFacts({
+      status: 'partial',
+      dataQuality: { factsCoverage: 1 }
+    }),
+    false
+  );
+  assert.equal(
+    roleLeaderboardHasIncompleteFacts({
+      status: 'partial',
+      dataQuality: { factsCoverage: 0.75 }
+    }),
+    true
+  );
+  assert.equal(
+    roleLeaderboardHasIncompleteFacts({
+      status: 'ok',
+      dataQuality: { factsCoverage: 0.75 }
+    }),
+    false
   );
 });
 
