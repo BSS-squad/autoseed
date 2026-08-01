@@ -185,6 +185,14 @@ export function roleLeaderboardUsesSquadSize(role: RoleLeaderboardRole): boolean
   return role === 'player' || role === 'squad_leader';
 }
 
+export function roleLeaderboardHasIncompleteFacts(
+  response: Pick<RoleLeaderboardResponse, 'status'> & {
+    dataQuality: Pick<RoleLeaderboardResponse['dataQuality'], 'factsCoverage'>;
+  }
+): boolean {
+  return response.status === 'partial' && response.dataQuality.factsCoverage !== 1;
+}
+
 const METRIC_FIELDS = new Set([
   'resourceSwingPer90',
   'resourceSwing',

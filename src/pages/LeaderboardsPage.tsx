@@ -20,6 +20,7 @@ import {
   ROLE_LEADERBOARD_PERIODS,
   ROLE_LEADERBOARD_ROLES,
   ROLE_LEADERBOARD_SQUAD_SIZES,
+  roleLeaderboardHasIncompleteFacts,
   roleLeaderboardUsesSquadSize,
   shiftRolePeriodId
 } from '../lib/leaderboards';
@@ -644,6 +645,9 @@ export function LeaderboardsPage({ config, route, vipShopUrl }: LeaderboardsPage
   const currentPeriodId = getCurrentRolePeriodId(selection.period);
   const activePeriodId = selection.periodId || response?.periodId || currentPeriodId;
   const hasEntries = loadState === 'ready' && Boolean(response?.entries.length);
+  const hasIncompleteFacts = Boolean(
+    response && roleLeaderboardHasIncompleteFacts(response)
+  );
   const visibleEntries =
     response?.entries.slice(0, expanded ? response.entries.length : 5) || [];
   const podiumEntries = visibleEntries.slice(0, 3);
@@ -780,7 +784,7 @@ export function LeaderboardsPage({ config, route, vipShopUrl }: LeaderboardsPage
         <section
           className={classNames(
             'leaderboard-context-strip',
-            response.status === 'partial' && 'leaderboard-context-strip-warning'
+            hasIncompleteFacts && 'leaderboard-context-strip-warning'
           )}
           data-testid="leaderboard-context"
         >
@@ -815,7 +819,7 @@ export function LeaderboardsPage({ config, route, vipShopUrl }: LeaderboardsPage
             <strong>{formatCompactTimestamp(response.generatedAt || undefined)}</strong>
           </span>
           {response.stale ? <em>Обновление задерживается — показан последний расчёт</em> : null}
-          {response.status === 'partial' ? (
+          {hasIncompleteFacts ? (
             <em>Часть матчей записана неполно — доступные места всё равно показаны</em>
           ) : null}
         </section>
