@@ -17,6 +17,9 @@ import {
   getCurrentRolePeriodId,
   readRoleLeaderboardSelection,
   resolveRoleLeaderboardUrl,
+  roleLeaderboardUsesGrowingMonthThreshold,
+  ROLE_LEADERBOARD_LEGACY_MONTH_THRESHOLD_NOTE,
+  ROLE_LEADERBOARD_MONTH_THRESHOLD_NOTE,
   ROLE_LEADERBOARD_PERIODS,
   ROLE_LEADERBOARD_ROLES,
   ROLE_LEADERBOARD_SQUAD_SIZES,
@@ -574,7 +577,7 @@ function RolePodiumCard({
       </div>
       <strong className="role-entry-name">{entry.name}</strong>
       <span className="role-match-progress">
-        {entry.matches} / {response.minimumMatches} матчей
+        Матчей: {entry.matches} · минимум: {response.minimumMatches}
       </span>
       <RoleMetricSet
         entry={entry}
@@ -703,6 +706,18 @@ export function LeaderboardsPage({ config, route, vipShopUrl }: LeaderboardsPage
               </button>
             ))}
           </SegmentedControl>
+
+          {selection.period === 'month' ? (
+            <p
+              className="leaderboard-month-threshold-note"
+              data-testid="leaderboard-month-threshold-note"
+            >
+              {response?.period === 'month' &&
+              !roleLeaderboardUsesGrowingMonthThreshold(response.rulesVersion)
+                ? ROLE_LEADERBOARD_LEGACY_MONTH_THRESHOLD_NOTE
+                : ROLE_LEADERBOARD_MONTH_THRESHOLD_NOTE}
+            </p>
+          ) : null}
 
           <SegmentedControl label="Роль" className="leaderboard-role-row">
             {ROLE_LEADERBOARD_ROLES.map((entry) => (
@@ -867,10 +882,10 @@ export function LeaderboardsPage({ config, route, vipShopUrl }: LeaderboardsPage
             }
             title={
               response.available
-                ? `Пока никто не прошёл порог ${response.minimumMatches} матчей`
+                ? 'Пока никто не прошёл в топ'
                 : 'Рейтинг этого периода ещё не рассчитан'
             }
-            description={`Сейчас участвуют: ${response.progress.candidates}. Разверните список, чтобы увидеть, кому и сколько матчей осталось до входа.`}
+            description={`Минимум для входа: ${response.minimumMatches}. Сейчас участвуют: ${response.progress.candidates}. Разверните список, чтобы увидеть, кому и сколько матчей осталось до входа.`}
           />
         ) : null}
 
@@ -893,9 +908,7 @@ export function LeaderboardsPage({ config, route, vipShopUrl }: LeaderboardsPage
                     <span className="overview-label">Остальные места</span>
                     <strong>{formatRolePeriodRange(response)}</strong>
                   </div>
-                  <span>
-                    Сыграно / минимум для входа: {response.minimumMatches}
-                  </span>
+                  <span>Минимум для входа: {response.minimumMatches}</span>
                 </div>
                 <div className="leaderboard-table role-leaderboard-table" role="table">
                   {tableEntries.map((entry) => (
@@ -909,7 +922,7 @@ export function LeaderboardsPage({ config, route, vipShopUrl }: LeaderboardsPage
                       <span className="role-table-person">
                         <strong>{entry.name}</strong>
                         <small>
-                          {entry.matches} / {response.minimumMatches} матчей
+                          Матчей: {entry.matches} · минимум: {response.minimumMatches}
                         </small>
                       </span>
                       <RoleMetricSet
@@ -973,9 +986,9 @@ export function LeaderboardsPage({ config, route, vipShopUrl }: LeaderboardsPage
                   <span className="role-table-person">
                     <strong>{entry.name}</strong>
                     <small>
-                      {entry.matches} / {response.minimumMatches} матчей
+                      Матчей: {entry.matches} · минимум: {response.minimumMatches}
                     </small>
-                    <em>Осталось матчей: {entry.matchesNeeded}</em>
+                    <em>Матчей до входа: {entry.matchesNeeded}</em>
                   </span>
                   <RoleMetricSet
                     entry={entry}

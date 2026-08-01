@@ -148,8 +148,19 @@ export const ROLE_LEADERBOARD_PERIODS: Array<{
 }> = [
   { value: 'day', label: 'День', description: 'от 2 матчей' },
   { value: 'week', label: 'Неделя', description: 'от 9 матчей' },
-  { value: 'month', label: 'Месяц', description: 'от 50 матчей' }
+  { value: 'month', label: 'Месяц', description: 'порог растёт' }
 ];
+
+export const ROLE_LEADERBOARD_MONTH_THRESHOLD_NOTE =
+  'Месячный минимум начинается с 2 матчей и растёт по ходу месяца. При расчёте учитывается число матчей пятого по активности участника, поэтому порог может отличаться между ролями и размерами отряда; командиры считаются без деления по размеру.';
+
+export const ROLE_LEADERBOARD_LEGACY_MONTH_THRESHOLD_NOTE =
+  'Этот расчёт выполнен по прежним правилам. Его фактический минимум указан в сводке ниже; новые месячные срезы используют растущий порог.';
+
+export function roleLeaderboardUsesGrowingMonthThreshold(rulesVersion: string): boolean {
+  const version = /^observed-impact-v(\d+)$/.exec(rulesVersion)?.[1];
+  return version !== undefined && Number(version) >= 5;
+}
 
 export const ROLE_LEADERBOARD_ROLES: Array<{
   value: RoleLeaderboardRole;
