@@ -2,6 +2,7 @@ export type AppConfig = {
   app: {
     title: string;
     debugLogLimit?: number;
+    siteUrl?: string;
     vipShopUrl?: string;
     testMode?: TestModeConfig;
   };

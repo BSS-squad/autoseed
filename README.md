@@ -26,6 +26,7 @@
 - хранение `enabled`, `lastProcessedTimestamp`, `cooldown` и permissions в `localStorage`;
 - локальный preflight-check на странице: popup, `steam://`, и явная подсказка оставить Squad в главном меню;
 - redirect через служебное popup-окно для автосценариев, чтобы страница не теряла состояние и могла выполнить follow-up redirect; ручное прямое подключение открывает `steam://` в текущей вкладке, как SquadBrowser;
+- опциональная ссылка на основной сайт BSS через `app.siteUrl`, которая открывается в новой вкладке и не прерывает текущий сценарий автосида;
 - опциональная публичная ссылка на внешний VIP purchase flow через `app.vipShopUrl`;
 - публичная витрина ролевых топов через `leaderboards.roleUrl` или
   автоматически выведенный `{leaderboards.url}/v2`;
@@ -49,7 +50,8 @@ npm run dev
 ```json
 {
   "app": {
-    "title": "BSS AutoConnect"
+    "title": "BSS AutoConnect",
+    "siteUrl": "https://squad.leo-land.ru/"
   },
   "policy": {
     "timezone": "Europe/Moscow",
@@ -78,6 +80,22 @@ npm run dev
 ```
 
 `exporters[].name` здесь только служебная метка endpoint-а для ошибок. Отображаемое название сервера frontend берёт из `snapshot.servers[].name`, а exporter заполняет его из `ShowServerInfo`.
+
+Опционально можно добавить `app.siteUrl` с адресом основного сайта BSS:
+
+```json
+{
+  "app": {
+    "title": "BSS AutoConnect",
+    "siteUrl": "https://squad.leo-land.ru/"
+  }
+}
+```
+
+Тогда в навигации появится ссылка `Сайт BSS`. Она открывается в новой вкладке,
+чтобы не сбрасывать выбранный сервер и состояние автосида. Адрес должен быть
+абсолютным `http`/`https` URL, а в боевой сборке — `https`; логины, пароли,
+параметры запроса и фрагменты в нём запрещены.
 
 Опционально можно добавить `app.vipShopUrl` с абсолютным `http`/`https` URL внешнего VIP-сервиса:
 

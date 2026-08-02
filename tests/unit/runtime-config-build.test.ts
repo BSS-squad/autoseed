@@ -30,6 +30,7 @@ test('runtime config generator writes only the approved public shape', (t) => {
   const config = {
     app: {
       title: 'BSS AutoConnect',
+      siteUrl: 'https://squad.example.test/',
       vipShopUrl: 'https://vip.example.test'
     },
     policy: {
@@ -84,6 +85,59 @@ test('runtime config generator rejects exporter URLs with credentials', (t) => {
       }
     ]
   });
+  t.after(() => fs.rmSync(result.tempDir, { recursive: true, force: true }));
+
+  assert.notEqual(result.status, 0);
+  assert.equal(fs.existsSync(result.outputPath), false);
+});
+
+test('runtime config generator rejects unsafe canonical site URLs', (t) => {
+  const results = [
+    'https://user:password@squad.example.test/',
+    'https://squad.example.test/?token=secret',
+    'https://squad.example.test/#private'
+  ].map((siteUrl) =>
+    runGenerator({
+      app: { title: 'BSS AutoConnect', siteUrl },
+      exporters: [
+        {
+          name: 'squadjs1',
+          baseUrl: 'https://api.example.test/autoseed'
+        }
+      ]
+    })
+  );
+  t.after(() => {
+    for (const result of results) {
+      fs.rmSync(result.tempDir, { recursive: true, force: true });
+    }
+  });
+
+  for (const result of results) {
+    assert.notEqual(result.status, 0);
+    assert.equal(fs.existsSync(result.outputPath), false);
+  }
+});
+
+test('production runtime config requires HTTPS for the canonical site URL', (t) => {
+  const result = runGenerator(
+    {
+      app: {
+        title: 'BSS AutoConnect',
+        siteUrl: 'http://squad.example.test/'
+      },
+      exporters: [
+        {
+          name: 'squadjs1',
+          baseUrl: 'https://api.squad.leo-land.ru/squadjs1/v1/autoseed'
+        }
+      ]
+    },
+    {
+      AUTOSEED_RUNTIME_CONFIG_MODE: 'production',
+      AUTOSEED_ALLOWED_EXPORTER_ORIGINS: 'https://api.squad.leo-land.ru'
+    }
+  );
   t.after(() => fs.rmSync(result.tempDir, { recursive: true, force: true }));
 
   assert.notEqual(result.status, 0);

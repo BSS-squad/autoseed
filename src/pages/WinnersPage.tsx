@@ -63,6 +63,7 @@ type WinnersPageProps = {
   snapshot: CombinedSnapshot;
   now: number;
   route: AppRoute;
+  siteUrl: string | null;
   vipShopUrl: string | null;
 };
 
@@ -172,7 +173,7 @@ function getPrimaryRaffleServer(raffleServers: RaffleServerSnapshot[]): RaffleSe
   );
 }
 
-export function WinnersPage({ snapshot, now, route, vipShopUrl }: WinnersPageProps) {
+export function WinnersPage({ snapshot, now, route, siteUrl, vipShopUrl }: WinnersPageProps) {
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const raffleServers = getRaffleServers(snapshot);
   const activeRaffles = getActiveRaffles(raffleServers);
@@ -193,6 +194,7 @@ export function WinnersPage({ snapshot, now, route, vipShopUrl }: WinnersPagePro
   return (
     <PageShell
       currentRoute={route}
+      siteUrl={siteUrl}
       vipShopUrl={vipShopUrl}
       className="winners-shell"
       testId="winners-page"

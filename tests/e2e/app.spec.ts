@@ -56,6 +56,14 @@ const vipShopRuntimeConfig = {
   }
 };
 
+const siteRuntimeConfig = {
+  ...runtimeConfig,
+  app: {
+    ...runtimeConfig.app,
+    siteUrl: 'https://squad.leo-land.ru/'
+  }
+};
+
 const leaderboardsRuntimeConfig = {
   ...runtimeConfig,
   leaderboards: {
@@ -2041,6 +2049,35 @@ test('hides the VIP purchase link when the runtime config does not provide a URL
   await page.goto('./');
 
   await expect(page.getByTestId('vip-shop-nav-link')).toHaveCount(0);
+});
+
+test('hides the main site link when the runtime config does not provide a URL', async ({
+  page
+}) => {
+  await mockAutoseedApi(page);
+
+  await page.goto('./');
+
+  await expect(page.getByTestId('site-nav-link')).toHaveCount(0);
+});
+
+test('renders a safe responsive link to the main site from runtime config', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 800 });
+  await mockAutoseedApi(page, undefined, siteRuntimeConfig);
+
+  await page.goto('./');
+
+  const siteLink = page.getByRole('link', { name: 'Сайт BSS' });
+  await expect(siteLink).toBeVisible();
+  await expect(siteLink).toHaveAttribute('href', 'https://squad.leo-land.ru/');
+  await expect(siteLink).toHaveAttribute('target', '_blank');
+  await expect(siteLink).toHaveAttribute('rel', /noopener/);
+  await expect(siteLink).toHaveAttribute('rel', /noreferrer/);
+
+  const pageFitsViewport = await page.evaluate(
+    () => document.documentElement.scrollWidth <= window.innerWidth + 1
+  );
+  expect(pageFitsViewport).toBe(true);
 });
 
 test('renders the VIP purchase link from runtime config', async ({ page }) => {
