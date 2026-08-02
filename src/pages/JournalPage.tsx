@@ -9,13 +9,15 @@ import type { CombinedSnapshot } from '../types';
 type JournalPageProps = {
   snapshot: CombinedSnapshot;
   route: AppRoute;
+  siteUrl: string | null;
   vipShopUrl: string | null;
 };
 
-export function JournalPage({ snapshot, route, vipShopUrl }: JournalPageProps) {
+export function JournalPage({ snapshot, route, siteUrl, vipShopUrl }: JournalPageProps) {
   return (
     <PageShell
       currentRoute={route}
+      siteUrl={siteUrl}
       vipShopUrl={vipShopUrl}
       testId="journal-page"
     >

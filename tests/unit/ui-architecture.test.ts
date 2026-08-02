@@ -27,6 +27,7 @@ function buildServer(
 test('shared class and URL helpers keep presentation inputs safe', () => {
   assert.equal(classNames('base', false, null, 'active'), 'base active');
   assert.equal(getSafeHttpUrl('https://example.test/shop'), 'https://example.test/shop');
+  assert.equal(getSafeHttpUrl('https://user:password@example.test/shop'), null);
   assert.equal(getSafeHttpUrl('javascript:alert(1)'), null);
   assert.equal(getSafeHttpUrl('not a url'), null);
 });

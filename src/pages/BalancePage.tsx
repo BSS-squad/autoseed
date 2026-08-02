@@ -22,10 +22,11 @@ import type {
 type BalancePageProps = {
   snapshot: CombinedSnapshot;
   route: AppRoute;
+  siteUrl: string | null;
   vipShopUrl: string | null;
 };
 
-export function BalancePage({ snapshot, route, vipShopUrl }: BalancePageProps) {
+export function BalancePage({ snapshot, route, siteUrl, vipShopUrl }: BalancePageProps) {
   const [proposalMode, setProposalMode] = useState<TeamBalancerProposalMode>('squad');
   const [selectedServerKey, setSelectedServerKey] = useState('');
   const defaultServer =
@@ -42,6 +43,7 @@ export function BalancePage({ snapshot, route, vipShopUrl }: BalancePageProps) {
   return (
     <PageShell
       currentRoute={route}
+      siteUrl={siteUrl}
       vipShopUrl={vipShopUrl}
       testId="balance-page"
     >

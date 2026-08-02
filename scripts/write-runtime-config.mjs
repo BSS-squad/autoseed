@@ -91,11 +91,16 @@ function assertRuntimeConfig(config) {
   assertAllowedKeys(config, new Set(['app', 'policy', 'leaderboards', 'exporters']), 'root object');
 
   assertPlainObject(config.app, 'app');
-  assertAllowedKeys(config.app, new Set(['title', 'debugLogLimit', 'vipShopUrl', 'testMode']), 'app');
+  assertAllowedKeys(
+    config.app,
+    new Set(['title', 'debugLogLimit', 'siteUrl', 'vipShopUrl', 'testMode']),
+    'app'
+  );
   assertNonEmptyString(config.app.title, 'app.title');
   if (config.app.debugLogLimit !== undefined) {
     assertFiniteNumber(config.app.debugLogLimit, 'app.debugLogLimit');
   }
+  assertOptionalPublicUrl(config.app.siteUrl, 'app.siteUrl');
   assertOptionalPublicUrl(config.app.vipShopUrl, 'app.vipShopUrl');
 
   if (config.app.testMode !== undefined) {

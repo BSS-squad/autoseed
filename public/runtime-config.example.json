@@ -2,6 +2,7 @@
   "app": {
     "title": "BSS AutoConnect",
     "debugLogLimit": 80,
+    "siteUrl": "https://squad.leo-land.ru/",
     "testMode": {
       "sequenceServerIds": [1, 2, 3],
       "delayMs": 60000,

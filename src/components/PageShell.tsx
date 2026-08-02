@@ -12,6 +12,7 @@ export const APP_DISPLAY_NAME = 'Автосид BSS';
 
 type PageShellProps = {
   currentRoute: AppRoute;
+  siteUrl?: string | null;
   vipShopUrl?: string | null;
   className?: string;
   testId?: string;
@@ -95,9 +96,11 @@ function activateLinkWithSpace(event: KeyboardEvent<HTMLAnchorElement>): void {
 
 function AppNav({
   currentRoute,
+  siteUrl,
   vipShopUrl
-}: Pick<PageShellProps, 'currentRoute' | 'vipShopUrl'>) {
-  const itemCount = ROUTES.length + (vipShopUrl ? 1 : 0);
+}: Pick<PageShellProps, 'currentRoute' | 'siteUrl' | 'vipShopUrl'>) {
+  const distinctVipShopUrl = vipShopUrl && vipShopUrl !== siteUrl ? vipShopUrl : null;
+  const itemCount = ROUTES.length + (siteUrl ? 1 : 0) + (distinctVipShopUrl ? 1 : 0);
   const navStyle = { '--nav-item-count': itemCount } as CSSProperties;
   const rememberRoute = (_event: MouseEvent<HTMLAnchorElement>) =>
     rememberCurrentHash(currentRoute);
@@ -125,10 +128,22 @@ function AppNav({
           </a>
         );
       })}
-      {vipShopUrl ? (
+      {siteUrl ? (
         <a
           className="app-nav-link"
-          href={vipShopUrl}
+          href={siteUrl}
+          target="_blank"
+          rel="noreferrer noopener"
+          data-testid="site-nav-link"
+          onKeyDown={activateLinkWithSpace}
+        >
+          Сайт BSS
+        </a>
+      ) : null}
+      {distinctVipShopUrl ? (
+        <a
+          className="app-nav-link"
+          href={distinctVipShopUrl}
           target="_blank"
           rel="noreferrer noopener"
           data-testid="vip-shop-nav-link"
@@ -143,6 +158,7 @@ function AppNav({
 
 export function PageShell({
   currentRoute,
+  siteUrl,
   vipShopUrl,
   className,
   testId,
@@ -155,7 +171,11 @@ export function PageShell({
       data-testid={testId}
     >
       <div className="app-topbar">
-        <AppNav currentRoute={currentRoute} vipShopUrl={vipShopUrl} />
+        <AppNav
+          currentRoute={currentRoute}
+          siteUrl={siteUrl}
+          vipShopUrl={vipShopUrl}
+        />
       </div>
       <main className="page-content">{children}</main>
     </div>

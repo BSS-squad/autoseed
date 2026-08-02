@@ -548,6 +548,7 @@ function InlineHelp({ label, title, description, testId }: InlineHelpProps) {
 export default function App({ config }: AppProps) {
   const storedState = useMemo(() => loadStoredState(), []);
   const hasConfiguredTestMode = Boolean(config.app.testMode?.sequenceServerIds?.length);
+  const siteUrl = getSafeHttpUrl(config.app.siteUrl);
   const vipShopUrl = getSafeHttpUrl(config.app.vipShopUrl);
   const [snapshot, setSnapshot] = useState<CombinedSnapshot>(EMPTY_SNAPSHOT);
   const [permissions, setPermissions] = useState<BrowserPermissions | null>(storedState.permissions);
@@ -1471,24 +1472,54 @@ export default function App({ config }: AppProps) {
   }, [displayTargetServer, orderedServers]);
 
   if (route === 'winners') {
-    return <WinnersPage snapshot={snapshot} now={now} route={route} vipShopUrl={vipShopUrl} />;
+    return (
+      <WinnersPage
+        snapshot={snapshot}
+        now={now}
+        route={route}
+        siteUrl={siteUrl}
+        vipShopUrl={vipShopUrl}
+      />
+    );
   }
 
   if (route === 'leaderboards') {
-    return <LeaderboardsPage config={config} route={route} vipShopUrl={vipShopUrl} />;
+    return (
+      <LeaderboardsPage
+        config={config}
+        route={route}
+        siteUrl={siteUrl}
+        vipShopUrl={vipShopUrl}
+      />
+    );
   }
 
   if (route === 'balance') {
-    return <BalancePage snapshot={snapshot} route={route} vipShopUrl={vipShopUrl} />;
+    return (
+      <BalancePage
+        snapshot={snapshot}
+        route={route}
+        siteUrl={siteUrl}
+        vipShopUrl={vipShopUrl}
+      />
+    );
   }
 
   if (route === 'journal') {
-    return <JournalPage snapshot={snapshot} route={route} vipShopUrl={vipShopUrl} />;
+    return (
+      <JournalPage
+        snapshot={snapshot}
+        route={route}
+        siteUrl={siteUrl}
+        vipShopUrl={vipShopUrl}
+      />
+    );
   }
 
   return (
     <PageShell
       currentRoute={route}
+      siteUrl={siteUrl}
       vipShopUrl={vipShopUrl}
       testId="app-shell"
     >

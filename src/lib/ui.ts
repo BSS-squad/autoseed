@@ -12,7 +12,9 @@ export function getSafeHttpUrl(value?: string | null): string | null {
 
   try {
     const parsed = new URL(trimmed);
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:'
+    return (parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
+      !parsed.username &&
+      !parsed.password
       ? trimmed
       : null;
   } catch {

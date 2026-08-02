@@ -57,6 +57,7 @@ type RoleLeaderboardDisplayEntry =
 type LeaderboardsPageProps = {
   config: AppConfig;
   route: AppRoute;
+  siteUrl: string | null;
   vipShopUrl: string | null;
 };
 
@@ -589,7 +590,7 @@ function RolePodiumCard({
   );
 }
 
-export function LeaderboardsPage({ config, route, vipShopUrl }: LeaderboardsPageProps) {
+export function LeaderboardsPage({ config, route, siteUrl, vipShopUrl }: LeaderboardsPageProps) {
   const sourceUrl = useMemo(
     () => getSafeHttpUrl(resolveRoleLeaderboardUrl(config.leaderboards)),
     [config.leaderboards]
@@ -673,6 +674,7 @@ export function LeaderboardsPage({ config, route, vipShopUrl }: LeaderboardsPage
   return (
     <PageShell
       currentRoute={route}
+      siteUrl={siteUrl}
       vipShopUrl={vipShopUrl}
       className="leaderboards-shell"
       testId="leaderboards-page"
