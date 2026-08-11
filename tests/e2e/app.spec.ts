@@ -1959,6 +1959,8 @@ test('keeps a private event server in the journal but out of autoseed controls',
 
   await expect(page.getByTestId('server-card-6')).toHaveCount(0);
   await expect(page.getByTestId('overview-target')).toContainText('SPEC OPS');
+  await expect(page.getByTestId('hero-glance-grid')).toContainText('1/2');
+  await expect(page.getByTestId('hero-glance-grid')).not.toContainText('2/3');
 
   await page.goto('./#journal?server=squadjs6');
 
