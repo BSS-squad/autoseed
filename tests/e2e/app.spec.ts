@@ -2092,7 +2092,7 @@ test('renders the VIP purchase link from runtime config', async ({ page }) => {
   await expect(vipLink).toHaveAttribute('rel', /noreferrer/);
 });
 
-test('normalizes exporter v3 fixtures and follows Mix Spec Ops Invasion day priority', async ({
+test('normalizes exporter v3 fixtures and follows Mix Spec Ops Invasion priority', async ({
   page
 }) => {
   await page.clock.setFixedTime('2026-07-15T12:00:00.000Z');
@@ -2110,7 +2110,7 @@ test('normalizes exporter v3 fixtures and follows Mix Spec Ops Invasion day prio
   await expect(page.getByTestId('server-card-3')).toContainText('INVASION');
 });
 
-test('keeps strict day priority even when a later server is stronger', async ({ page }) => {
+test('keeps strict priority even when a later server is stronger', async ({ page }) => {
   await page.clock.setFixedTime('2026-07-15T12:00:00.000Z');
   const snapshotState = {
     mixPlayers: 60,
@@ -2141,7 +2141,7 @@ test('skips a priority server that has reached the seed limit', async ({ page })
   await expect(page.getByTestId('overview-target')).toContainText('SPEC OPS');
 });
 
-test('uses squadjs3 -> squadjs2 -> squadjs1 priority at night', async ({ page }) => {
+test('ignores the legacy night schedule and keeps Mix first at night', async ({ page }) => {
   await page.clock.setFixedTime('2026-07-14T22:30:00.000Z');
   await mockPriorityAutoseedApi(page, {
     mixPlayers: 20,
@@ -2151,7 +2151,7 @@ test('uses squadjs3 -> squadjs2 -> squadjs1 priority at night', async ({ page })
 
   await page.goto('./');
 
-  await expect(page.getByTestId('overview-target')).toContainText('INVASION');
+  await expect(page.getByTestId('overview-target')).toContainText('MIX');
 });
 
 test('renders an empty Team Balancer state when no fresh report exists', async ({ page }) => {

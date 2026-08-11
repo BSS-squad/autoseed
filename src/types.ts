@@ -18,12 +18,7 @@ export type TestModeConfig = {
 };
 
 export type SeedPolicy = {
-  timezone: string;
-  nightWindowStart: string;
-  nightWindowEnd: string;
-  nightPriorityOrder: number[];
   maxSeedPlayers: number;
-  priorityOrder: number[];
   cooldownMs: number;
   periodicReconnectMs: number;
 };
@@ -738,7 +733,6 @@ export type CombinedSnapshot = {
 export type SelectionState = {
   targetServer: ExporterServerSnapshot | null;
   reason: 'target_found' | 'no_suitable_server';
-  nightMode: boolean;
 };
 
 export type BrowserPermissions = {

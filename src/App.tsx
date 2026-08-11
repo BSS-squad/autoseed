@@ -778,7 +778,7 @@ export default function App({ config }: AppProps) {
               : nextSelection.targetServer
                 ? formatServerDisplayName(nextSelection.targetServer)
                 : 'нет'
-          }, режим=${testModeEnabled ? 'тест' : nextSelection.nightMode ? 'ночь' : 'день'}`
+          }, режим=${testModeEnabled ? 'тест' : 'обычный'}`
         );
 
         if (!enabledRef.current) return;

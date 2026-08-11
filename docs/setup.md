@@ -14,9 +14,7 @@
 - policy живёт только во frontend runtime-config;
 - страница победителей доступна по GitHub Pages hash-route `/#winners`;
 - текущая BSS policy:
-  - с `00:00` до `08:00` по Москве строгий приоритет
-    `3 -> 2 -> 1` (`Invasion -> Spec Ops -> Mix`)
-  - в остальное время строгий приоритет
+  - в любое время строгий приоритет
     `1 -> 2 -> 3` (`Mix -> Spec Ops -> Invasion`)
   - лимит `maxSeedPlayers=80`
 
@@ -33,12 +31,7 @@
     "debugLogLimit": 80
   },
   "policy": {
-    "timezone": "Europe/Moscow",
-    "nightWindowStart": "00:00",
-    "nightWindowEnd": "08:00",
-    "nightPriorityOrder": [3, 2, 1],
     "maxSeedPlayers": 80,
-    "priorityOrder": [1, 2, 3],
     "cooldownMs": 600000
   },
   "exporters": [
@@ -136,11 +129,6 @@
 ### Меняется во frontend secret
 
 - `exporters[].baseUrl`
-- `policy.timezone`
-- `policy.nightWindowStart`
-- `policy.nightWindowEnd`
-- `policy.nightPriorityOrder`
-- `policy.priorityOrder`
 - `policy.maxSeedPlayers`
 - `policy.cooldownMs`
 - `app.siteUrl` для перехода на основной сайт BSS
@@ -235,12 +223,7 @@ networks:
     "debugLogLimit": 80
   },
   "policy": {
-    "timezone": "Europe/Moscow",
-    "nightWindowStart": "00:00",
-    "nightWindowEnd": "08:00",
-    "nightPriorityOrder": [3, 2, 1],
     "maxSeedPlayers": 80,
-    "priorityOrder": [1, 2, 3],
     "cooldownMs": 600000
   },
   "exporters": [

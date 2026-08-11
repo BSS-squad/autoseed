@@ -34,7 +34,7 @@ test('runtime config generator writes only the approved public shape', (t) => {
       vipShopUrl: 'https://vip.example.test'
     },
     policy: {
-      priorityOrder: [1, 2, 3]
+      maxSeedPlayers: 80
     },
     leaderboards: {
       url: 'https://statistics.example.test/api/leaderboards',
@@ -52,6 +52,36 @@ test('runtime config generator writes only the approved public shape', (t) => {
 
   assert.equal(result.status, 0, result.stderr);
   assert.deepEqual(JSON.parse(fs.readFileSync(result.outputPath, 'utf8')), config);
+});
+
+test('runtime config generator removes deprecated priority schedules from public output', (t) => {
+  const result = runGenerator({
+    app: { title: 'BSS AutoConnect' },
+    policy: {
+      timezone: 'Europe/Moscow',
+      nightWindowStart: '00:00',
+      nightWindowEnd: '08:00',
+      nightPriorityOrder: [3, 2, 1],
+      nightPreferredServerId: 3,
+      priorityOrder: [3, 2, 1],
+      switchDelta: 10,
+      maxSeedPlayers: 80,
+      cooldownMs: 600000
+    },
+    exporters: [
+      {
+        name: 'squadjs1',
+        baseUrl: 'https://api.example.test/autoseed'
+      }
+    ]
+  });
+  t.after(() => fs.rmSync(result.tempDir, { recursive: true, force: true }));
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(fs.readFileSync(result.outputPath, 'utf8')).policy, {
+    maxSeedPlayers: 80,
+    cooldownMs: 600000
+  });
 });
 
 test('runtime config generator rejects unapproved fields without printing values', (t) => {

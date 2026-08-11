@@ -10,12 +10,7 @@
     }
   },
   "policy": {
-    "timezone": "Europe/Moscow",
-    "nightWindowStart": "00:00",
-    "nightWindowEnd": "08:00",
-    "nightPriorityOrder": [3, 2, 1],
     "maxSeedPlayers": 80,
-    "priorityOrder": [1, 2, 3],
     "cooldownMs": 600000,
     "periodicReconnectMs": 600000
   },
