@@ -7,7 +7,7 @@ import {
   type ChangeEvent
 } from 'react';
 
-import { runPermissionCheck } from './lib/permissions';
+import { requestSteamMain } from './lib/permissions';
 import {
   buildSelectionState,
   getSelectionStatusLabel,
@@ -25,7 +25,6 @@ import {
   USER_STATE_COPY
 } from './lib/ui-copy';
 import {
-  formatBool,
   formatCompactTimestamp,
   formatCountdown,
   formatHours
@@ -571,7 +570,7 @@ export default function App({ config }: AppProps) {
   const [logs, setLogs] = useState<string[]>([]);
   const [now, setNow] = useState<number>(Date.now());
   const [activeServerKey, setActiveServerKey] = useState<string>('');
-  const [joinLinkRequestServerKey, setJoinLinkRequestServerKey] = useState<string>('');
+  const [awaitingSteamConfirmation, setAwaitingSteamConfirmation] = useState<boolean>(false);
   const [route, setRoute] = useState<AppRoute>(() => getRouteFromHash());
   const [teamBalancerProposalMode, setTeamBalancerProposalMode] =
     useState<TeamBalancerProposalMode>('squad');
@@ -683,29 +682,15 @@ export default function App({ config }: AppProps) {
       return next.slice(Math.max(0, next.length - debugLogLimit));
     });
   };
-  const isJoinLinkRequestPending = (server: ExporterServerSnapshot | null | undefined): boolean =>
-    Boolean(server && getServerSelectionKey(server) === joinLinkRequestServerKey);
-
   const requestFreshJoinLink = async (
-    server: ExporterServerSnapshot,
-    reason: 'redirect' | 'direct'
+    server: ExporterServerSnapshot
   ): Promise<string | null> => {
     if (!canRequestJoinLink(server)) {
-      appendLog(
-        reason === 'direct'
-          ? `Прямое подключение недоступно: ${formatServerDisplayName(server)} сейчас оффлайн.`
-          : `Переход отменён: ${formatServerDisplayName(server)} сейчас оффлайн.`
-      );
+      appendLog(`Переход отменён: ${formatServerDisplayName(server)} сейчас оффлайн.`);
       return null;
     }
 
-    const serverKey = getServerSelectionKey(server);
-    setJoinLinkRequestServerKey(serverKey);
-    appendLog(
-      reason === 'direct'
-        ? `Прямое подключение: запрашиваю свежую ссылку входа для ${formatServerDisplayName(server)}.`
-        : `Запрашиваю свежую ссылку входа для ${formatServerDisplayName(server)}.`
-    );
+    appendLog(`Запрашиваю свежую ссылку входа для ${formatServerDisplayName(server)}.`);
 
     try {
       return await fetchServerJoinLink(server.joinLinkUrl);
@@ -713,13 +698,9 @@ export default function App({ config }: AppProps) {
       const message =
         error instanceof Error ? error.message : 'неизвестная ошибка при запросе ссылки входа';
       appendLog(
-        reason === 'direct'
-          ? `Прямое подключение не удалось: ${formatServerDisplayName(server)} не отдал ссылку входа (${message}).`
-          : `Переход отменён: ${formatServerDisplayName(server)} не отдал ссылку входа (${message}).`
+        `Переход отменён: ${formatServerDisplayName(server)} не отдал ссылку входа (${message}).`
       );
       return null;
-    } finally {
-      setJoinLinkRequestServerKey((current) => (current === serverKey ? '' : current));
     }
   };
 
@@ -1002,8 +983,7 @@ export default function App({ config }: AppProps) {
 
   const triggerJoinLink = async (
     server: ExporterServerSnapshot,
-    followupServer?: ExporterServerSnapshot | null,
-    reason: 'redirect' | 'direct' = 'redirect'
+    followupServer?: ExporterServerSnapshot | null
   ): Promise<string | null> => {
     const connectorWindow = ensureConnectorWindow();
     if (!connectorWindow) {
@@ -1025,7 +1005,7 @@ export default function App({ config }: AppProps) {
         followupServer ? testSequenceDelayMsRef.current : 0
       );
 
-      const joinLink = await requestFreshJoinLink(server, reason);
+      const joinLink = await requestFreshJoinLink(server);
       if (!joinLink) {
         return null;
       }
@@ -1108,7 +1088,6 @@ export default function App({ config }: AppProps) {
     saveLastProcessedTimestamp(0);
     setCooldownUntil(0);
     saveCooldownUntil(0);
-    setJoinLinkRequestServerKey('');
     activeRedirectServerKeyRef.current = '';
     saveActiveRedirectServerKey('');
     pendingRedirectServerKeyRef.current = '';
@@ -1147,39 +1126,6 @@ export default function App({ config }: AppProps) {
       clearPendingSequence();
       scheduleSequenceStep(pendingRemaining);
       appendLog(`Ожидающий следующий переход пересоздан с задержкой из конфига.`);
-    }
-  };
-
-  const handlePermissionsCheck = async () => {
-    const result = await runPermissionCheck();
-    setPermissions(result);
-    savePermissions(result);
-    appendLog(
-      `Проверка браузера: окно=${formatBool(result.popupAllowed)}, Steam=${formatBool(result.steamProtocolReady)}`
-    );
-  };
-
-  const handleDirectJoin = async (server: ExporterServerSnapshot) => {
-    if (!canRequestJoinLink(server)) {
-      appendLog(
-        `Прямое подключение недоступно: ${formatServerDisplayName(server)} сейчас оффлайн.`
-      );
-      return;
-    }
-
-    const joinLink = await requestFreshJoinLink(server, 'direct');
-    if (!joinLink) return;
-
-    try {
-      appendLog(`Прямое подключение: ${formatServerDisplayName(server)}`);
-      const openedWindow = window.open(joinLink, '_self');
-      if (!openedWindow) {
-        window.location.href = joinLink;
-      }
-    } catch {
-      appendLog(
-        `Прямое подключение не удалось: браузер заблокировал переход к ${formatServerDisplayName(server)}.`
-      );
     }
   };
 
@@ -1282,22 +1228,7 @@ export default function App({ config }: AppProps) {
     return () => unsubscribe();
   }, [config.exporters]);
 
-  const handleEnable = async () => {
-    if (!permissions) {
-      appendLog('Автоподключение не запущено: сначала проверьте браузер.');
-      return;
-    }
-
-    if (!permissions.popupAllowed || !permissions.steamProtocolReady) {
-      appendLog('Автоподключение не запущено: браузер ещё не готов.');
-      return;
-    }
-
-    if (!ensureConnectorWindow()) {
-      appendLog('Автоподключение не запущено: не удалось открыть вспомогательное окно.');
-      return;
-    }
-
+  const activateAutoseed = async () => {
     clearPendingSequence();
     resetRedirectState();
     enabledRef.current = true;
@@ -1345,10 +1276,64 @@ export default function App({ config }: AppProps) {
     void refreshSnapshot();
   };
 
+  const invalidateBrowserPermissions = () => {
+    const invalidPermissions: BrowserPermissions = {
+      popupAllowed: false,
+      steamProtocolReady: false,
+      checkedAt: Date.now()
+    };
+    permissionsRef.current = invalidPermissions;
+    setPermissions(invalidPermissions);
+    savePermissions(invalidPermissions);
+  };
+
+  const handleEnable = async () => {
+    if (awaitingSteamConfirmation) return;
+    if (!permissions?.popupAllowed || !permissions.steamProtocolReady) {
+      const steamRequested = requestSteamMain();
+      setAwaitingSteamConfirmation(steamRequested);
+      appendLog(
+        steamRequested
+          ? 'Открываю главную Steam: подтвердите результат перед подключением.'
+          : 'Не удалось передать безопасную проверку приложению Steam.'
+      );
+      return;
+    }
+
+    if (!ensureConnectorWindow()) {
+      invalidateBrowserPermissions();
+      appendLog('Автоподключение не запущено: браузер заблокировал служебное окно.');
+      return;
+    }
+    await activateAutoseed();
+  };
+
+  const handleSteamConfirmation = async () => {
+    if (!awaitingSteamConfirmation || enabledRef.current) return;
+    if (!ensureConnectorWindow()) {
+      setAwaitingSteamConfirmation(false);
+      invalidateBrowserPermissions();
+      appendLog('Автоподключение не запущено: браузер заблокировал служебное окно.');
+      return;
+    }
+
+    const confirmedPermissions: BrowserPermissions = {
+      popupAllowed: true,
+      steamProtocolReady: true,
+      checkedAt: Date.now()
+    };
+    permissionsRef.current = confirmedPermissions;
+    setPermissions(confirmedPermissions);
+    savePermissions(confirmedPermissions);
+    setAwaitingSteamConfirmation(false);
+    appendLog('Steam и служебное окно подтверждены пользователем.');
+    await activateAutoseed();
+  };
+
   const handleDisable = () => {
     clearPendingSequence();
     closeConnectorWindow();
-    setJoinLinkRequestServerKey('');
+    setAwaitingSteamConfirmation(false);
     activeRedirectServerKeyRef.current = '';
     saveActiveRedirectServerKey('');
     pendingRedirectServerKeyRef.current = '';
@@ -1391,7 +1376,6 @@ export default function App({ config }: AppProps) {
   const heroModeCaption = productionMode
     ? 'Обычный режим работы'
     : 'Режим для ручной проверки';
-  const browserCheckLabel = permissionsReady ? 'Браузер проверен' : 'Проверить браузер';
   const orderedServers = useMemo(
     () =>
       snapshot.servers
@@ -1423,36 +1407,28 @@ export default function App({ config }: AppProps) {
         : ['Кнопка: «Обычный»', 'Тестовый режим сейчас недоступен']
     },
     {
-      id: 'browser',
-      step: '2',
-      title: 'Нажми «Проверить браузер»',
-      description:
-        'Проверь, что браузер готов открыть окно и передать подключение в Steam. Пока оба индикатора не зелёные, автоподключение не запустится.',
-      hints: ['Кнопка: «Проверить браузер»', 'Смотри статусы окна и Steam']
-    },
-    {
       id: 'squad',
-      step: '3',
+      step: '2',
       title: 'Запусти Squad и оставь его в главном меню',
       description:
-        'Перед включением автоподключения или ручным прямым подключением клиент Squad уже должен быть открыт и ждать в главном меню. Иначе переход в игру может не сработать или сработать нестабильно.',
+        'Клиент Squad уже должен быть открыт и ждать в главном меню. Иначе переход в игру может сработать нестабильно.',
       hints: ['Squad должен быть запущен', 'Оставь игру в главном меню']
     },
     {
       id: 'connector',
-      step: '4',
-      title: 'Нажми «Автоподключение»',
+      step: '3',
+      title: 'Нажми «Подключиться»',
       description:
-        'После запуска откроется окно автоподключения. Не закрывай его во время работы. Если после отправки оно осталось на вспомогательной карточке, это нормально.',
-      hints: ['Кнопка: «Автоподключение»', 'Окно автоподключения не закрывать']
+        'При первом запуске откроется главная Steam: подтвердите это на странице, и AutoSeed сразу выберет сервер и подключит вас.',
+      hints: ['Кнопка: «Подключиться»', 'На первом запуске подтвердите Steam']
     },
     {
-      id: 'manual',
-      step: '5',
-      title: 'Следи за выбранным сервером и при необходимости заходи вручную',
+      id: 'observe',
+      step: '4',
+      title: 'Следи за целью AutoSeed',
       description:
-        'Ниже видно, куда сейчас стоит заходить. Если нужен ручной вход, используй кнопку «Подключиться напрямую», когда Squad уже открыт в главном меню.',
-      hints: ['Карточки: «Выбранный сервер» и «Куда заходить»', 'Кнопка: «Подключиться напрямую»']
+        'Карточки ниже показывают состояние и состав, но не меняют автоматический маршрут. Служебное окно во время работы закрывать не нужно.',
+      hints: ['Маркер: «цель AutoSeed»', 'Карточки только для просмотра']
     }
   ];
 
@@ -1526,7 +1502,7 @@ export default function App({ config }: AppProps) {
       <PageHeader
         eyebrow="Автосид BSS"
         title={APP_DISPLAY_NAME}
-        description="Рабочий экран для выбора цели, проверки браузера и запуска подключения без лишних переходов."
+        description="Одно подключение: AutoSeed сам выбирает подходящий сервер, а карточки объясняют его решение."
         className="hero hero-redesign"
         headingClassName="hero-main hero-main-tight"
         eyebrowClassName="eyebrow"
@@ -1548,7 +1524,7 @@ export default function App({ config }: AppProps) {
             <InlineHelp
               label="Справка по главному экрану"
               title="Главный экран Автосида"
-              description="Здесь включается автоподключение, выбирается режим и видно, что готово к запуску."
+              description="Здесь запускается AutoSeed и видно, какую цель он выбрал по текущему состоянию серверов."
               testId="hero-help"
             />
           </div>
@@ -1566,7 +1542,7 @@ export default function App({ config }: AppProps) {
 
             <div className="hero-badges hero-badges-tight">
               <span className={classNames('status-pill', enabled ? 'status-good' : 'status-muted')}>
-                {enabled ? 'Автоподключение активно' : 'Автоподключение выключено'}
+                {enabled ? 'Подключение активно' : 'AutoSeed выключен'}
               </span>
               <span
                 className={classNames(
@@ -1574,7 +1550,11 @@ export default function App({ config }: AppProps) {
                   permissionsReady ? 'status-good' : 'status-danger'
                 )}
               >
-                {permissionsReady ? 'Браузер готов' : 'Нужна проверка браузера'}
+                {permissionsReady
+                  ? 'Браузер готов'
+                  : awaitingSteamConfirmation
+                    ? 'Подтвердите Steam'
+                    : 'Нужна проверка браузера'}
               </span>
             </div>
 
@@ -1666,21 +1646,10 @@ export default function App({ config }: AppProps) {
               <span className="guide-inline-step" aria-hidden="true">
                 2
               </span>
-              <span>Готовность браузера</span>
+              <span>Данные серверов</span>
             </div>
 
             <div className="control-actions">
-              <button
-                className={classNames(
-                  'button',
-                  'guide-button',
-                  permissionsReady ? 'button-success guide-focus-success' : 'button-primary'
-                )}
-                onClick={() => void handlePermissionsCheck()}
-                data-testid="check-browser-button"
-              >
-                <span>{browserCheckLabel}</span>
-              </button>
               <button
                 className="button"
                 onClick={() => void refreshSnapshot()}
@@ -1701,16 +1670,32 @@ export default function App({ config }: AppProps) {
             onClick={enabled ? handleDisable : () => void handleEnable()}
             data-testid="power-toggle"
             aria-pressed={enabled}
+            disabled={awaitingSteamConfirmation}
           >
             <div className="power-button-head">
               <span className="guide-inline-step guide-inline-step-large" aria-hidden="true">
                 3
               </span>
-              <span className="power-caption">Автоподключение</span>
+              <span className="power-caption">AutoSeed</span>
             </div>
-            <strong>{enabled ? 'Включён' : 'Выключен'}</strong>
-            <small>{statusText}</small>
+            <strong>{enabled ? 'Отключить' : 'Подключиться'}</strong>
+            <small>
+              {awaitingSteamConfirmation
+                ? 'Подтвердите, что Steam открылся'
+                : statusText}
+            </small>
           </button>
+
+          {awaitingSteamConfirmation ? (
+            <button
+              type="button"
+              className="button button-primary guide-button"
+              onClick={() => void handleSteamConfirmation()}
+              data-testid="confirm-steam-button"
+            >
+              Steam открылся — подключиться
+            </button>
+          ) : null}
 
           <div className="signal-grid compact-signal-grid">
             <div className="signal-card signal-card-with-help">
@@ -1777,7 +1762,7 @@ export default function App({ config }: AppProps) {
                 )}
               />
               <div>
-                <strong>Выбранный сервер</strong>
+                <strong>Цель AutoSeed</strong>
                 <p>{displayTargetServer ? 'есть' : 'нет'}</p>
               </div>
             </div>
@@ -1792,9 +1777,8 @@ export default function App({ config }: AppProps) {
         </summary>
         <div className="guide-spoiler-body">
           <p className="guide-spoiler-copy">
-            Весь сценарий укладывается в несколько коротких действий: выбрать режим, проверить
-            браузер, открыть Squad и оставить его в главном меню, затем включить автоподключение
-            или при необходимости зайти вручную.
+            Оставьте Squad в главном меню и нажмите «Подключиться». AutoSeed сам выберет
+            подходящий сервер; при первом запуске останется подтвердить открытие Steam.
           </p>
 
           <ol className="guide-steps" aria-label="Пошаговая инструкция">
@@ -1831,15 +1815,15 @@ export default function App({ config }: AppProps) {
       )}
 
       <ServerSelector
-        label="Выбор сервера"
+        label="Просмотр серверов"
         className="section-shell server-switcher"
       >
         <div className="section-head">
           <div>
             <span className="section-eyebrow">Серверы</span>
-            <h2>Выбор сервера</h2>
+            <h2>Состояние серверов</h2>
           </div>
-          <p>Открой карточку ниже, чтобы посмотреть состав и подключиться вручную.</p>
+          <p>Открой карточку, чтобы посмотреть состав. Просмотр не меняет цель AutoSeed.</p>
         </div>
 
         <div className="server-switcher-track" data-testid="server-switcher-track">
@@ -1847,8 +1831,6 @@ export default function App({ config }: AppProps) {
             const serverKey = getServerSelectionKey(server);
             const isActive = serverKey === getServerSelectionKey(activeServer);
             const isTarget = isSameServer(server, displayTargetServer);
-            const canDirectJoin = canRequestJoinLink(server);
-            const joinRequestPending = isJoinLinkRequestPending(server);
             const [leftTeam, rightTeam] = server.teams;
             const switcherHoursLine =
               leftTeam && rightTeam
@@ -1887,26 +1869,11 @@ export default function App({ config }: AppProps) {
                   </div>
                   <div className="server-switcher-meta">
                     <span>{server.playerCount}/{server.maxPlayers || '—'}</span>
-                    {isTarget ? <span className="server-switcher-accent">выбран</span> : null}
+                    {isTarget ? <span className="server-switcher-accent">цель AutoSeed</span> : null}
                   </div>
                   <p>{switcherHoursLine}</p>
                 </button>
 
-                <div className="server-switcher-actions">
-                  <button
-                    type="button"
-                    className="button button-small"
-                    onClick={() => void handleDirectJoin(server)}
-                    disabled={!canDirectJoin || joinRequestPending}
-                    data-testid={`direct-join-${server.id}`}
-                  >
-                    {joinRequestPending
-                      ? 'Запрашиваем ссылку...'
-                      : canDirectJoin
-                        ? 'Подключиться'
-                        : 'Сервер оффлайн'}
-                  </button>
-                </div>
               </article>
             );
           })}
@@ -1916,10 +1883,10 @@ export default function App({ config }: AppProps) {
       <section className="section-shell server-stack">
         <div className="section-head">
           <div>
-            <span className="section-eyebrow">Выбранный сервер</span>
+            <span className="section-eyebrow">Просмотр сервера</span>
             <h2>Информация о сервере</h2>
           </div>
-          <p>Онлайн, состав сторон и ручное подключение.</p>
+          <p>Онлайн и состав сторон без влияния на автоматическую цель.</p>
         </div>
 
         {activeServer ? (() => {
@@ -1947,8 +1914,8 @@ export default function App({ config }: AppProps) {
                       <h2>{formatServerDisplayName(server)}</h2>
                       <InlineHelp
                         label="Справка по карточке сервера"
-                        title="Карточка выбранного сервера"
-                        description="Это основной блок выбранного сервера. Здесь видно текущий онлайн, стороны и кнопка ручного подключения."
+                        title="Информационная карточка сервера"
+                        description="Здесь видны текущий онлайн, стороны и состав. Переключение карточки не меняет цель AutoSeed."
                         testId="server-help"
                       />
                     </div>
@@ -1971,7 +1938,7 @@ export default function App({ config }: AppProps) {
                       </span>
                       <span className="server-state state-join">вход по запросу</span>
                       {isSameServer(server, displayTargetServer) ? (
-                        <span className="server-state state-target">выбран</span>
+                        <span className="server-state state-target">цель AutoSeed</span>
                       ) : null}
                     </div>
                   </div>
