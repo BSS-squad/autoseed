@@ -1357,7 +1357,6 @@ export default function App({ config }: AppProps) {
   const nextFollowupCountdown = pendingSequence
     ? Math.max(0, pendingSequence.nextRedirectAt - now)
     : 0;
-  const liveServerCount = snapshot.servers.filter((server) => server.online).length;
   const healthyExporterCount = Math.max(0, config.exporters.length - snapshot.errors.length);
   const nextActionValue = pendingSequence
     ? formatCountdown(nextFollowupCountdown)
@@ -1371,7 +1370,6 @@ export default function App({ config }: AppProps) {
     : enabled
       ? 'Статус обновляется автоматически'
       : 'Автоподключение выключено';
-  const heroMeshLabel = `${liveServerCount}/${snapshot.servers.length || config.exporters.length}`;
   const heroModeLabel = productionMode ? 'Обычный' : 'Тест';
   const heroModeCaption = productionMode
     ? 'Обычный режим работы'
@@ -1390,6 +1388,8 @@ export default function App({ config }: AppProps) {
         }),
     [displayTargetServer, snapshot.servers]
   );
+  const liveAutoseedServerCount = orderedServers.filter((server) => server.online).length;
+  const heroMeshLabel = `${liveAutoseedServerCount}/${orderedServers.length}`;
   const activeServer =
     orderedServers.find((server) => getServerSelectionKey(server) === activeServerKey) ||
     orderedServers[0] ||
