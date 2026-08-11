@@ -1727,8 +1727,15 @@ async function mockPriorityAutoseedApi(
   );
 }
 
-async function mockSuccessfulPermissionCheck(page: Page) {
-  await page.addInitScript(() => {
+async function mockSafeSteamAndPopup(page: Page, popupAllowed = true) {
+  await page.addInitScript(({ allowPopup }) => {
+    const testWindow = window as Window & {
+      __steamProtocolTargets?: string[];
+      __popupCalls?: number;
+    };
+    testWindow.__steamProtocolTargets = [];
+    testWindow.__popupCalls = 0;
+
     const createPopup = () => {
       let closed = false;
 
@@ -1751,8 +1758,10 @@ async function mockSuccessfulPermissionCheck(page: Page) {
       };
     };
 
-    window.open = () =>
-      createPopup() as unknown as Window;
+    window.open = () => {
+      testWindow.__popupCalls = (testWindow.__popupCalls || 0) + 1;
+      return allowPopup ? createPopup() as unknown as Window : null;
+    };
 
     const originalCreateElement = Document.prototype.createElement;
     Document.prototype.createElement = function (
@@ -1771,16 +1780,14 @@ async function mockSuccessfulPermissionCheck(page: Page) {
           },
           set(value) {
             currentSrc = String(value);
-            window.setTimeout(() => {
-              window.dispatchEvent(new Event('blur'));
-            }, 0);
+            testWindow.__steamProtocolTargets?.push(currentSrc);
           }
         });
       }
 
       return element;
     };
-  });
+  }, { allowPopup: popupAllowed });
 }
 
 async function captureConnectorWindowMarkup(page: Page) {
@@ -1870,7 +1877,8 @@ test('renders the localized control room from exporter snapshots', async ({ page
   await expect(page.getByTestId('server-card-2')).toContainText('SPEC OPS');
   await expect(page.getByTestId('active-server-board')).toContainText('вход по запросу');
   await expect(page.getByText('Как запустить')).toBeVisible();
-  await expect(page.getByText('Выбор сервера')).toBeVisible();
+  await expect(page.getByText('Состояние серверов')).toBeVisible();
+  await expect(page.getByText('Выбор сервера')).toHaveCount(0);
 });
 
 test('keeps a private event server in the journal but out of autoseed controls', async ({
@@ -3202,8 +3210,8 @@ test('uses player-friendly language on the home page', async ({ page }) => {
   await page.goto('./');
 
   await expect(page.getByTestId('mode-production')).toHaveText('Обычный');
-  await expect(page.getByTestId('power-toggle')).toContainText('Автоподключение');
-  await expect(page.getByText('Выбранный сервер', { exact: true }).first()).toBeVisible();
+  await expect(page.getByTestId('power-toggle')).toContainText('Подключиться');
+  await expect(page.getByText('Цель AutoSeed', { exact: true }).first()).toBeVisible();
   await expect(page.getByText('Обновлено', { exact: true }).first()).toBeVisible();
   await expect(page.getByText('Связь с серверами', { exact: true })).toBeVisible();
   await expectPlayerFriendlyLanguage(page);
@@ -3905,37 +3913,83 @@ test('shows cancelled raffle campaign by cancellation date', async ({ page }) =>
   await expect(page.getByTestId('planned-campaign-notification')).toHaveCount(0);
 });
 
-test('requests join-link on demand and dispatches direct joins in the current tab', async ({
+test('keeps server cards informational without requesting a direct join-link', async ({
   page
 }) => {
   const counters = { joinLinkRequests: 0 };
   await mockAutoseedApi(page, counters);
 
   await page.goto('./');
-  await expect(page.getByTestId('direct-join-2')).toBeVisible();
+  await expect(page.locator('[data-testid^="direct-join-"]')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Подключиться' })).toHaveCount(1);
   expect(counters.joinLinkRequests).toBe(0);
 
-  await Promise.all([
-    page.waitForURL('**/redirect-target'),
-    page.getByTestId('direct-join-2').click()
-  ]);
+  await page.getByTestId('server-card-1').locator('.server-switcher-select').click();
 
-  expect(counters.joinLinkRequests).toBe(1);
-  await expect(page.getByTestId('redirect-target')).toHaveText('Точка перехода');
+  await expect(page.getByTestId('active-server-board')).toContainText('MIX');
+  expect(counters.joinLinkRequests).toBe(0);
 });
 
-test('marks browser check as successful and keeps the button green', async ({ page }) => {
-  await mockSuccessfulPermissionCheck(page);
-  await mockAutoseedApi(page);
+test('uses a safe explicit Steam confirmation before the first automatic join', async ({ page }) => {
+  const counters = { joinLinkRequests: 0 };
+  await mockSafeSteamAndPopup(page);
+  await mockAutoseedApi(page, counters);
 
   await page.goto('./');
 
-  const button = page.getByTestId('check-browser-button');
+  const button = page.getByTestId('power-toggle');
   await button.click();
+  await expect(page.getByTestId('confirm-steam-button')).toBeVisible();
+  expect(counters.joinLinkRequests).toBe(0);
+  expect(await page.evaluate(() => (
+    window as Window & { __steamProtocolTargets?: string[] }
+  ).__steamProtocolTargets)).toEqual(['steam://open/main']);
+  expect(await page.evaluate(() => (
+    window as Window & { __popupCalls?: number }
+  ).__popupCalls)).toBe(0);
 
-  await expect(button).toContainText('Браузер проверен');
-  await expect(button).toHaveClass(/button-success/);
+  await page.getByTestId('confirm-steam-button').click();
+  await expect.poll(() => counters.joinLinkRequests).toBe(1);
+  expect(await page.evaluate(() => (
+    window as Window & { __popupCalls?: number }
+  ).__popupCalls)).toBe(1);
   await expect(page.getByTestId('hero')).toContainText('Браузер готов');
+  await expect(button).toContainText('Отключить');
+});
+
+test('does not enable or request a link when the connector popup is blocked', async ({ page }) => {
+  const counters = { joinLinkRequests: 0 };
+  await mockSafeSteamAndPopup(page, false);
+  await mockAutoseedApi(page, counters);
+
+  await page.goto('./');
+  await page.getByTestId('power-toggle').click();
+  await page.getByTestId('confirm-steam-button').click();
+
+  expect(counters.joinLinkRequests).toBe(0);
+  await expect(page.getByTestId('power-toggle')).toContainText('Подключиться');
+  await expect(page.getByTestId('hero')).toContainText('Нужна проверка браузера');
+});
+
+test('invalidates a stored browser confirmation when the connector popup becomes blocked', async ({
+  page
+}) => {
+  const counters = { joinLinkRequests: 0 };
+  await mockSafeSteamAndPopup(page, false);
+  await mockAutoseedApi(page, counters);
+  await seedStoredAutoconnectState(page, { enabled: false });
+
+  await page.goto('./');
+  await expect(page.getByTestId('hero')).toContainText('Браузер готов');
+
+  await page.getByTestId('power-toggle').click();
+
+  expect(counters.joinLinkRequests).toBe(0);
+  await expect(page.getByTestId('power-toggle')).toContainText('Подключиться');
+  await expect(page.getByTestId('hero')).toContainText('Нужна проверка браузера');
+  await expect
+    .poll(() => page.evaluate(() => window.localStorage.getItem('steam-auto-permissions')))
+    .toContain('"popupAllowed":false');
 });
 
 test('keeps help popovers visible inside the viewport on mobile', async ({ page }) => {
@@ -4017,13 +4071,12 @@ test('accepts a fresh snapshot during the pending test sequence without regenera
   page
 }) => {
   const counters = { firstJoinLinkRequests: 0, secondJoinLinkRequests: 0 };
-  await mockSuccessfulPermissionCheck(page);
+  await mockSafeSteamAndPopup(page);
   await mockTestModeAutoseedApi(page, counters);
+  await seedStoredAutoconnectState(page, { enabled: false });
 
   await page.goto('./');
   await page.getByTestId('mode-test').click();
-  await page.getByTestId('check-browser-button').click();
-  await expect(page.getByTestId('check-browser-button')).toContainText('Браузер проверен');
 
   await page.getByTestId('power-toggle').click();
   await expect.poll(() => counters.firstJoinLinkRequests).toBe(1);
@@ -4042,12 +4095,11 @@ test('regenerates the production join-link only when the current target crosses 
 }) => {
   const counters = { serverOneJoinLinkRequests: 0, serverTwoJoinLinkRequests: 0 };
   const snapshotState = { serverOnePlayers: 60, serverTwoPlayers: 70 };
-  await mockSuccessfulPermissionCheck(page);
+  await mockSafeSteamAndPopup(page);
   await mockProductionSwitchAutoseedApi(page, counters, snapshotState);
+  await seedStoredAutoconnectState(page, { enabled: false });
 
   await page.goto('./');
-  await page.getByTestId('check-browser-button').click();
-  await expect(page.getByTestId('check-browser-button')).toContainText('Браузер проверен');
 
   await page.getByTestId('power-toggle').click();
   await expect.poll(() => counters.serverOneJoinLinkRequests).toBe(1);
@@ -4072,7 +4124,7 @@ test('restores the current production target after reload without showing a stal
   page
 }) => {
   const counters = { joinLinkRequests: 0 };
-  await mockSuccessfulPermissionCheck(page);
+  await mockSafeSteamAndPopup(page);
   await mockAutoseedApi(page, counters);
   await seedStoredAutoconnectState(page, {
     enabled: true,
@@ -4083,7 +4135,7 @@ test('restores the current production target after reload without showing a stal
 
   await page.goto('./');
 
-  await expect(page.getByTestId('power-toggle')).toContainText('Включён');
+  await expect(page.getByTestId('power-toggle')).toContainText('Отключить');
   await expect(page.getByTestId('hero-next-action-value')).toHaveText('30 с');
   await expect(page.getByTestId('overview-next-action-value')).toHaveText('30 с');
   await page.waitForTimeout(300);
