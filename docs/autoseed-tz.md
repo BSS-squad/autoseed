@@ -234,7 +234,7 @@ Redirect выполняется, если одновременно выполн�
 - `joinLink` не должен публиковаться в `snapshot`;
 - frontend не должен вычислять `joinLink` самостоятельно;
 - frontend не должен парсить Steam;
-- frontend должен делать `GET {baseUrl}/join-link` только по факту redirect/direct join;
+- frontend должен делать `GET {baseUrl}/join-link` только по факту автоматического перехода к выбранной политикой цели;
 - exporter должен проксировать lookup в `Squadbrowser API` только для этого запроса;
 - допустимый формат: только готовый lobby link из `Squadbrowser API`;
 - `joinLink` должен использовать реальный public connect-port Squad-сервера, а не `queryPort`, если эти порты различаются.

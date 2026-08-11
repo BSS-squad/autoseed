@@ -7,7 +7,7 @@
 - frontend полностью статический и публикуется через GitHub Pages;
 - exporter публикуется отдельно через `https://api.squad.leo-land.ru/squadjs1/v1/autoseed`, `https://api.squad.leo-land.ru/squadjs2/v1/autoseed` и `https://api.squad.leo-land.ru/squadjs3/v1/autoseed`;
 - exporter отдаёт `healthz` и расширенный `snapshot` с общим онлайном, составом сторон, squad-структурой и часами из `PlaytimeTracker`;
-- `joinLink` больше не живёт в snapshot: frontend запрашивает его у exporter-а только по факту redirect/direct join, а exporter уже делает lookup в `Squadbrowser API` по exact server name;
+- `joinLink` больше не живёт в snapshot: frontend запрашивает его у exporter-а только по факту автоматического перехода, а exporter уже делает lookup в `Squadbrowser API` по exact server name;
 - policy живёт только во frontend runtime-config;
 - текущий приоритет выбора в любое время: `1 -> 2 -> 3`
   (`Mix -> Spec Ops -> Invasion`).
@@ -24,7 +24,7 @@
 - опциональный test-sequence через runtime-config, например `1 -> 2 -> 3` с задержкой `60 s`;
 - хранение `enabled`, `lastProcessedTimestamp`, `cooldown` и permissions в `localStorage`;
 - локальный preflight-check на странице: popup, `steam://`, и явная подсказка оставить Squad в главном меню;
-- redirect через служебное popup-окно для автосценариев, чтобы страница не теряла состояние и могла выполнить follow-up redirect; ручное прямое подключение открывает `steam://` в текущей вкладке, как SquadBrowser;
+- одно действие подключения без ручного назначения сервера; первый запуск безопасно открывает главную Steam, а после явного подтверждения служебное popup-окно сохраняет страницу и выполняет автоматические переходы;
 - опциональная ссылка на основной сайт BSS через `app.siteUrl`, которая открывается в новой вкладке и не прерывает текущий сценарий автосида;
 - опциональная публичная ссылка на внешний VIP purchase flow через `app.vipShopUrl`;
 - публичная витрина ролевых топов через `leaderboards.roleUrl` или
@@ -42,7 +42,7 @@ npm run dev
 
 ## Runtime config
 
-`baseUrl` должен указывать не просто на host, а на публичный exporter-prefix. Frontend сам использует `GET {baseUrl}/snapshot` для ручного refresh, `GET {baseUrl}/events` для realtime-подписки и `GET {baseUrl}/join-link` только по факту redirect/direct join.
+`baseUrl` должен указывать не просто на host, а на публичный exporter-prefix. Frontend сам использует `GET {baseUrl}/snapshot` для ручного refresh, `GET {baseUrl}/events` для realtime-подписки и `GET {baseUrl}/join-link` только по факту автоматического перехода.
 
 Файл `public/runtime-config.json` должен содержать:
 
