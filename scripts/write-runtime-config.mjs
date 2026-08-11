@@ -173,8 +173,27 @@ function parseConfig(raw, source) {
   }
 }
 
+function sanitizeRuntimeConfig(config) {
+  if (!config.policy) return config;
+
+  const policy = Object.fromEntries(
+    ['maxSeedPlayers', 'cooldownMs', 'periodicReconnectMs']
+      .filter((key) => config.policy[key] !== undefined)
+      .map((key) => [key, config.policy[key]])
+  );
+  if (Object.keys(policy).length === 0) {
+    const { policy: _deprecatedPolicy, ...withoutPolicy } = config;
+    return withoutPolicy;
+  }
+  return { ...config, policy };
+}
+
 function writeConfig(config) {
-  fs.writeFileSync(outputPath, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
+  fs.writeFileSync(
+    outputPath,
+    `${JSON.stringify(sanitizeRuntimeConfig(config), null, 2)}\n`,
+    'utf8'
+  );
 }
 
 fs.mkdirSync(publicDir, { recursive: true });
@@ -185,7 +204,7 @@ if (rawConfig && rawConfig.trim().length > 0) {
 }
 
 if (fs.existsSync(outputPath)) {
-  parseConfig(fs.readFileSync(outputPath, 'utf8'), 'public/runtime-config.json');
+  writeConfig(parseConfig(fs.readFileSync(outputPath, 'utf8'), 'public/runtime-config.json'));
   process.exit(0);
 }
 
