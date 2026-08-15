@@ -40,9 +40,6 @@ jobs:
       - run: npm ci
       - run: npm run test:unit
       - name: Build production bundle
-        env:
-          AUTOSEED_ALLOWED_EXPORTER_ORIGINS: https://api.squad.leo-land.ru
-          AUTOSEED_RUNTIME_CONFIG_MODE: production
         run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: PLAYWRIGHT_SERVER=preview PLAYWRIGHT_BASE_PATH="$VITE_BASE_PATH" npm run test:e2e
@@ -67,11 +64,12 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Build release artifact
-        env:
-          AUTOSEED_ALLOWED_EXPORTER_ORIGINS: https://api.squad.leo-land.ru
-          AUTOSEED_RUNTIME_CONFIG_MODE: production
-          AUTOSEED_RUNTIME_CONFIG_JSON: ${{ secrets.AUTOSEED_RUNTIME_CONFIG_JSON }}
         run: npm run build
+      - name: Verify static cutover artifact
+        run: |
+          test -f dist/index.html
+          test ! -e dist/runtime-config.json
+          test "$(find dist -type f | wc -l)" -eq 1
       - name: Add release manifest
         env:
           RELEASE_SHA: ${{ github.sha }}
@@ -142,18 +140,20 @@ jobs:
     env:
       PAGES_URL: ${{ needs.deploy.outputs.page_url }}
       EXPECTED_RELEASE_SHA: ${{ github.sha }}
-      ALLOWED_EXPORTER_ORIGINS: https://api.squad.leo-land.ru
-      EXPORTER_MAX_AGE_MS: 120000
-      EXPORTER_MAX_FUTURE_SKEW_MS: 30000
       SMOKE_REQUEST_TIMEOUT_MS: 15000
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 22
+          cache: npm
+      - run: npm ci
       - name: Wait for Pages availability
         run: >-
           curl --fail --location --retry 6 --retry-all-errors --retry-delay 5
           --connect-timeout 10 --max-time 20 "$PAGES_URL"
-      - name: Verify deployed release and exporter freshness
+      - name: Verify deployed release and canonical readiness
         run: node scripts/verify-pages-release.mjs
+      - run: npx playwright install --with-deps chromium
+      - name: Verify published redirect matrix
+        run: PLAYWRIGHT_BASE_URL="$PAGES_URL" npm run test:e2e

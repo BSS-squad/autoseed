@@ -1,198 +1,75 @@
-# AutoSeed
+# AutoSeed: совместимый адрес Pages
 
-Статический frontend для автоконнектора Squad и набор документов по интеграции с публичным exporter-плагином для `SquadJS`.
+`https://bss-squad.github.io/autoseed/` больше не является отдельным
+приложением. Это тонкая статическая точка перехода на единый сайт Breaking
+Squad: `https://squad.leo-land.ru/autoseed`.
 
-## Актуальное состояние
+Пользовательская логика, источники данных и автоматическое подключение находятся
+только на едином сайте. Pages не читает exporter-ы, не получает секреты, не
+создаёт `runtime-config.json` и не хранит второй вариант интерфейса.
 
-- frontend полностью статический и публикуется через GitHub Pages;
-- exporter публикуется отдельно через `https://api.squad.leo-land.ru/squadjs1/v1/autoseed`, `https://api.squad.leo-land.ru/squadjs2/v1/autoseed` и `https://api.squad.leo-land.ru/squadjs3/v1/autoseed`;
-- exporter отдаёт `healthz` и расширенный `snapshot` с общим онлайном, составом сторон, squad-структурой и часами из `PlaytimeTracker`;
-- `joinLink` больше не живёт в snapshot: frontend запрашивает его у exporter-а только по факту автоматического перехода, а exporter уже делает lookup в `Squadbrowser API` по exact server name;
-- policy живёт только во frontend runtime-config;
-- текущий приоритет выбора в любое время: `1 -> 2 -> 3`
-  (`Mix -> Spec Ops -> Invasion`).
+## Совместимые ссылки
 
-## Что реализовано
+| Старый вход | Назначение |
+| --- | --- |
+| без фрагмента URL | `https://squad.leo-land.ru/autoseed` |
+| `#leaderboards` и его параметры | канонический корень с тем же фрагментом |
+| `#journal` и его параметры | канонический корень с тем же фрагментом |
+| точный `#balance` | `https://squad.leo-land.ru/#balance` |
+| `#winners` и его параметры | канонический корень с тем же фрагментом |
+| любой другой фрагмент | `https://squad.leo-land.ru/autoseed` |
 
-- frontend на Vite + React c GitHub Pages deployment;
-- runtime-конфиг через `public/runtime-config.json`;
-- fully-static архитектура без backend и без Steam auth;
-- realtime-подписка на публичные exporter endpoint-ы через `SSE /events`;
-- просмотр онлайна серверов, состава сторон и баланса часов по игрокам;
-- выбор целевого сервера по единому строгому порядку с учётом
-  доступности, признака `isSeedCandidate` и лимита онлайна;
-- опциональный test-sequence через runtime-config, например `1 -> 2 -> 3` с задержкой `60 s`;
-- хранение `enabled`, `lastProcessedTimestamp`, `cooldown` и permissions в `localStorage`;
-- локальный preflight-check на странице: popup, `steam://`, и явная подсказка оставить Squad в главном меню;
-- одно действие подключения без ручного назначения сервера; первый запуск безопасно открывает главную Steam, а после явного подтверждения служебное popup-окно сохраняет страницу и выполняет автоматические переходы;
-- опциональная ссылка на основной сайт BSS через `app.siteUrl`, которая открывается в новой вкладке и не прерывает текущий сценарий автосида;
-- опциональная публичная ссылка на внешний VIP purchase flow через `app.vipShopUrl`;
-- публичная витрина ролевых топов через `leaderboards.roleUrl` или
-  автоматически выведенный `{leaderboards.url}/v2`;
-- документация по настройке frontend, exporter-а и `Squadbrowser` join-link lookup.
+Единый сайт проверяет параметры и переводит совместимые ссылки в актуальные
+разделы. Pages использует фиксированный домен назначения и
+`window.location.replace`, поэтому произвольное перенаправление и цикл через
+кнопку «Назад» исключены. Без JavaScript остаётся обычная заметная ссылка на
+основной AutoSeed.
 
-## Локальный запуск
+## Локальная проверка
 
 ```bash
-npm install
-npm run dev
+npm ci
+npm run test:unit
+npm run build
+PLAYWRIGHT_SERVER=preview PLAYWRIGHT_BASE_PATH=/autoseed/ npm run test:e2e
 ```
 
-По умолчанию `prebuild` создаёт `public/runtime-config.json` из `AUTOSEED_RUNTIME_CONFIG_JSON`. Если переменная не передана, он копирует `public/runtime-config.example.json`.
+Сборка Pages должна содержать только `dist/index.html`. Во время выпуска к нему
+добавляется `dist/release.json` с точной ревизией коммита.
 
-## Runtime config
+Браузерная матрица проверяет обычный вход, четыре совместимых фрагмента,
+неизвестные значения, режим без JavaScript, клавиатуру, отсутствие
+горизонтального переполнения и ширины 320/390/768/1440 пикселей. Уже
+опубликованный адрес можно проверить той же матрицей:
 
-`baseUrl` должен указывать не просто на host, а на публичный exporter-prefix. Frontend сам использует `GET {baseUrl}/snapshot` для ручного refresh, `GET {baseUrl}/events` для realtime-подписки и `GET {baseUrl}/join-link` только по факту автоматического перехода.
-
-Файл `public/runtime-config.json` должен содержать:
-
-```json
-{
-  "app": {
-    "title": "BSS AutoConnect",
-    "siteUrl": "https://squad.leo-land.ru/"
-  },
-  "policy": {
-    "maxSeedPlayers": 80,
-    "cooldownMs": 600000
-  },
-  "exporters": [
-    {
-      "name": "squadjs1",
-      "baseUrl": "https://api.squad.leo-land.ru/squadjs1/v1/autoseed"
-    },
-    {
-      "name": "squadjs2",
-      "baseUrl": "https://api.squad.leo-land.ru/squadjs2/v1/autoseed"
-    },
-    {
-      "name": "squadjs3",
-      "baseUrl": "https://api.squad.leo-land.ru/squadjs3/v1/autoseed"
-    }
-  ]
-}
+```bash
+PLAYWRIGHT_BASE_URL=https://bss-squad.github.io/autoseed/ npm run test:e2e
 ```
 
-`exporters[].name` здесь только служебная метка endpoint-а для ошибок. Отображаемое название сервера frontend берёт из `snapshot.servers[].name`, а exporter заполняет его из `ShowServerInfo`.
+## Выпуск
 
-Опционально можно добавить `app.siteUrl` с адресом основного сайта BSS:
+Сценарий `.github/workflows/deploy-pages.yml`:
 
-```json
-{
-  "app": {
-    "title": "BSS AutoConnect",
-    "siteUrl": "https://squad.leo-land.ru/"
-  }
-}
-```
+1. На запросе изменений запускает модульные проверки, сборку и браузерную
+   матрицу.
+2. Для принятой ревизии `main` собирает один HTML-файл, добавляет
+   `release.json` и публикует Pages.
+3. После публикации сверяет точную ревизию, проверяет готовность
+   `https://squad.leo-land.ru/readyz` и повторяет браузерную матрицу на боевом
+   адресе.
 
-Тогда в навигации появится ссылка `Сайт BSS`. Она открывается в новой вкладке,
-чтобы не сбрасывать выбранный сервер и состояние автосида. Адрес должен быть
-абсолютным `http`/`https` URL, а в боевой сборке — `https`; логины, пароли,
-параметры запроса и фрагменты в нём запрещены.
+Секреты и адреса exporter-ов для выпуска не нужны. Переменная
+`VITE_BASE_PATH` нужна только при публикации не из корня; для этого репозитория
+её значение — `/autoseed/`.
 
-Опционально можно добавить `app.vipShopUrl` с абсолютным `http`/`https` URL внешнего VIP-сервиса:
+## Исторические материалы
 
-```json
-{
-  "app": {
-    "title": "BSS AutoConnect",
-    "vipShopUrl": "https://vip.example.com"
-  }
-}
-```
+Каталоги `src/`, `public/`, старые модульные проверки и зависимости сохранены
+на время быстрого отката, но не входят в артефакт Pages. Их не следует считать
+текущей архитектурой или настраивать для нового выпуска.
 
-Если URL не задан или не является `http`/`https`, ссылка в навигации не показывается. Покупка, Steam auth, wallet ledger и purchase state остаются во внешнем VIP-сервисе; `autoseed` только ведет игрока на этот публичный entrypoint.
-
-Для ролевых топов можно указать абсолютный `http`/`https` URL публичного
-read-only API V2:
-
-```json
-{
-  "leaderboards": {
-    "url": "https://api.example.com/leaderboards",
-    "roleUrl": "https://api.example.com/leaderboards/v2"
-  }
-}
-```
-
-Если `roleUrl` не задан, сайт добавляет `/v2` к `leaderboards.url`. Страница
-передаёт период, роль, размер отряда и архивное окно, но не рассчитывает
-рейтинг или ачивки в браузере. Выбор сохраняется в hash-ссылке. Если API
-недоступен, страница показывает понятное состояние без ошибки приложения.
-В URL нельзя класть секреты или пользовательские токены.
-
-При необходимости можно добавить отдельный `app.testMode`:
-
-```json
-{
-  "sequenceServerIds": [1, 2, 3],
-  "delayMs": 60000,
-  "cooldownMs": 30000
-}
-```
-
-Порядок `[1, 2, 3]` соответствует ротации `Mix -> Spec Ops -> Invasion`. Тогда в интерфейсе появится отдельный тестовый режим, который не подменяет боевой. При включении тестового режима первый redirect запускается сразу, а `delayMs` относится только к follow-up hop. Задержку follow-up можно локально перекрыть прямо на странице; значение сохраняется в `localStorage` и не меняет общий runtime-config для остальных пользователей.
-
-Важно: это публичный клиентский конфиг. Даже если он подставляется через GitHub Secrets, после билда значения становятся видимыми в браузере. Сборка принимает только задокументированные поля и URL без логина, пароля, параметров запроса и фрагмента. В выпуске exporter-ы дополнительно ограничены HTTPS и утверждённым origin `https://api.squad.leo-land.ru`. Не кладите сюда приватные ключи, токены или другие учётные данные.
-
-Frontend не знает пользователя, не хранит `steamId` и не обращается к Steam OpenID. Exporter отдаёт только факты по серверам, а все правила выбора живут во frontend runtime-config. Это общий autoconnect на правильный seed-сервер по публичному правилу.
-
-## Squadbrowser Join Link
-
-Локальный файл [docs/squadbrowser-openapi.json](./docs/squadbrowser-openapi.json) описывает ручку `POST /pub/join-link`. Exporter в `squadjs2` умеет:
-
-- брать exact server name из SquadJS;
-- звать `Squadbrowser API` с `x-api-key`;
-- держать `GET {baseUrl}/join-link` как on-demand lookup;
-- не кешировать и не дедуплицировать lookup в нашем слое: каждый запрос подключения должен заново сходить в `Squadbrowser API`;
-- не считать разные запросы гарантией разных URL: `Squadbrowser API` может возвращать один и тот же стабильный `steam://joinlobby/...` для активного server lobby;
-- не поллить `Squadbrowser API` из `snapshot`/`events`;
-- возвращать ошибку, если `Squadbrowser API` не вернул валидный lobby link.
-
-Для включения этого пути на стороне SquadJS нужен:
-
-- `SQUADBROWSER_API_KEY`
-
-По умолчанию exporter ходит в `https://api.squadbrowser.app/api`. При необходимости URL можно переопределить опцией `squadbrowserApiBaseUrl`, но для обычного деплоя это не требуется.
-
-## Быстрый тест
-
-Перед проверкой GitHub Pages убедитесь, что exporter отвечает:
-
-- `https://api.squad.leo-land.ru/squadjs1/v1/autoseed/healthz`
-- `https://api.squad.leo-land.ru/squadjs1/v1/autoseed/snapshot`
-- `https://api.squad.leo-land.ru/squadjs1/v1/autoseed/join-link`
-- `https://api.squad.leo-land.ru/squadjs2/v1/autoseed/healthz`
-- `https://api.squad.leo-land.ru/squadjs2/v1/autoseed/snapshot`
-- `https://api.squad.leo-land.ru/squadjs2/v1/autoseed/join-link`
-- `https://api.squad.leo-land.ru/squadjs3/v1/autoseed/healthz`
-- `https://api.squad.leo-land.ru/squadjs3/v1/autoseed/snapshot`
-- `https://api.squad.leo-land.ru/squadjs3/v1/autoseed/join-link`
-
-Дальше:
-
-1. Обновите secret `AUTOSEED_RUNTIME_CONFIG_JSON`.
-2. Дождитесь успешного workflow `Deploy Pages`.
-3. Откройте GitHub Pages URL.
-4. Пройдите preflight-check на странице.
-5. Держите Steam и Squad открытыми, Squad в главном меню.
-6. Включите автоконнектор и дождитесь нового snapshot.
-
-## GitHub Pages
-
-CI workflow лежит в `.github/workflows/deploy-pages.yml`.
-
-1. В `Settings -> Pages` включите `GitHub Actions`.
-2. Создайте secret `AUTOSEED_RUNTIME_CONFIG_JSON` и положите туда итоговый JSON-конфиг frontend-а.
-3. При необходимости создайте variable `VITE_BASE_PATH`, если сайт публикуется не из корня домена.
-4. Пуш в `main` сначала проходит модульные тесты, сборку и браузерные проверки широкого и мобильного интерфейса; только затем сайт публикуется на Pages.
-5. После публикации workflow сверяет опубликованный `release.json` с коммитом выпуска, затем проверяет публичный runtime-config и свежесть всех exporter-ов. Exporter обязан вернуть `success: true`, `stale: false`, хотя бы один online-сервер и время последнего серверного обновления не старше двух минут и не из будущего.
-6. Ручной запуск по умолчанию выполняет только проверки. Для повторной публикации с `main` нужно явно включить параметр `deploy`.
-
-## Документация
-
-- [README.md](./README.md)
-- [docs/autoseed-tz.md](./docs/autoseed-tz.md)
-- [docs/setup.md](./docs/setup.md)
-- [docs/superpowers/specs/2026-07-05-exporter-autoseed-switching-design.md](./docs/superpowers/specs/2026-07-05-exporter-autoseed-switching-design.md)
+- [docs/setup.md](./docs/setup.md) — статус прежней схемы развёртывания;
+- [docs/ui-system.md](./docs/ui-system.md) — статус прежней системы интерфейса;
+- [docs/autoseed-tz.md](./docs/autoseed-tz.md) — историческое техническое
+  задание старого приложения;
+- полное обоснование перехода зафиксировано в `breaking-squad/site-backend#114`.
