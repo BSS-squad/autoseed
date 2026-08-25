@@ -25,7 +25,8 @@ concurrency:
 jobs:
   quality:
     if: github.repository == 'BSS-squad/autoseed'
-    runs-on: ubuntu-latest
+    runs-on:
+      group: selfhost-group-1
     timeout-minutes: 20
     permissions:
       contents: read
@@ -50,7 +51,8 @@ jobs:
       github.ref_name == github.event.repository.default_branch &&
       (github.event_name == 'push' || inputs.deploy)
     needs: quality
-    runs-on: ubuntu-latest
+    runs-on:
+      group: selfhost-group-1
     timeout-minutes: 20
     permissions:
       contents: read
@@ -93,7 +95,8 @@ jobs:
       github.ref_name == github.event.repository.default_branch &&
       (github.event_name == 'push' || inputs.deploy)
     needs: package
-    runs-on: ubuntu-latest
+    runs-on:
+      group: selfhost-group-1
     timeout-minutes: 10
     permissions:
       pages: write
@@ -113,7 +116,8 @@ jobs:
       github.ref_name == github.event.repository.default_branch &&
       (github.event_name == 'push' || inputs.deploy)
     needs: upload
-    runs-on: ubuntu-latest
+    runs-on:
+      group: selfhost-group-1
     timeout-minutes: 15
     permissions:
       pages: write
@@ -133,7 +137,8 @@ jobs:
       github.ref_name == github.event.repository.default_branch &&
       (github.event_name == 'push' || inputs.deploy)
     needs: deploy
-    runs-on: ubuntu-latest
+    runs-on:
+      group: selfhost-group-1
     timeout-minutes: 10
     permissions:
       contents: read
