@@ -1135,6 +1135,7 @@ function mapActivitySnapshot(value: unknown): ExporterActivitySnapshot | null {
     : recentRounds;
 
   return {
+    historyAvailable: Array.isArray(activity.sessions) || Array.isArray(activity.recentRounds),
     version: Math.max(1, Math.round(toNumber(activity.version, 1))),
     generatedAt: toIsoStringOrNull(activity.generatedAt),
     teamBalancerHistory: Array.isArray(activity.teamBalancerHistory)

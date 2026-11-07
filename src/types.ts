@@ -648,6 +648,7 @@ export type ExporterActivityKillfeedSnapshot = {
 };
 
 export type ExporterActivitySnapshot = {
+  historyAvailable: boolean;
   version: number;
   generatedAt: string | null;
   teamBalancerHistory: ExporterTeamBalancerHistoryEntrySnapshot[];

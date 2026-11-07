@@ -816,3 +816,17 @@ test('preserves the exporter status for a rejected match export password', async
     (error) => error instanceof MatchExportError && error.status === 401
   );
 });
+
+test('различает недоступную и пустую историю матчей', async () => {
+  for (const [activity, expected] of [
+    [{ teamBalancerHistoryVersion: 2, teamBalancerHistory: [] }, false],
+    [{ sessions: [], recentRounds: [] }, true],
+    [null, false]
+  ] as const) {
+    globalThis.fetch = async () => new Response(JSON.stringify({
+      success: true, timestamp: Date.now(), servers: [{ id: 1, code: 'squadjs1', name: 'Server', activity }]
+    }), { status: 200 });
+    const snapshot = await fetchCombinedSnapshot([{ code: 'squadjs1', baseUrl: 'https://example.test' }]);
+    assert.equal(snapshot.servers[0]?.activity?.historyAvailable ?? false, expected);
+  }
+});
