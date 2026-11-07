@@ -1169,10 +1169,9 @@ export function JournalWorkspace({ servers }: JournalWorkspaceProps) {
                 <span>{server.online ? 'В сети' : 'Оффлайн'}</span>
                 <strong>{formatServerDisplayName(server)}</strong>
                 <p>
-                  {serverSessions.length} матчей ·{' '}
-                  {serverSessions[0]
-                    ? formatMatchDate(serverSessions[0].endedAt)
-                    : 'истории нет'}
+                  {server.activity?.historyAvailable
+                    ? `${serverSessions.length} матчей · ${serverSessions[0] ? formatMatchDate(serverSessions[0].endedAt) : 'истории нет'}`
+                    : 'История временно недоступна'}
                 </p>
               </button>
             );
@@ -1187,7 +1186,7 @@ export function JournalWorkspace({ servers }: JournalWorkspaceProps) {
         <aside className="journal-session-sidebar">
           <div className="journal-sidebar-head">
             <span>Последние матчи</span>
-            <strong>{sessions.length} матчей</strong>
+            <strong>{selectedServer?.activity?.historyAvailable ? `${sessions.length} матчей` : 'Недоступно'}</strong>
           </div>
           {sessions.length ? (
             <ul className="journal-session-list">
@@ -1221,8 +1220,14 @@ export function JournalWorkspace({ servers }: JournalWorkspaceProps) {
             </ul>
           ) : (
             <div className="journal-empty-state journal-sidebar-empty">
-              <strong>Завершённых матчей ещё нет</strong>
-              <p>Запись появится только после конца игры.</p>
+              {selectedServer?.activity?.historyAvailable ? (
+                <>
+                  <strong>Завершённых матчей ещё нет</strong>
+                  <p>Запись появится только после конца игры.</p>
+                </>
+              ) : (
+                <strong>История временно недоступна</strong>
+              )}
             </div>
           )}
           <SessionTopSummary topWindow={selectedServer?.activity?.topWindow || null} />
@@ -1378,8 +1383,10 @@ export function JournalWorkspace({ servers }: JournalWorkspaceProps) {
                 hasSelectedSession={false}
               />
               <div className="journal-empty-state journal-match-empty">
-                <strong>Выберите завершённый матч</strong>
-                <p>Итоги и события никогда не показываются до окончания игры.</p>
+                <strong>{selectedServer?.activity?.historyAvailable ? 'Выберите завершённый матч' : 'История временно недоступна'}</strong>
+                {selectedServer?.activity?.historyAvailable ? (
+                  <p>Итоги и события никогда не показываются до окончания игры.</p>
+                ) : null}
               </div>
             </>
           )}
